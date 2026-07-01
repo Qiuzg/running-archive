@@ -10,12 +10,23 @@
     other: "其他",
   };
   const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
-  const races = [...data.races].sort(byDateDesc);
+
+  // Filter out evening "races" — real races start in the morning (before noon).
+  // Extract start hour from sourceRunId (format: apple-YYYYMMDD-HHMMSS).
+  function isMorningRace(race) {
+    const id = race.sourceRunId || race.id || "";
+    const match = id.match(/[_-](\d{2})(\d{2})(\d{2})$/);
+    if (!match) return true; // can't parse time — keep it
+    const hour = parseInt(match[1], 10);
+    return hour < 12;
+  }
+
+  const races = [...data.races].filter(isMorningRace).sort(byDateDesc);
   const marathonTimeline = races.filter((race) => race.type === "marathon");
   const runs = [...data.runs].sort(byDateDesc);
-  const raceSourceRunIds = new Set(data.races.map((race) => race.sourceRunId).filter(Boolean));
+  const raceSourceRunIds = new Set(races.map((race) => race.sourceRunId).filter(Boolean));
   const activityItems = [
-    ...data.races.map((item) => ({ ...item, source: "race" })),
+    ...races.map((item) => ({ ...item, source: "race" })),
     ...data.runs
       .filter((item) => !raceSourceRunIds.has(item.id))
       .map((item) => ({ ...item, source: "run" })),
@@ -86,7 +97,7 @@
   }
 
   function findPB(type) {
-    const candidates = data.races.filter((race) => race.type === type);
+    const candidates = races.filter((race) => race.type === type);
     if (!candidates.length) return null;
     return candidates.reduce((best, race) =>
       parseTimeToSeconds(race.finishTime) < parseTimeToSeconds(best.finishTime) ? race : best,
@@ -233,7 +244,7 @@
       createMetric(`${currentYear} 年跑量`, formatKm(getYearDistance(currentYear)), "自动按日期归档"),
       createMetric("全马 PB", marathonPB ? marathonPB.finishTime : "--", marathonPB ? marathonPB.name : "等待第一场全马"),
       createMetric("半马 PB", halfPB ? halfPB.finishTime : "--", halfPB ? halfPB.name : "等待第一场半马"),
-      createMetric("完赛场次", `${data.races.length} 场`, `${marathonTimeline.length} 场全马`),
+      createMetric("完赛场次", `${races.length} 场`, `${marathonTimeline.length} 场全马`),
     ].join("");
   }
 
@@ -477,7 +488,7 @@
       subtitle.textContent = "";
       renderPanelRoutes(body);
     } else if (activePanelTab === "races") {
-      subtitle.textContent = `${data.races.length} 场比赛 · ${marathonTimeline.length} 场全马`;
+      subtitle.textContent = `${races.length} 场比赛 · ${marathonTimeline.length} 场全马`;
       renderPanelRaces(body);
     } else if (activePanelTab === "stats") {
       subtitle.textContent = `${availableYears.join(" · ")}`;
@@ -615,7 +626,7 @@
       .join("");
 
     const yearRuns = data.runs.filter((r) => new Date(r.date).getFullYear() === year);
-    const yearRaces = data.races.filter((r) => new Date(r.date).getFullYear() === year);
+    const yearRaces = races.filter((r) => new Date(r.date).getFullYear() === year);
     const longestRun = [...yearRuns].sort((a, b) => b.distanceKm - a.distanceKm)[0];
     const bestMarathon = findPB("marathon");
     const bestMonthDist = Math.max(...totals);
@@ -754,7 +765,7 @@
     // City markers for marathon/half-marathon races
     const cityMarkers = [];
     const seenCities = new Set();
-    for (const race of data.races) {
+    for (const race of races) {
       if (race.type !== "marathon" && race.type !== "half_marathon") continue;
       const route = routeIndex[race.routeId];
       if (!route || !route.previewCoordinates || !route.previewCoordinates.length) continue;

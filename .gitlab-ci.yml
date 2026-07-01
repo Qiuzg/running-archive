@@ -1,0 +1,11 @@
+# GitLab Pages — static site, no build step
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp -r assets routes *.html *.js *.css public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - main

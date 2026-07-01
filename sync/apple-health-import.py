@@ -298,6 +298,16 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
             name = "半马"
         else:
             continue
+
+        # Only count morning runs as races (start hour < 12).
+        # ID format: apple-YYYYMMDD-HHMMSS
+        import re
+        match = re.search(r"[_-](\d{2})(\d{2})(\d{2})$", item["id"])
+        if match:
+            hour = int(match.group(1))
+            if hour >= 12:
+                continue
+
         place = "" if item.get("location") == "户外" else item.get("location", "")
         display_name = f"{place}{name} {item['date']}" if place else f"{name} {item['date']}"
         race_candidates.append(
