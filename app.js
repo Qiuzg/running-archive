@@ -170,6 +170,26 @@
     }));
   }
 
+  function getSvgColors() {
+    const light = document.documentElement.dataset.theme === "light";
+    return {
+      bg1: light ? "#f0f2f5" : "#0d141d",
+      bg2: light ? "#e8eaef" : "#111a24",
+      bg3: light ? "#dde1e6" : "#0f1820",
+      grid: light ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)",
+      decor1: light ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.06)",
+      decor2: light ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.05)",
+      decor3: light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)",
+      routeGlow: light ? "rgba(37,99,235,0.25)" : "rgba(59,139,255,0.3)",
+      route: light ? "#2563eb" : "#3b8bff",
+      routeAccent: light ? "#10b981" : "#2dd4a8",
+      startFill: light ? "#f0f2f5" : "#0d141d",
+      startStroke: light ? "#10b981" : "#2dd4a8",
+      endFill: light ? "#e04a2a" : "#ff5e3a",
+      endStroke: light ? "#f0f2f5" : "#0d141d",
+    };
+  }
+
   function renderRouteSvg(route, variant = "large") {
     if (!route) {
       return '<div class="route-empty">暂无路线</div>';
@@ -178,6 +198,7 @@
     if (!projected.length) {
       return '<div class="route-empty">路线加载中</div>';
     }
+    const c = getSvgColors();
     const points = projected.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
     const startPoint = projected[0];
     const endPoint = projected[projected.length - 1];
@@ -186,24 +207,24 @@
       <svg class="route-svg route-svg--${variant}" viewBox="0 0 420 240" role="img" aria-label="${escapeAttr(route.name)}路线图">
         <defs>
           <linearGradient id="route-paper-${escapeAttr(route.id)}" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#0d141d" />
-            <stop offset="54%" stop-color="#111a24" />
-            <stop offset="100%" stop-color="#0f1820" />
+            <stop offset="0%" stop-color="${c.bg1}" />
+            <stop offset="54%" stop-color="${c.bg2}" />
+            <stop offset="100%" stop-color="${c.bg3}" />
           </linearGradient>
           <pattern id="route-grid-${escapeAttr(route.id)}" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1" />
+            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="${c.grid}" stroke-width="1" />
           </pattern>
         </defs>
         <rect width="420" height="240" rx="8" fill="url(#route-paper-${escapeAttr(route.id)})" />
         <rect width="420" height="240" rx="8" fill="url(#route-grid-${escapeAttr(route.id)})" opacity="0.75" />
-        <path d="M-18 204 C68 150 150 204 235 148 S342 86 442 122" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2" stroke-dasharray="8 9" opacity="0.5" />
-        <path d="M26 58 C110 112 178 46 250 88 S336 166 398 78" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2" stroke-dasharray="4 7" opacity="0.4" />
-        <path d="M16 28 H404 M16 212 H404 M22 22 V218 M398 22 V218" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
-        <polyline points="${points}" fill="none" stroke="rgba(59,139,255,0.3)" stroke-width="${variant === "mini" ? 10 : 12}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
-        <polyline points="${points}" fill="none" stroke="#3b8bff" stroke-width="${variant === "mini" ? 7 : 9}" stroke-linecap="round" stroke-linejoin="round" />
-        <polyline points="${points}" fill="none" stroke="#2dd4a8" stroke-width="${variant === "mini" ? 2.5 : 3.5}" stroke-linecap="round" stroke-linejoin="round" />
-        <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="#0d141d" stroke="#2dd4a8" stroke-width="4" />
-        <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="#ff5e3a" stroke="#0d141d" stroke-width="4" />
+        <path d="M-18 204 C68 150 150 204 235 148 S342 86 442 122" fill="none" stroke="${c.decor1}" stroke-width="2" stroke-dasharray="8 9" opacity="0.5" />
+        <path d="M26 58 C110 112 178 46 250 88 S336 166 398 78" fill="none" stroke="${c.decor2}" stroke-width="2" stroke-dasharray="4 7" opacity="0.4" />
+        <path d="M16 28 H404 M16 212 H404 M22 22 V218 M398 22 V218" fill="none" stroke="${c.decor3}" stroke-width="1" />
+        <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${variant === "mini" ? 10 : 12}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
+        <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${variant === "mini" ? 7 : 9}" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${variant === "mini" ? 2.5 : 3.5}" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="4" />
+        <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
       </svg>
     `;
   }
@@ -424,7 +445,6 @@
                     const title = item.name || item.title;
                     const tooltip = `${title} · ${formatKm(distance)} · ${item.pace}/km`;
                     const content = `
-                      <span class="month-activity-bar__value">${formatKm(distance)}</span>
                       <i style="--activity-height: ${height}%"></i>
                       <small>${day}</small>
                     `;
@@ -433,13 +453,11 @@
                           class="month-activity-bar"
                           type="button"
                           data-route-target="${escapeAttr(item.routeId)}"
-                          data-tooltip="${escapeAttr(tooltip)}"
                           title="${escapeAttr(tooltip)}"
                           aria-label="${escapeAttr(`${tooltip}，查看路线`)}"
                         >${content}</button>`
                       : `<div
                           class="month-activity-bar"
-                          data-tooltip="${escapeAttr(tooltip)}"
                           title="${escapeAttr(tooltip)}"
                           aria-label="${escapeAttr(tooltip)}"
                         >${content}</div>`;
@@ -459,22 +477,24 @@
       link.classList.toggle("is-active", link.dataset.panelTab === tab);
     });
     document.querySelector("#panelEyebrow").textContent =
-      tab === "routes" ? "Route Atlas" : tab === "races" ? "Race Records" : "Yearly Stats";
+      tab === "routes" ? "Route Atlas" : tab === "races" ? "Race Records" : "";
     document.querySelector("#panelTitle").textContent =
-      tab === "routes" ? "路线足迹" : tab === "races" ? "比赛记录" : "年度统计";
-    // Stats tab: full-width panel, hide map
+      tab === "routes" ? "路线足迹" : tab === "races" ? "比赛记录" : "";
+    // Stats tab: full-width, hide map, hide panel header
     const heroEl = document.querySelector(".hero");
     const mapContainer = document.querySelector("#heroMap");
     const summaryStrip = document.querySelector("#summaryStrip");
+    const panelHeader = document.querySelector(".hero__panel-header");
     if (tab === "stats") {
       heroEl.classList.add("hero--stats-full");
       if (mapContainer) mapContainer.style.display = "none";
       if (summaryStrip) summaryStrip.style.display = "none";
+      if (panelHeader) panelHeader.style.display = "none";
     } else {
       heroEl.classList.remove("hero--stats-full");
       if (mapContainer) mapContainer.style.display = "";
       if (summaryStrip) summaryStrip.style.display = "";
-      // Leaflet needs invalidateSize after being hidden
+      if (panelHeader) panelHeader.style.display = "";
       setTimeout(() => { if (heroMap) heroMap.invalidateSize(); }, 100);
     }
     renderPanelContent();
@@ -491,7 +511,7 @@
       subtitle.textContent = `${races.length} 场比赛 · ${marathonTimeline.length} 场全马`;
       renderPanelRaces(body);
     } else if (activePanelTab === "stats") {
-      subtitle.textContent = `${availableYears.join(" · ")}`;
+      subtitle.textContent = "";
       renderPanelStats(body);
     }
   }
@@ -625,26 +645,32 @@
       })
       .join("");
 
-    const yearRuns = data.runs.filter((r) => new Date(r.date).getFullYear() === year);
     const yearRaces = races.filter((r) => new Date(r.date).getFullYear() === year);
-    const longestRun = [...yearRuns].sort((a, b) => b.distanceKm - a.distanceKm)[0];
-    const bestMarathon = findPB("marathon");
     const bestMonthDist = Math.max(...totals);
     const bestMonth = totals.indexOf(bestMonthDist) + 1;
 
     container.innerHTML = `
+      <div class="stats-kpi-row">
+        <div class="stats-kpi">
+          <span>最高月跑量</span>
+          <strong>${bestMonthDist.toFixed(1)} km</strong>
+          <small>${bestMonth} 月</small>
+        </div>
+        <div class="stats-kpi">
+          <span>比赛</span>
+          <strong>${yearRaces.length} 场</strong>
+          <small>全马 ${races.filter(r => r.type === "marathon" && new Date(r.date).getFullYear() === year).length} · 半马 ${races.filter(r => r.type === "half_marathon" && new Date(r.date).getFullYear() === year).length}</small>
+        </div>
+      </div>
       <div class="chart-block">
         <div class="chart-block__header">
-          <h3>月度跑量</h3>
-          <label class="year-select"><span>年份</span><select data-stats-year-select>${yearOptions}</select></label>
+          <h3>${year} 月度跑量</h3>
+          <div class="chart-block__header-right">
+            <span class="year-total-inline">年度总跑量 <strong>${formatKm(getYearDistance(year))}</strong></span>
+            <label class="year-select"><select data-stats-year-select>${yearOptions}</select></label>
+          </div>
         </div>
         <div class="bar-chart">${bars}</div>
-      </div>
-      <div class="insight-list">
-        <article><span>最长训练</span><strong>${longestRun ? formatKm(longestRun.distanceKm) : "--"}</strong><p>${longestRun ? longestRun.title : "暂无"}</p></article>
-        <article><span>最佳全马</span><strong>${bestMarathon ? bestMarathon.finishTime : "--"}</strong><p>${bestMarathon ? [bestMarathon.name, bestMarathon.city].filter(Boolean).join(" · ") : "暂无"}</p></article>
-        <article><span>${year} 最高月跑量</span><strong>${bestMonthDist.toFixed(1)} km</strong><p>${bestMonth} 月</p></article>
-        <article><span>${year} 比赛数</span><strong>${yearRaces.length} 场</strong><p>${formatKm(getYearDistance(year))}</p></article>
       </div>
       <div class="month-records" id="monthRecords"></div>
     `;
@@ -737,10 +763,8 @@
     document.querySelectorAll("[data-route-target]").forEach((button) => {
       button.onclick = () => {
         const routeId = button.dataset.routeTarget;
-        // Update hero map directly — no tab switch
         heroActiveRouteId = routeId;
         updateHeroRoute(routeId, true);
-        window.scrollTo({ top: 0, behavior: "smooth" });
       };
     });
   }
@@ -782,6 +806,15 @@
       });
     }
 
+    let heroTileLayer = null;
+
+    function getTileUrl() {
+      const theme = document.documentElement.dataset.theme || "dark";
+      return theme === "light"
+        ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    }
+
     function renderHeroMap() {
       if (!window.L) return;
       heroMap = window.L.map(heroMapEl, {
@@ -789,7 +822,7 @@
         zoomControl: true,
         scrollWheelZoom: true,
       });
-      window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      heroTileLayer = window.L.tileLayer(getTileUrl(), {
         maxZoom: 19,
         subdomains: "abcd",
       }).addTo(heroMap);
@@ -861,6 +894,43 @@
     }
   }
 
+  // ---- Theme toggle ----
+  function initTheme() {
+    const saved = localStorage.getItem("theme") || "dark";
+    document.documentElement.dataset.theme = saved;
+    updateThemeIcon(saved);
+  }
+
+  function updateThemeIcon(theme) {
+    const icon = document.querySelector(".theme-toggle__icon");
+    if (icon) icon.textContent = theme === "light" ? "☀️" : "🌙";
+  }
+
+  function switchMapTiles() {
+    if (!heroMap || !window.L) return;
+    // Remove old tile layer and add new one matching theme
+    heroMap.eachLayer((layer) => {
+      if (layer instanceof window.L.TileLayer) {
+        heroMap.removeLayer(layer);
+      }
+    });
+    const url = document.documentElement.dataset.theme === "light"
+      ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    window.L.tileLayer(url, { maxZoom: 19, subdomains: "abcd" }).addTo(heroMap);
+  }
+
+  document.querySelector("#themeToggle")?.addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = current;
+    localStorage.setItem("theme", current);
+    updateThemeIcon(current);
+    switchMapTiles();
+    // Re-render panel to update SVG route preview colors
+    renderPanelContent();
+  });
+
+  initTheme();
   renderSummary();
   initPanelTabs();
   initHeroMap();
