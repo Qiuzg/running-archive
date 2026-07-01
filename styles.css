@@ -3565,3 +3565,50 @@ body.is-app-mode .hero__image {
     min-width: 44px;
   }
 }
+
+/* Dark consistency fixes for special first cards and profile branding. */
+.brand__mark--photo {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.brand__mark--photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.record-grid .race-card,
+.record-grid .race-card:first-child,
+.insight-list article,
+.insight-list article:nth-child(1) {
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)),
+    rgba(16, 21, 29, 0.92);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.record-grid .race-card:first-child .race-card__body,
+.record-grid .race-card .race-card__body {
+  background: transparent;
+}
+
+.record-grid .race-card:first-child h3,
+.record-grid .race-card:first-child p,
+.record-grid .race-card:first-child .race-card__meta,
+.record-grid .race-card:first-child .race-card__result span,
+.insight-list article:nth-child(1) span,
+.insight-list article:nth-child(1) p {
+  color: var(--muted);
+}
+
+.record-grid .race-card:first-child h3,
+.insight-list article:nth-child(1) strong {
+  color: var(--ink);
+}
