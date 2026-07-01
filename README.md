@@ -1,54 +1,90 @@
-# 跑步档案馆
+# Run Log
 
-这是一个静态网页版本的个人跑步档案馆。直接打开 `index.html` 即可查看，也可以部署到 GitHub Pages。
+个人跑步档案馆 — 记录马拉松比赛、日常训练与年度跑量。纯静态网站，深色运动风主题，支持 GitHub Pages / GitLab Pages 一键部署。
+
+## 页面结构
+
+单页应用，顶部导航切换三个面板：
+
+| 标签 | 内容 |
+|------|------|
+| **路线** | 左侧滚动列表（SVG 缩略图 + 日期距离），右侧全幅地图实时展示轨迹 |
+| **比赛** | 全马 / 半马分组卡片，含路线预览、成绩、配速，点击路线直接在地图展示 |
+| **统计** | 全屏年度数据：月度跑量柱状图、年度洞察卡片、每月训练分布明细 |
+
+地图上方浮动显示 5 项关键指标：累计里程、年度跑量、全马 PB、半马 PB、完赛场次。
+
+## 快速开始
+
+```bash
+python3 -m http.server 8080
+# 浏览器打开 http://localhost:8080
+```
+
+无需构建工具，无需 npm install。
+
+## 目录结构
+
+```
+index.html                 # 入口页面
+app.js                     # 主逻辑（IIFE，约 870 行）
+styles.css                 # 样式表（CSS 自定义属性，约 1515 行）
+data.generated.js          # 自动生成：跑步与比赛数据
+route-index.generated.js   # 自动生成：路线预览索引
+routes/*.js                # 每条路线的完整 GPS 坐标（按需加载）
+sync/
+  apple-health-import.py   # Apple Health 导出 → 生成数据文件
+  strava-sync.mjs          # Strava API → 生成数据文件
+assets/                    # 静态资源（头像等）
+```
 
 ## 数据维护
 
-- `data.js`：比赛、跑步记录、PB 和同步配置。
-- `route-index.generated.js`：公开路线索引，不含完整 GPS 坐标，用于快速加载页面。
-- `routes/*.js`：每条路线的完整公开轨迹，点击路线时按需加载。
-- `app.js`：统计计算、路线绘制、标签切换。
-
-## Apple Watch 自动同步建议
-
-网页不能直接读取 Apple Health。可以选两条链路：
-
-### 不走 Strava API：Apple Health 导出
-
-1. iPhone 打开健康 App。
-2. 点右上角头像或姓名缩写。
-3. 选择“导出所有健康数据”。
-4. 把导出的 zip 放到电脑。
-5. 运行：
+### Apple Health 导入
 
 ```bash
 python3 sync/apple-health-import.py /path/to/apple_health_export.zip
 ```
 
-脚本会生成 `data.generated.js`、`route-index.generated.js` 和 `routes/*.js`。页面会先加载轻量索引，点击某条路线时再加载该路线完整点位。
+脚本自动生成 `data.generated.js`、`route-index.generated.js` 和 `routes/*.js`。
 
-### 借助第三方 App 同步
+### Strava 同步
 
-1. Apple Watch 记录跑步。
-2. iPhone 使用 Strava、HealthFit 或 RunGap 把 Apple Health 跑步同步到 Strava。
-3. 在本项目运行 `sync/strava-sync.mjs` 拉取活动和路线。
-4. 脚本生成 `data.generated.js`、`route-index.generated.js` 和 `routes/*.js`，检查后刷新网页。
+1. Apple Watch 记录跑步 → 通过 Strava / HealthFit / RunGap 同步到 Strava
+2. 编辑 `sync/strava-sync.mjs`，填入 API 凭证后运行
 
-不要把 Strava token 写进前端文件，也不要提交到公开仓库。
+### 比赛判定规则
+
+脚本和前端采用相同的过滤逻辑，避免晚间长距离训练被误判为比赛：
+
+1. **距离**：41-44km → 全马，20-23km → 半马
+2. **时间**：只保留上午（开始时间早于 12:00）的记录。从 `sourceRunId`（格式 `apple-YYYYMMDD-HHMMSS`）中提取开始小时
 
 ## 路线隐私
 
-公开页面默认不展示原始完整路线。同步脚本会裁剪每条路线的前后若干坐标点，页面也会标注隐私半径。
+公开页面默认不展示完整路线。同步脚本会裁剪每条路线首尾若干坐标点，页面标注隐私半径。完整 GPS 数据存储在 `routes/*.js` 中，仅点击路线时按需加载。
 
-## 部署到 GitHub Pages
+## 部署
 
-这是纯静态项目，不需要构建步骤。推荐方式：
+### GitHub Pages
 
-1. 在 GitHub 新建一个仓库，例如 `running-archive`。
-2. 把本目录里的文件提交到仓库根目录。
-3. 打开仓库 `Settings` -> `Pages`。
-4. `Build and deployment` 选择 `Deploy from a branch`。
-5. Branch 选择 `main`，目录选择 `/root`。
-6. 保存后等待 GitHub 生成公开访问地址。
+仓库设置 → Pages → Source: `Deploy from a branch` → Branch: `main`, `/ (root)`。
 
-如果你希望访问地址是 `https://你的用户名.github.io/running-archive/`，仓库名就用 `running-archive`。如果希望是 `https://你的用户名.github.io/`，仓库名需要是 `你的用户名.github.io`。
+### GitLab Pages
+
+仓库已包含 `.gitlab-ci.yml`，推送到 `main` 分支后自动部署。网站地址：`https://<用户名>.gitlab.io/running-archive/`。
+
+```bash
+git remote add gitlab https://gitlab.com/<用户名>/running-archive.git
+git push gitlab main
+```
+
+两个远程互不冲突，同一份代码可以同时推送到 GitHub 和 GitLab。
+
+## 技术栈
+
+- **地图**：Leaflet.js（CDN 按需加载），CartoDB Dark Matter 暗色瓦片
+- **路线缩略图**：内联 SVG，Mercator 投影，暗色主题配色
+- **样式**：CSS 自定义属性、backdrop-filter 毛玻璃、CSS Grid/Flexbox
+- **数据加载**：完整 GPS 坐标通过动态 `<script>` 注入按需加载
+- **零依赖**：不依赖任何框架或构建工具
