@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>跑步档案馆</title>
+    <meta
+      name="description"
+      content="一个公开展示型的个人跑步档案馆，记录马拉松比赛、日常跑步与年度跑量。"
+    />
+    <link rel="stylesheet" href="./styles.css?v=20260701-9" />
+  </head>
+  <body>
+    <header class="hero">
+      <img
+        class="hero__image"
+        src="./assets/marathon-archive-hero.png"
+        alt="晨光中的跑鞋、号码布、奖牌和训练笔记"
+      />
+      <div class="hero__shade"></div>
+      <nav class="topbar" aria-label="主导航">
+        <a class="brand" href="#top" aria-label="跑步档案馆首页">
+          <span class="brand__mark">42</span>
+          <span>跑步档案馆</span>
+        </a>
+        <div class="topbar__links">
+          <a href="#" data-view-target="races">比赛</a>
+          <a href="#" data-view-target="routes">路线</a>
+          <a href="#" data-view-target="stats">统计</a>
+        </div>
+      </nav>
+      <section id="top" class="hero__content">
+        <p class="eyebrow">Personal Running Archive</p>
+        <h1>把每一次起跑，整理成一条时间线。</h1>
+        <p class="hero__copy">
+          这里记录马拉松履历、日常训练、年度跑量和不断刷新的个人最好成绩。
+        </p>
+        <div class="hero__actions" aria-label="快捷入口">
+          <a class="button button--primary" href="#" data-view-target="races">查看比赛记录</a>
+          <a class="button button--ghost" href="#" data-view-target="routes">路线足迹</a>
+          <a class="button button--ghost" href="#" data-view-target="stats">年度统计</a>
+        </div>
+      </section>
+    </header>
+
+    <main class="app-workspace">
+      <section class="summary-band" aria-label="关键跑步数据">
+        <div class="summary-grid" id="summaryGrid"></div>
+      </section>
+
+      <div class="view-switcher" role="tablist" aria-label="页面视图">
+        <button class="view-switcher__button is-active" type="button" data-view-target="races">比赛记录</button>
+        <button class="view-switcher__button" type="button" data-view-target="routes">路线足迹</button>
+        <button class="view-switcher__button" type="button" data-view-target="stats">年度统计</button>
+      </div>
+
+      <section class="section section--timeline view-panel is-active" id="races" data-view-panel="races">
+        <div class="section__header">
+          <p class="eyebrow">Marathon Timeline</p>
+          <h2>全马时间线</h2>
+        </div>
+        <div class="timeline" id="raceTimeline"></div>
+        <div class="section__subheader">
+          <p class="eyebrow">Race Records</p>
+          <h3>全部比赛记录</h3>
+        </div>
+        <div class="record-grid" id="raceCards"></div>
+      </section>
+
+      <section class="section section--routes view-panel" id="routes" data-view-panel="routes" hidden>
+        <div class="section__header">
+          <p class="eyebrow">Route Atlas</p>
+          <h2>路线足迹</h2>
+        </div>
+        <div class="route-atlas">
+          <article class="route-map-card" id="featuredRoute"></article>
+          <aside class="route-browser">
+            <div class="route-browser__toolbar">
+              <strong id="routeListSummary"></strong>
+              <div class="route-pager" id="routePager"></div>
+            </div>
+            <div class="route-list" id="routeList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section section--stats view-panel" data-view-panel="stats" hidden>
+        <div class="section__header">
+          <p class="eyebrow">Yearly Stats</p>
+          <h2>年度统计</h2>
+        </div>
+        <div class="stats-layout" id="stats">
+          <div class="chart-block">
+            <div class="chart-block__header">
+              <h3>月度跑量</h3>
+              <span id="chartYear"></span>
+            </div>
+            <div class="bar-chart" id="monthChart" aria-label="月度跑量柱状图"></div>
+          </div>
+          <div class="insight-list" id="insightList"></div>
+        </div>
+        <div class="month-records" id="monthRecords"></div>
+      </section>
+    </main>
+
+    <script src="./data.generated.js?v=20260701-5"></script>
+    <script src="./route-index.generated.js?v=20260701-5"></script>
+    <script src="./app.js?v=20260701-9"></script>
+  </body>
+</html>
