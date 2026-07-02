@@ -40,6 +40,8 @@
   let routeMap = null;
   let routeLayer = null;
   let leafletPromise = null;
+  let chartJsPromise = null;
+  let statsCharts = [];      // active Chart.js instances
   let selectedStatsYear = availableYears.includes(currentYear) ? currentYear : availableYears[0] || currentYear;
   let selectedStatsMonth = null;
 
@@ -47,6 +49,16 @@
     return activityItems
       .filter((item) => item.routeId === routeId)
       .sort(byDateDesc)[0];
+  }
+
+  // Sync .is-active UI state across race cards and route items
+  function updateActiveRouteUI(routeId) {
+    document.querySelectorAll(".race-card[data-route-target]").forEach((card) => {
+      card.classList.toggle("is-active", card.dataset.routeTarget === routeId);
+    });
+    document.querySelectorAll("[data-hero-route]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.heroRoute === routeId);
+    });
   }
 
   const routeItems = Object.values(routeIndex).sort((a, b) => {
@@ -220,9 +232,9 @@
         <path d="M-18 204 C68 150 150 204 235 148 S342 86 442 122" fill="none" stroke="${c.decor1}" stroke-width="2" stroke-dasharray="8 9" opacity="0.5" />
         <path d="M26 58 C110 112 178 46 250 88 S336 166 398 78" fill="none" stroke="${c.decor2}" stroke-width="2" stroke-dasharray="4 7" opacity="0.4" />
         <path d="M16 28 H404 M16 212 H404 M22 22 V218 M398 22 V218" fill="none" stroke="${c.decor3}" stroke-width="1" />
-        <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${variant === "mini" ? 10 : 12}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
-        <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${variant === "mini" ? 7 : 9}" stroke-linecap="round" stroke-linejoin="round" />
-        <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${variant === "mini" ? 2.5 : 3.5}" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${variant === "mini" ? 5 : 6}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
+        <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${variant === "mini" ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${variant === "mini" ? 1.5 : 2}" stroke-linecap="round" stroke-linejoin="round" />
         <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="4" />
         <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
       </svg>
@@ -320,7 +332,7 @@
         return;
       }
       const script = document.createElement("script");
-      script.src = `./routes/${routeId}.js?v=20260701-5`;
+      script.src = `./routes/${routeId}.js?v=20260702-6`;
       script.dataset.routeScript = routeId;
       script.onload = () => {
         script.dataset.loaded = "true";
@@ -348,6 +360,19 @@
     return leafletPromise;
   }
 
+  function loadChartJs() {
+    if (window.Chart) return Promise.resolve(window.Chart);
+    if (chartJsPromise) return chartJsPromise;
+    chartJsPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js";
+      script.onload = () => resolve(window.Chart);
+      script.onerror = () => reject(new Error("Chart.js load failed"));
+      document.body.appendChild(script);
+    });
+    return chartJsPromise;
+  }
+
   function renderLeafletRoute(route, detail) {
     const mapEl = document.querySelector("#routeMap");
     const fallbackEl = document.querySelector("#routeMapFallback");
@@ -360,19 +385,8 @@
     fallbackEl.hidden = true;
     const latLngs = detail.coordinates.map(([lon, lat]) => [lat, lon]);
 
+    // Create map once; on subsequent calls just swap layers
     if (!routeMap) {
-      routeMap = window.L.map(mapEl, {
-        attributionControl: true,
-        scrollWheelZoom: false,
-      });
-      window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-        attribution: "&copy; CartoDB",
-        subdomains: "abcd",
-      }).addTo(routeMap);
-    } else {
-      routeMap.removeLayer(routeLayer);
-      routeMap.remove();
       routeMap = window.L.map(mapEl, {
         attributionControl: true,
         scrollWheelZoom: false,
@@ -384,6 +398,11 @@
       }).addTo(routeMap);
     }
 
+    // Remove previous layers before adding new ones
+    if (routeLayer) routeMap.removeLayer(routeLayer);
+    if (routeMap._startMarker) routeMap.removeLayer(routeMap._startMarker);
+    if (routeMap._endMarker) routeMap.removeLayer(routeMap._endMarker);
+
     routeLayer = window.L.polyline(latLngs, {
       color: "#2457d6",
       weight: 5,
@@ -391,14 +410,14 @@
       lineJoin: "round",
       lineCap: "round",
     }).addTo(routeMap);
-    window.L.circleMarker(latLngs[0], {
+    routeMap._startMarker = window.L.circleMarker(latLngs[0], {
       radius: 6,
       color: "#207868",
       fillColor: "#ffffff",
       fillOpacity: 1,
       weight: 3,
     }).addTo(routeMap);
-    window.L.circleMarker(latLngs[latLngs.length - 1], {
+    routeMap._endMarker = window.L.circleMarker(latLngs[latLngs.length - 1], {
       radius: 6,
       color: "#ffffff",
       fillColor: "#d94b3d",
@@ -559,9 +578,8 @@
       btn.addEventListener("click", () => {
         if (btn.dataset.heroRoute === heroActiveRouteId) return;
         heroActiveRouteId = btn.dataset.heroRoute;
-        container.querySelectorAll("[data-hero-route]").forEach((b) => b.classList.remove("is-active"));
-        btn.classList.add("is-active");
         updateHeroRoute(heroActiveRouteId, true);
+        updateActiveRouteUI(heroActiveRouteId);
       });
     });
   }
@@ -590,8 +608,10 @@
       } else {
         media = `<div class="race-card__fallback"><span>${raceTypes[race.type] || "RUN"}</span><strong>${formatKm(race.distanceKm)}</strong></div>`;
       }
+      const hasRoute = race.routeId && routeIndex[race.routeId];
+      const isActive = hasRoute && race.routeId === heroActiveRouteId;
       return `
-        <article class="race-card">
+        <article class="race-card ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
           <div class="race-card__media">${media}</div>
           <div class="race-card__body">
             <div class="race-card__meta"><span>${formatDate(race.date)}</span>${race.isPB ? '<b class="badge badge--small">PB</b>' : ""}</div>
@@ -601,7 +621,6 @@
               <strong>${race.finishTime}</strong><span>${race.pace} /km</span>
             </div>
             ${race.notes ? `<p class="race-card__notes">${race.notes}</p>` : ""}
-            ${race.routeId ? `<button class="text-action" type="button" data-route-target="${escapeAttr(race.routeId)}">查看公开路线</button>` : ""}
           </div>
         </article>
       `;
@@ -646,6 +665,8 @@
       .join("");
 
     const yearRaces = races.filter((r) => new Date(r.date).getFullYear() === year);
+    const yearMarathonCount = yearRaces.filter((r) => r.type === "marathon").length;
+    const yearHalfCount = yearRaces.filter((r) => r.type === "half_marathon").length;
     const bestMonthDist = Math.max(...totals);
     const bestMonth = totals.indexOf(bestMonthDist) + 1;
 
@@ -659,7 +680,7 @@
         <div class="stats-kpi">
           <span>比赛</span>
           <strong>${yearRaces.length} 场</strong>
-          <small>全马 ${races.filter(r => r.type === "marathon" && new Date(r.date).getFullYear() === year).length} · 半马 ${races.filter(r => r.type === "half_marathon" && new Date(r.date).getFullYear() === year).length}</small>
+          <small>全马 ${yearMarathonCount} · 半马 ${yearHalfCount}</small>
         </div>
       </div>
       <div class="chart-block">
@@ -739,8 +760,10 @@
         } else {
           media = `<div class="race-card__fallback"><span>${raceTypes[race.type] || "RUN"}</span><strong>${formatKm(race.distanceKm)}</strong></div>`;
         }
+        const hasRoute = race.routeId && routeIndex[race.routeId];
+        const isActive = hasRoute && race.routeId === heroActiveRouteId;
         return `
-          <article class="race-card">
+          <article class="race-card ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
             <div class="race-card__media">${media}</div>
             <div class="race-card__body">
               <div class="race-card__meta"><span>${raceTypes[race.type] || race.type}</span><span>${formatDate(race.date)}</span></div>
@@ -751,7 +774,6 @@
                 ${race.isPB ? '<b class="badge badge--small">PB</b>' : ""}
               </div>
               ${race.notes ? `<p class="race-card__notes">${race.notes}</p>` : ""}
-              ${race.routeId ? `<button class="text-action" type="button" data-route-target="${escapeAttr(race.routeId)}">查看公开路线</button>` : ""}
             </div>
           </article>
         `;
@@ -760,11 +782,26 @@
   }
 
   function initRouteLinks() {
-    document.querySelectorAll("[data-route-target]").forEach((button) => {
-      button.onclick = () => {
-        const routeId = button.dataset.routeTarget;
+    // Race cards — entire card is clickable (skip nested interactive elements)
+    document.querySelectorAll(".race-card[data-route-target]").forEach((card) => {
+      card.onclick = (event) => {
+        if (event.target.closest("button, a, input, select, textarea")) return;
+        const routeId = card.dataset.routeTarget;
+        if (routeId === heroActiveRouteId) return;
         heroActiveRouteId = routeId;
         updateHeroRoute(routeId, true);
+        updateActiveRouteUI(routeId);
+      };
+    });
+
+    // Other route-target buttons (month bars, timeline links, etc.)
+    document.querySelectorAll("[data-route-target]:not(.race-card)").forEach((el) => {
+      el.onclick = () => {
+        const routeId = el.dataset.routeTarget;
+        if (routeId === heroActiveRouteId) return;
+        heroActiveRouteId = routeId;
+        updateHeroRoute(routeId, true);
+        updateActiveRouteUI(routeId);
       };
     });
   }
@@ -892,6 +929,217 @@
         heroMap.fitBounds(heroRouteLine.getBounds(), { padding: [80, 120] });
       }
     }
+    renderStatsOverlay(routeId);
+  }
+
+  // ---- Stats overlay with sparkline charts ----
+
+  function destroyStatsCharts() {
+    statsCharts.forEach(function (c) { c.destroy(); });
+    statsCharts = [];
+  }
+
+  function chartColors() {
+    var isLight = document.documentElement.dataset.theme === "light";
+    return {
+      grid: isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.10)",
+      text: isLight ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.45)",
+      line: isLight ? "#1a73e8" : "#5b9aff",
+      fill: isLight ? "rgba(26,115,232,0.08)" : "rgba(91,154,255,0.10)",
+      elevation: isLight ? "#e87a20" : "#ff9e4a",
+    };
+  }
+
+  function formatElapsed(seconds) {
+    if (seconds == null) return "";
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return h + ":" + String(m).padStart(2, "0") + "h";
+    return m + "min";
+  }
+
+  function makeSparkConfig(labels, data, lineColor, fillColor, yLabel, reverseY) {
+    var colors = chartColors();
+    // Calculate y-axis range from data with tight padding for readability
+    var validData = data.filter(function(v) { return v != null; });
+    var yMin, yMax;
+    if (validData.length >= 2) {
+      yMin = Math.min.apply(null, validData);
+      yMax = Math.max.apply(null, validData);
+      var pad = (yMax - yMin) * 0.12 || 1;  // 12% padding, min 1 unit
+      yMin = Math.floor(yMin - pad);
+      yMax = Math.ceil(yMax + pad);
+    }
+    var cfg = {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          borderColor: lineColor,
+          backgroundColor: fillColor,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: lineColor,
+          tension: 0.2,
+          fill: true,
+          spanGaps: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { intersect: false, mode: "nearest" },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: {
+            display: true,
+            ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 },
+            grid: { color: colors.grid, drawTicks: false },
+          },
+          y: {
+            display: true,
+            position: "right",
+            reverse: reverseY || false,
+            min: yMin,
+            max: yMax,
+            ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 3, callback: function(v) { return v; } },
+            grid: { color: colors.grid, drawTicks: false },
+            title: { display: !!yLabel, text: yLabel || "", color: colors.text, font: { size: 10, weight: "bold" } },
+          },
+        },
+      },
+    };
+    return cfg;
+  }
+
+  async function renderStatsOverlay(routeId) {
+    // Destroy previous
+    var existing = document.querySelector("#heroStatsOverlay");
+    if (existing) existing.remove();
+    destroyStatsCharts();
+
+    var route = routeIndex[routeId];
+    if (!route) return;
+
+    var activity = getActivityForRoute(routeId);
+    if (!activity) return;
+
+    var stats = [];
+    if (activity.avgHeartRate) {
+      stats.push({ label: "平均心率", value: activity.avgHeartRate + " bpm", sub: activity.maxHeartRate ? "最高 " + activity.maxHeartRate : "" });
+    }
+    if (activity.avgPower) {
+      stats.push({ label: "平均功率", value: activity.avgPower + " W" });
+    }
+    if (activity.pace) {
+      stats.push({ label: "平均配速", value: activity.pace + " /km" });
+    }
+    if (activity.finishTime || activity.duration) {
+      stats.push({ label: "用时", value: activity.finishTime || activity.duration });
+    }
+    var elevGain = route.elevationGain;
+    if (elevGain != null) {
+      stats.push({ label: "累计爬升", value: Math.round(elevGain) + " m" });
+    }
+
+    if (!stats.length) return;
+
+    var mapContainer = document.querySelector("#heroMap");
+    if (!mapContainer) return;
+
+    // Build stat value row
+    var valuesHtml = stats.map(function (s) {
+      return '<div class="hero-stats-overlay__item"><span class="hero-stats-overlay__label">' + s.label + '</span><strong>' + s.value + '</strong>' + (s.sub ? '<small>' + s.sub + '</small>' : '') + '</div>';
+    }).join("");
+
+    var chartsHtml = "";
+    var hasCharts = false;
+
+    // Try to get timeSeries from route detail
+    var timeSeries = null;
+    try {
+      await loadRouteDetail(routeId);
+      var detail = window.RUN_ROUTE_DETAIL[routeId];
+      if (detail && detail.timeSeries && detail.timeSeries.elapsed && detail.timeSeries.elapsed.length >= 2) {
+        timeSeries = detail.timeSeries;
+      }
+    } catch (e) {
+      // Route detail not available, just show aggregate values
+    }
+
+    if (timeSeries) {
+      try {
+        await loadChartJs();
+        var labels = timeSeries.elapsed.map(formatElapsed);
+
+        // Determine which charts to show
+        var showPace = timeSeries.pace && timeSeries.pace.some(function(p) { return p != null; });
+        var showElev = timeSeries.elevation && timeSeries.elevation.some(function(e) { return e != null; });
+        var showHR = timeSeries.heartRate && timeSeries.heartRate.some(function(h) { return h != null; });
+
+        if (showPace || showElev || showHR) {
+          hasCharts = true;
+          chartsHtml = '<div class="hero-stats-overlay__charts">';
+          if (showPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
+          if (showElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
+          if (showHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+          chartsHtml += '</div>';
+        }
+      } catch (e) {
+        chartsHtml = "";
+      }
+    }
+
+    var toggleHtml = hasCharts ? '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="折叠图表" aria-label="折叠图表">▼</button>' : '';
+    var html = '<div class="hero-stats-overlay" id="heroStatsOverlay"><div class="hero-stats-overlay__values">' + valuesHtml + toggleHtml + '</div>' + chartsHtml + '</div>';
+    mapContainer.insertAdjacentHTML("beforeend", html);
+
+    // Bind collapse toggle
+    if (hasCharts) {
+      var toggleBtn = document.querySelector("#statsToggle");
+      if (toggleBtn) {
+        toggleBtn.onclick = function(e) {
+          e.stopPropagation();
+          var overlay = document.querySelector("#heroStatsOverlay");
+          if (overlay) {
+            overlay.classList.toggle("hero-stats-overlay--collapsed");
+            toggleBtn.textContent = overlay.classList.contains("hero-stats-overlay--collapsed") ? "▶" : "▼";
+          }
+        };
+      }
+    }
+
+    // Render charts after DOM insertion
+    if (timeSeries && window.Chart) {
+      try {
+        var colors = chartColors();
+        var labels = timeSeries.elapsed.map(formatElapsed);
+
+        var paceCanvas = document.querySelector("#chartPace");
+        if (paceCanvas) {
+          var paceCfg = makeSparkConfig(labels, timeSeries.pace, colors.line, colors.fill, "min/km", true);
+          statsCharts.push(new window.Chart(paceCanvas, paceCfg));
+        }
+
+        var elevCanvas = document.querySelector("#chartElev");
+        if (elevCanvas) {
+          var elevCfg = makeSparkConfig(labels, timeSeries.elevation, colors.elevation, "rgba(255,158,74,0.08)", "m", false);
+          statsCharts.push(new window.Chart(elevCanvas, elevCfg));
+        }
+
+        var hrCanvas = document.querySelector("#chartHR");
+        if (hrCanvas) {
+          var hrColor = "#ff5e3a";
+          var hrCfg = makeSparkConfig(labels, timeSeries.heartRate, hrColor, "rgba(255,94,58,0.10)", "bpm", false);
+          statsCharts.push(new window.Chart(hrCanvas, hrCfg));
+        }
+      } catch (e) {
+        console.warn("Stats chart creation failed:", e);
+      }
+    }
   }
 
   // ---- Theme toggle ----
@@ -928,6 +1176,8 @@
     switchMapTiles();
     // Re-render panel to update SVG route preview colors
     renderPanelContent();
+    // Refresh stats overlay chart colors
+    if (heroActiveRouteId) renderStatsOverlay(heroActiveRouteId);
   });
 
   initTheme();

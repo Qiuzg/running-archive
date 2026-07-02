@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-
 CITY_POINTS = [
     ("南京", 118.7969, 32.0603),
     ("上海", 121.4737, 31.2304),
@@ -28,6 +27,28 @@ CITY_POINTS = [
     ("重庆", 106.5516, 29.5630),
     ("成都", 104.0665, 30.5728),
 ]
+
+# ============================================================
+# 比赛名称自定义映射
+# 格式: "日期(YYYY-MM-DD)": "自定义名称"
+# 每场比赛的日期唯一，新比赛按日期添加即可
+# 示例:
+#   "2024-11-03": "南京马拉松",
+#   "2024-04-21": "上海半程马拉松",
+# ============================================================
+RACE_NAME_OVERRIDES = {
+    "2023-04-09": "2023仙林半程马拉松",
+    "2024-04-21": "2024仙林半程马拉松",
+    "2025-03-02": "2025溧水半程马拉松",
+    "2025-03-09": "2025浦口半程马拉松",
+    "2025-03-16": "2025南京半程马拉松",
+    "2025-11-02": "2025高淳半程马拉松",
+    "2025-11-16": "2025南京马拉松",
+    "2026-03-15": "2026眉山仁寿半程马拉松",
+    "2026-03-22": "2026杭州西湖半程马拉松",
+    "2026-03-29": "2026宿迁马拉松",
+    "2026-04-12": "2026仙林半程马拉松",
+}
 
 
 def parse_apple_date(value):
@@ -84,7 +105,10 @@ def haversine_km(a, b):
     lat2, lon2 = math.radians(b[1]), math.radians(b[0])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    h = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
     return 6371 * 2 * math.asin(math.sqrt(h))
 
 
@@ -96,6 +120,26 @@ def trim_points(points, count):
     if len(points) <= count * 2 + 2:
         return []
     return points[count : len(points) - count]
+
+
+def downsample_list(values, max_items):
+    """Downsample a 1D list to max_items elements, preserving first and last."""
+    if max_items <= 0 or not values or len(values) <= max_items:
+        return values
+    step = (len(values) - 1) / (max_items - 1)
+    return [values[round(i * step)] for i in range(max_items)]
+
+
+def elevation_gain(elevations, points_to_trim=0):
+    """Compute total elevation gain (positive deltas only) in meters."""
+    if not elevations:
+        return 0.0
+    elems = elevations[points_to_trim : len(elevations) - points_to_trim] if points_to_trim else elevations
+    valid = [e for e in elems if e is not None]
+    if len(valid) < 2:
+        return 0.0
+    gain = sum(max(0, valid[i] - valid[i - 1]) for i in range(1, len(valid)))
+    return round(gain, 0)
 
 
 def downsample_points(points, max_points):
@@ -116,7 +160,10 @@ def infer_city(points):
     lon = sum(point[0] for point in points) / len(points)
     lat = sum(point[1] for point in points) / len(points)
     city, _, distance = min(
-        ((name, (city_lon, city_lat), haversine_km((lon, lat), (city_lon, city_lat))) for name, city_lon, city_lat in CITY_POINTS),
+        (
+            (name, (city_lon, city_lat), haversine_km((lon, lat), (city_lon, city_lat)))
+            for name, city_lon, city_lat in CITY_POINTS
+        ),
         key=lambda item: item[2],
     )
     return city if distance <= 120 else ""
@@ -155,6 +202,10 @@ def parse_route_datetime(path):
     if len(parts) < 3:
         return None
     raw_time = parts[2].replace(".", ":")
+    # Zero-pad hour: Apple GPX filenames use single-digit hours (6.08am not 06.08am)
+    if ":" in raw_time:
+        hour, rest = raw_time.split(":", 1)
+        raw_time = f"{hour.zfill(2)}:{rest}"
     for fmt in ["%Y-%m-%d %I:%M%p", "%Y-%m-%d %H:%M"]:
         try:
             return datetime.strptime(f"{parts[1]} {raw_time}", fmt)
@@ -168,7 +219,9 @@ def find_export_root(path):
     for name in ["export.xml", "导出.xml"]:
         candidates.extend(path.rglob(name))
     if not candidates:
-        raise FileNotFoundError("Could not find export.xml or 导出.xml in Apple Health export.")
+        raise FileNotFoundError(
+            "Could not find export.xml or 导出.xml in Apple Health export."
+        )
     return candidates[0].parent
 
 
@@ -177,11 +230,14 @@ def find_export_xml(export_root):
         candidate = export_root / name
         if candidate.exists():
             return candidate
-    raise FileNotFoundError("Could not find export.xml or 导出.xml in Apple Health export root.")
+    raise FileNotFoundError(
+        "Could not find export.xml or 导出.xml in Apple Health export root."
+    )
 
 
 def parse_workouts(export_xml):
     workouts = []
+    workout_windows = {}  # workout_id -> (start_dt, end_dt)
     for _, elem in ET.iterparse(export_xml, events=("end",)):
         if elem.tag != "Workout":
             continue
@@ -190,15 +246,42 @@ def parse_workouts(export_xml):
             continue
 
         start = parse_apple_date(elem.attrib.get("startDate"))
-        duration_seconds = duration_to_seconds(elem.attrib.get("duration"), elem.attrib.get("durationUnit"))
-        distance_km = distance_to_km(elem.attrib.get("totalDistance"), elem.attrib.get("totalDistanceUnit"))
+        duration_seconds = duration_to_seconds(
+            elem.attrib.get("duration"), elem.attrib.get("durationUnit")
+        )
+        distance_km = distance_to_km(
+            elem.attrib.get("totalDistance"), elem.attrib.get("totalDistanceUnit")
+        )
+        health_stats = {}
         for child in elem:
             if child.tag != "WorkoutStatistics":
                 continue
-            if child.attrib.get("type") == "HKQuantityTypeIdentifierDistanceWalkingRunning":
-                distance_km = distance_to_km(child.attrib.get("sum"), child.attrib.get("unit"))
-                break
-        workout_id = f"apple-{start.strftime('%Y%m%d-%H%M%S')}" if start else f"apple-{len(workouts) + 1}"
+            stat_type = child.attrib.get("type", "")
+            if stat_type == "HKQuantityTypeIdentifierDistanceWalkingRunning":
+                distance_km = distance_to_km(
+                    child.attrib.get("sum"), child.attrib.get("unit")
+                )
+            elif stat_type == "HKQuantityTypeIdentifierHeartRate":
+                avg_val = child.attrib.get("average")
+                if avg_val:
+                    health_stats["avgHeartRate"] = round(float(avg_val))
+                max_val = child.attrib.get("maximum")
+                if max_val:
+                    health_stats["maxHeartRate"] = round(float(max_val))
+            elif stat_type == "HKQuantityTypeIdentifierRunningCadence":
+                avg_val = child.attrib.get("average")
+                if avg_val:
+                    health_stats["avgCadence"] = round(float(avg_val), 1)
+            elif stat_type == "HKQuantityTypeIdentifierRunningPower":
+                avg_val = child.attrib.get("average")
+                if avg_val:
+                    health_stats["avgPower"] = round(float(avg_val), 1)
+
+        workout_id = (
+            f"apple-{start.strftime('%Y%m%d-%H%M%S')}"
+            if start
+            else f"apple-{len(workouts) + 1}"
+        )
 
         workouts.append(
             {
@@ -211,16 +294,91 @@ def parse_workouts(export_xml):
                 "pace": pace_for(distance_km, duration_seconds),
                 "runType": "long" if distance_km >= 25 else "easy",
                 "location": "",
+                **health_stats,
                 "notes": "",
             }
         )
+        if start and duration_seconds:
+            from datetime import timedelta
+            end_dt = start + timedelta(seconds=duration_seconds)
+            workout_windows[workout_id] = (start, end_dt)
         elem.clear()
-    return workouts
+    return workouts, workout_windows
+
+
+def extract_hr_records(xml_path, workout_windows):
+    """Extract heart rate time-series from export.xml using regex streaming.
+    Returns dict: {workout_id: [(elapsed_seconds, hr_value), ...]}"""
+    import re
+    from collections import defaultdict
+    from datetime import datetime, timedelta, timezone
+
+    # Convert workout windows to UTC timestamps for robust comparison
+    def to_utc_ts(dt):
+        if dt.tzinfo is None:
+            # Assume local time is CST (UTC+8) for Chinese Apple Health exports
+            return dt.replace(tzinfo=timezone(timedelta(hours=8))).timestamp()
+        return dt.timestamp()
+
+    # Build index: date -> list of (workout_id, start_ts, end_ts)
+    date_index = defaultdict(list)
+    for wid, (start, end) in workout_windows.items():
+        try:
+            start_ts = to_utc_ts(start)
+            end_ts = to_utc_ts(end)
+            date_index[start.date().isoformat()].append((wid, start_ts, end_ts))
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    if not date_index:
+        return {}
+
+    hr_pattern = re.compile(
+        r'<Record type="HKQuantityTypeIdentifierHeartRate"'
+        r'.*?startDate="([^"]*)"'
+        r'.*?value="([^"]*)"'
+    )
+
+    hr_data = defaultdict(list)
+    scanned = 0
+    matched = 0
+    buf_seconds = 300  # 5-min buffer for clock skew
+
+    with open(xml_path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if 'HKQuantityTypeIdentifierHeartRate' not in line:
+                continue
+            m = hr_pattern.search(line)
+            if not m:
+                continue
+            scanned += 1
+            date_str = m.group(1)[:10]
+            if date_str not in date_index:
+                continue
+            try:
+                hr_time = datetime.fromisoformat(m.group(1))
+                hr_val = float(m.group(2))
+                hr_ts = to_utc_ts(hr_time)
+            except (ValueError, TypeError, AttributeError):
+                continue
+            # Check against all workouts on this date
+            for wid, w_start_ts, w_end_ts in date_index[date_str]:
+                if w_start_ts - buf_seconds <= hr_ts <= w_end_ts + buf_seconds:
+                    elapsed = hr_ts - w_start_ts
+                    hr_data[wid].append((elapsed, hr_val))
+                    matched += 1
+                    break  # assume one workout per time slot
+
+    print(f"  HR extraction: scanned {scanned} records, matched {matched} to workouts")
+    return dict(hr_data)
 
 
 def parse_gpx(path):
     tree = ET.parse(path)
     points = []
+    elevations = []
+    timestamps = []
+    speeds = []
     for point in tree.iter():
         if not point.tag.endswith("trkpt"):
             continue
@@ -228,42 +386,187 @@ def parse_gpx(path):
         lon = point.attrib.get("lon")
         if lat and lon:
             points.append([round(float(lon), 6), round(float(lat), 6)])
-    return points
+            # Extract elevation from <ele> child element
+            ele_el = point.find("{http://www.topografix.com/GPX/1/1}ele")
+            if ele_el is None:
+                ele_el = point.find("ele")
+            if ele_el is not None and ele_el.text:
+                try:
+                    elevations.append(round(float(ele_el.text), 1))
+                except ValueError:
+                    elevations.append(None)
+            else:
+                elevations.append(None)
+            # Extract timestamp from <time> child element
+            time_el = point.find("{http://www.topografix.com/GPX/1/1}time")
+            if time_el is None:
+                time_el = point.find("time")
+            if time_el is not None and time_el.text:
+                timestamps.append(time_el.text.strip())
+            else:
+                timestamps.append(None)
+            # Extract speed from <extensions><speed> child element
+            speed_val = None
+            ext_el = point.find("{http://www.topografix.com/GPX/1/1}extensions")
+            if ext_el is None:
+                ext_el = point.find("extensions")
+            if ext_el is not None:
+                speed_el = ext_el.find("{http://www.topografix.com/GPX/1/1}speed")
+                if speed_el is None:
+                    speed_el = ext_el.find("speed")
+                if speed_el is not None and speed_el.text:
+                    try:
+                        speed_val = round(float(speed_el.text), 2)
+                    except ValueError:
+                        pass
+            speeds.append(speed_val)
+    return points, elevations, timestamps, speeds
 
 
-def assign_routes(export_root, workouts, trim_count, privacy_radius, max_points):
+def compute_time_series(timestamps, speeds, elevations, trim_count, max_points, heart_rates=None):
+    """Downsample time-series arrays to max_points, preserving alignment.
+    Returns dict with elapsed, speed, elevation, pace, and optionally heartRate."""
+    n = len(timestamps)
+    if trim_count > 0 and n > trim_count * 2:
+        timestamps = timestamps[trim_count : n - trim_count]
+        speeds = speeds[trim_count : n - trim_count]
+        elevations = elevations[trim_count : n - trim_count]
+        n = len(timestamps)
+
+    if max_points > 0 and n > max_points:
+        step = (n - 1) / (max_points - 1)
+        indices = [round(i * step) for i in range(max_points)]
+        timestamps = [timestamps[i] for i in indices]
+        speeds = [speeds[i] for i in indices]
+        elevations = [elevations[i] for i in indices]
+        n = max_points
+
+    # Compute elapsed seconds from first valid timestamp
+    elapsed_secs = []
+    base = None
+    for ts in timestamps:
+        if ts and base is None:
+            try:
+                from datetime import datetime
+                base = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        if ts and base:
+            try:
+                from datetime import datetime
+                t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                elapsed_secs.append(round((t - base).total_seconds()))
+            except Exception:
+                elapsed_secs.append(None)
+        else:
+            elapsed_secs.append(None)
+
+    # Compute pace: min/km from speed (m/s)
+    pace = []
+    for s in speeds:
+        if s and s > 0.1:
+            pace.append(round(1000 / (s * 60), 1))
+        else:
+            pace.append(None)
+
+    result = {
+        "elapsed": elapsed_secs,
+        "speed": speeds,
+        "elevation": elevations,
+        "pace": pace,
+    }
+
+    # Match and downsample heart rate data
+    if heart_rates and elapsed_secs:
+        hr_sorted = sorted(heart_rates, key=lambda x: x[0])
+        if hr_sorted:
+            # For each GPX elapsed point, pick the nearest HR reading
+            # This ensures HR data is aligned to the same x-axis as pace/elevation
+            hr_aligned = []
+            for elapsed in elapsed_secs:
+                if elapsed is None:
+                    hr_aligned.append(None)
+                    continue
+                best_val = None
+                best_dist = float("inf")
+                for hr_elapsed, hr_val in hr_sorted:
+                    dist = abs(hr_elapsed - elapsed)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_val = hr_val
+                hr_aligned.append(round(best_val) if best_val is not None else None)
+            result["heartRate"] = hr_aligned
+
+    return result
+
+
+def assign_routes(export_root, workouts, trim_count, privacy_radius, max_points, hr_data=None):
     routes = {}
     route_files = sorted((export_root / "workout-routes").glob("*.gpx"))
     unmatched = []
     used_workout_ids = set()
+    if hr_data is None:
+        hr_data = {}
 
     for route_file in route_files:
-        raw_points = parse_gpx(route_file)
-        public_points = downsample_points(trim_points(raw_points, trim_count), max_points)
+        raw_points, raw_elevations, raw_timestamps, raw_speeds = parse_gpx(route_file)
+        public_points = downsample_points(
+            trim_points(raw_points, trim_count), max_points
+        )
         if len(public_points) < 2:
             continue
+
+        # Trim and downsample elevations in parallel with coordinates
+        trimmed_elevations = (
+            raw_elevations[trim_count : len(raw_elevations) - trim_count]
+            if len(raw_elevations) > trim_count * 2
+            else raw_elevations
+        )
+        public_elevations = downsample_list(trimmed_elevations, max_points) if max_points > 0 else trimmed_elevations
+        route_elevation_gain = elevation_gain(raw_elevations, trim_count)
 
         route_start = parse_route_datetime(route_file)
         route_date = route_start.date() if route_start else None
 
-        candidates = [item for item in workouts if route_date and item["start"] and item["start"].date() == route_date]
+        candidates = [
+            item
+            for item in workouts
+            if route_date and item["start"] and item["start"].date() == route_date
+        ]
         if not candidates:
             unmatched.append(route_file.name)
             continue
 
-        available = [item for item in candidates if item["id"] not in used_workout_ids] or candidates
+        available = [
+            item for item in candidates if item["id"] not in used_workout_ids
+        ] or candidates
         if route_start:
             workout = min(
                 available,
-                key=lambda item: abs((item["start"].replace(tzinfo=None) - route_start).total_seconds()),
+                key=lambda item: abs(
+                    (item["start"].replace(tzinfo=None) - route_start).total_seconds()
+                ),
             )
         else:
-            workout = min(available, key=lambda item: abs(item["distanceKm"] - route_distance_km(public_points)))
+            workout = min(
+                available,
+                key=lambda item: abs(
+                    item["distanceKm"] - route_distance_km(public_points)
+                ),
+            )
         used_workout_ids.add(workout["id"])
         route_id = f"route-{workout['id']}"
+
+        # Compute time series for charts (after workout is identified, for HR matching)
+        time_series = compute_time_series(
+            raw_timestamps, raw_speeds, raw_elevations, trim_count, max_points,
+            heart_rates=hr_data.get(workout["id"])
+        )
         city = infer_city(public_points)
         workout["location"] = city or "户外"
-        workout["title"] = build_run_title(workout.get("start"), city, workout.get("distanceKm") or 0)
+        workout["title"] = build_run_title(
+            workout.get("start"), city, workout.get("distanceKm") or 0
+        )
         workout["routeId"] = route_id
         routes[route_id] = {
             "id": route_id,
@@ -273,6 +576,9 @@ def assign_routes(export_root, workouts, trim_count, privacy_radius, max_points)
             "privacy": "起终点附近已裁剪",
             "hiddenStartEndMeters": privacy_radius,
             "coordinates": public_points,
+            "elevationGain": route_elevation_gain,
+            "elevations": public_elevations,
+            "timeSeries": time_series,
         }
 
     return routes, unmatched
@@ -302,6 +608,7 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
         # Only count morning runs as races (start hour < 12).
         # ID format: apple-YYYYMMDD-HHMMSS
         import re
+
         match = re.search(r"[_-](\d{2})(\d{2})(\d{2})$", item["id"])
         if match:
             hour = int(match.group(1))
@@ -309,7 +616,11 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
                 continue
 
         place = "" if item.get("location") == "户外" else item.get("location", "")
-        display_name = f"{place}{name} {item['date']}" if place else f"{name} {item['date']}"
+        # 优先使用自定义名称，否则自动生成
+        display_name = RACE_NAME_OVERRIDES.get(
+            item["date"],
+            f"{place}{name} {item['date']}" if place else f"{name} {item['date']}",
+        )
         race_candidates.append(
             {
                 "id": f"race-{item['id']}",
@@ -327,14 +638,26 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
                 "routeId": item.get("routeId"),
                 "notes": "",
                 "photos": [],
+                "avgHeartRate": item.get("avgHeartRate"),
+                "maxHeartRate": item.get("maxHeartRate"),
+                "avgCadence": item.get("avgCadence"),
+                "avgPower": item.get("avgPower"),
             }
         )
 
     for race_type in ["marathon", "half_marathon"]:
-      typed = [item for item in race_candidates if item["type"] == race_type]
-      if typed:
-        best = min(typed, key=lambda item: sum(int(part) * 60 ** index for index, part in enumerate(reversed(item["finishTime"].split(":")))))
-        best["isPB"] = True
+        typed = [item for item in race_candidates if item["type"] == race_type]
+        if typed:
+            best = min(
+                typed,
+                key=lambda item: sum(
+                    int(part) * 60**index
+                    for index, part in enumerate(
+                        reversed(item["finishTime"].split(":"))
+                    )
+                ),
+            )
+            best["isPB"] = True
 
     year = datetime.now().year
     data = {
@@ -364,9 +687,15 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
     for route_id, route in routes.items():
         detail = dict(route)
         coordinates = detail.get("coordinates", [])
-        route_index[route_id] = {key: value for key, value in detail.items() if key != "coordinates"}
+        route_index[route_id] = {
+            key: value
+            for key, value in detail.items()
+            if key not in ("coordinates", "elevations", "timeSeries")
+        }
         route_index[route_id]["pointCount"] = len(coordinates)
-        route_index[route_id]["previewCoordinates"] = downsample_points(coordinates, 220)
+        route_index[route_id]["previewCoordinates"] = downsample_points(
+            coordinates, 220
+        )
         route_index[route_id]["routeFile"] = f"./routes/{route_id}.js"
         (route_dir / f"{route_id}.js").write_text(
             "window.RUN_ROUTE_DETAIL = window.RUN_ROUTE_DETAIL || {};\n"
@@ -381,12 +710,36 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Import Apple Health export data into the running archive.")
-    parser.add_argument("export", help="Path to Apple Health export zip or extracted apple_health_export directory.")
-    parser.add_argument("--out", default=str(Path(__file__).resolve().parents[1]), help="Output directory.")
-    parser.add_argument("--trim-points", type=int, default=8, help="Number of GPS points to remove from each end.")
-    parser.add_argument("--privacy-radius", type=int, default=600, help="Displayed privacy radius in meters.")
-    parser.add_argument("--max-route-points", type=int, default=0, help="Maximum public points kept per route. Use 0 to keep all public points.")
+    parser = argparse.ArgumentParser(
+        description="Import Apple Health export data into the running archive."
+    )
+    parser.add_argument(
+        "export",
+        help="Path to Apple Health export zip or extracted apple_health_export directory.",
+    )
+    parser.add_argument(
+        "--out",
+        default=str(Path(__file__).resolve().parents[1]),
+        help="Output directory.",
+    )
+    parser.add_argument(
+        "--trim-points",
+        type=int,
+        default=8,
+        help="Number of GPS points to remove from each end.",
+    )
+    parser.add_argument(
+        "--privacy-radius",
+        type=int,
+        default=600,
+        help="Displayed privacy radius in meters.",
+    )
+    parser.add_argument(
+        "--max-route-points",
+        type=int,
+        default=0,
+        help="Maximum public points kept per route. Use 0 to keep all public points.",
+    )
     args = parser.parse_args()
 
     source = Path(args.export).expanduser().resolve()
@@ -397,22 +750,38 @@ def main():
             with zipfile.ZipFile(source) as archive:
                 archive.extractall(tmp)
             export_root = find_export_root(Path(tmp))
-            workouts = parse_workouts(find_export_xml(export_root))
+            xml_path = find_export_xml(export_root)
+            workouts, workout_windows = parse_workouts(xml_path)
+            hr_data = extract_hr_records(xml_path, workout_windows)
             routes, unmatched = assign_routes(
-                export_root, workouts, args.trim_points, args.privacy_radius, args.max_route_points
+                export_root,
+                workouts,
+                args.trim_points,
+                args.privacy_radius,
+                args.max_route_points,
+                hr_data=hr_data,
             )
             write_outputs(out_dir, workouts, routes, args.privacy_radius)
     else:
         export_root = find_export_root(source)
-        workouts = parse_workouts(find_export_xml(export_root))
+        xml_path = find_export_xml(export_root)
+        workouts, workout_windows = parse_workouts(xml_path)
+        hr_data = extract_hr_records(xml_path, workout_windows)
         routes, unmatched = assign_routes(
-            export_root, workouts, args.trim_points, args.privacy_radius, args.max_route_points
+            export_root,
+            workouts,
+            args.trim_points,
+            args.privacy_radius,
+            args.max_route_points,
+            hr_data=hr_data,
         )
         write_outputs(out_dir, workouts, routes, args.privacy_radius)
 
     print(f"Imported {len(workouts)} running workouts and {len(routes)} routes.")
     if unmatched:
-        print(f"Skipped {len(unmatched)} route files that could not be matched by date.")
+        print(
+            f"Skipped {len(unmatched)} route files that could not be matched by date."
+        )
 
 
 if __name__ == "__main__":

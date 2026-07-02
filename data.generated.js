@@ -12,7 +12,7 @@ window.RUN_ARCHIVE_DATA = {
     {
       "id": "race-apple-20230409-080438",
       "sourceRunId": "apple-20230409-080438",
-      "name": "南京半马 2023-04-09",
+      "name": "2023仙林半程马拉松",
       "type": "half_marathon",
       "date": "2023-04-09",
       "city": "南京",
@@ -24,12 +24,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20230409-080438",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 171,
+      "maxHeartRate": 193,
+      "avgCadence": null,
+      "avgPower": null
     },
     {
       "id": "race-apple-20240421-081012",
       "sourceRunId": "apple-20240421-081012",
-      "name": "南京半马 2024-04-21",
+      "name": "2024仙林半程马拉松",
       "type": "half_marathon",
       "date": "2024-04-21",
       "city": "南京",
@@ -41,63 +45,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20240421-081012",
       "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20240927-214658",
-      "sourceRunId": "apple-20240927-214658",
-      "name": "半马 2024-09-27",
-      "type": "half_marathon",
-      "date": "2024-09-27",
-      "city": "",
-      "country": "",
-      "distanceKm": 21.13,
-      "finishTime": "01:57:36",
-      "pace": "05:34",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": null,
-      "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20241012-210032",
-      "sourceRunId": "apple-20241012-210032",
-      "name": "南京半马 2024-10-12",
-      "type": "half_marathon",
-      "date": "2024-10-12",
-      "city": "南京",
-      "country": "",
-      "distanceKm": 21.16,
-      "finishTime": "01:45:05",
-      "pace": "04:58",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": "route-apple-20241012-210032",
-      "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20241231-200903",
-      "sourceRunId": "apple-20241231-200903",
-      "name": "半马 2024-12-31",
-      "type": "half_marathon",
-      "date": "2024-12-31",
-      "city": "",
-      "country": "",
-      "distanceKm": 21.15,
-      "finishTime": "01:40:29",
-      "pace": "04:45",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": null,
-      "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 178,
+      "maxHeartRate": 187,
+      "avgCadence": null,
+      "avgPower": 231.4
     },
     {
       "id": "race-apple-20250302-083145",
       "sourceRunId": "apple-20250302-083145",
-      "name": "南京半马 2025-03-02",
+      "name": "2025溧水半程马拉松",
       "type": "half_marathon",
       "date": "2025-03-02",
       "city": "南京",
@@ -109,12 +66,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20250302-083145",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 172,
+      "maxHeartRate": 180,
+      "avgCadence": null,
+      "avgPower": 253.6
     },
     {
       "id": "race-apple-20250309-081222",
       "sourceRunId": "apple-20250309-081222",
-      "name": "南京半马 2025-03-09",
+      "name": "2025浦口半程马拉松",
       "type": "half_marathon",
       "date": "2025-03-09",
       "city": "南京",
@@ -126,12 +87,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20250309-081222",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 177,
+      "maxHeartRate": 184,
+      "avgCadence": null,
+      "avgPower": 282.9
     },
     {
       "id": "race-apple-20250316-075434",
       "sourceRunId": "apple-20250316-075434",
-      "name": "南京半马 2025-03-16",
+      "name": "2025南京半程马拉松",
       "type": "half_marathon",
       "date": "2025-03-16",
       "city": "南京",
@@ -143,12 +108,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20250316-075434",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 171,
+      "maxHeartRate": 183,
+      "avgCadence": null,
+      "avgPower": 273.6
     },
     {
       "id": "race-apple-20251102-073200",
       "sourceRunId": "apple-20251102-073200",
-      "name": "南京半马 2025-11-02",
+      "name": "2025高淳半程马拉松",
       "type": "half_marathon",
       "date": "2025-11-02",
       "city": "南京",
@@ -160,12 +129,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20251102-073200",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 175,
+      "maxHeartRate": 186,
+      "avgCadence": null,
+      "avgPower": 286.0
     },
     {
       "id": "race-apple-20251116-074728",
       "sourceRunId": "apple-20251116-074728",
-      "name": "南京全马 2025-11-16",
+      "name": "2025南京马拉松",
       "type": "marathon",
       "date": "2025-11-16",
       "city": "南京",
@@ -177,12 +150,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": true,
       "routeId": "route-apple-20251116-074728",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 170,
+      "maxHeartRate": 178,
+      "avgCadence": null,
+      "avgPower": 263.2
     },
     {
       "id": "race-apple-20260315-091811",
       "sourceRunId": "apple-20260315-091811",
-      "name": "成都半马 2026-03-15",
+      "name": "2026眉山仁寿半程马拉松",
       "type": "half_marathon",
       "date": "2026-03-15",
       "city": "成都",
@@ -194,12 +171,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20260315-091811",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 174,
+      "maxHeartRate": 186,
+      "avgCadence": null,
+      "avgPower": 288.1
     },
     {
       "id": "race-apple-20260322-063856",
       "sourceRunId": "apple-20260322-063856",
-      "name": "杭州半马 2026-03-22",
+      "name": "2026杭州西湖半程马拉松",
       "type": "half_marathon",
       "date": "2026-03-22",
       "city": "杭州",
@@ -211,12 +192,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20260322-063856",
       "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 152,
+      "maxHeartRate": 168,
+      "avgCadence": null,
+      "avgPower": 258.6
     },
     {
       "id": "race-apple-20260329-073028",
       "sourceRunId": "apple-20260329-073028",
-      "name": "全马 2026-03-29",
+      "name": "2026宿迁马拉松",
       "type": "marathon",
       "date": "2026-03-29",
       "city": "",
@@ -228,29 +213,16 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": false,
       "routeId": "route-apple-20260329-073028",
       "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20260406-151101",
-      "sourceRunId": "apple-20260406-151101",
-      "name": "南京半马 2026-04-06",
-      "type": "half_marathon",
-      "date": "2026-04-06",
-      "city": "南京",
-      "country": "",
-      "distanceKm": 21.16,
-      "finishTime": "01:50:51",
-      "pace": "05:14",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": "route-apple-20260406-151101",
-      "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 162,
+      "maxHeartRate": 177,
+      "avgCadence": null,
+      "avgPower": 245.5
     },
     {
       "id": "race-apple-20260412-073258",
       "sourceRunId": "apple-20260412-073258",
-      "name": "南京半马 2026-04-12",
+      "name": "2026仙林半程马拉松",
       "type": "half_marathon",
       "date": "2026-04-12",
       "city": "南京",
@@ -262,41 +234,11 @@ window.RUN_ARCHIVE_DATA = {
       "isPB": true,
       "routeId": "route-apple-20260412-073258",
       "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20260425-192403",
-      "sourceRunId": "apple-20260425-192403",
-      "name": "南京半马 2026-04-25",
-      "type": "half_marathon",
-      "date": "2026-04-25",
-      "city": "南京",
-      "country": "",
-      "distanceKm": 22.08,
-      "finishTime": "01:50:21",
-      "pace": "05:00",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": "route-apple-20260425-192403",
-      "notes": "",
-      "photos": []
-    },
-    {
-      "id": "race-apple-20260529-204815",
-      "sourceRunId": "apple-20260529-204815",
-      "name": "南京半马 2026-05-29",
-      "type": "half_marathon",
-      "date": "2026-05-29",
-      "city": "南京",
-      "country": "",
-      "distanceKm": 21.38,
-      "finishTime": "01:45:29",
-      "pace": "04:56",
-      "bibNumber": "",
-      "isPB": false,
-      "routeId": "route-apple-20260529-204815",
-      "notes": "",
-      "photos": []
+      "photos": [],
+      "avgHeartRate": 172,
+      "maxHeartRate": 185,
+      "avgCadence": null,
+      "avgPower": 297.2
     }
   ],
   "runs": [
@@ -1641,6 +1583,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "09:52",
       "runType": "easy",
       "location": "户外",
+      "avgHeartRate": 101,
+      "maxHeartRate": 117,
       "notes": ""
     },
     {
@@ -1652,6 +1596,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:00",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 180,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20221203-155448"
     },
@@ -1664,6 +1610,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:57",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 160,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20221204-081138"
     },
@@ -1676,6 +1624,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:50",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 178,
+      "maxHeartRate": 185,
       "notes": "",
       "routeId": "route-apple-20230304-195207"
     },
@@ -1688,6 +1638,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:36",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 182,
+      "maxHeartRate": 190,
       "notes": "",
       "routeId": "route-apple-20230408-184738"
     },
@@ -1700,6 +1652,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:51",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 171,
+      "maxHeartRate": 193,
       "notes": "",
       "routeId": "route-apple-20230409-080438"
     },
@@ -1712,6 +1666,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:14",
       "runType": "easy",
       "location": "南京",
+      "avgHeartRate": 170,
+      "maxHeartRate": 189,
       "notes": "",
       "routeId": "route-apple-20230527-080941"
     },
@@ -1724,6 +1680,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 256.1,
+      "avgHeartRate": 176,
+      "maxHeartRate": 185,
       "notes": "",
       "routeId": "route-apple-20231022-084816"
     },
@@ -1736,6 +1695,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 247.2,
+      "avgHeartRate": 177,
+      "maxHeartRate": 190,
       "notes": "",
       "routeId": "route-apple-20231122-191630"
     },
@@ -1748,6 +1710,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.1,
+      "avgHeartRate": 175,
+      "maxHeartRate": 188,
       "notes": "",
       "routeId": "route-apple-20231127-190811"
     },
@@ -1760,6 +1725,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 260.9,
+      "avgHeartRate": 179,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20231203-095914"
     },
@@ -1772,6 +1740,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:17",
       "runType": "easy",
       "location": "户外",
+      "avgHeartRate": 162,
+      "maxHeartRate": 171,
       "notes": ""
     },
     {
@@ -1783,6 +1753,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:52",
       "runType": "easy",
       "location": "户外",
+      "avgHeartRate": 167,
+      "maxHeartRate": 179,
       "notes": ""
     },
     {
@@ -1794,6 +1766,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:14",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 262.0,
+      "avgHeartRate": 173,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20231227-194156"
     },
@@ -1806,6 +1781,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 255.0,
+      "avgHeartRate": 175,
+      "maxHeartRate": 182,
       "notes": "",
       "routeId": "route-apple-20240113-145334"
     },
@@ -1818,6 +1796,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.1,
+      "avgHeartRate": 186,
+      "maxHeartRate": 195,
       "notes": "",
       "routeId": "route-apple-20240409-184608"
     },
@@ -1830,6 +1811,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:31",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 247.8,
+      "avgHeartRate": 171,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20240413-101650"
     },
@@ -1842,6 +1826,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.5,
+      "avgHeartRate": 169,
+      "maxHeartRate": 182,
       "notes": "",
       "routeId": "route-apple-20240416-191225"
     },
@@ -1854,6 +1841,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:55",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 231.4,
+      "avgHeartRate": 178,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20240421-081012"
     },
@@ -1866,6 +1856,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 256.5,
+      "avgHeartRate": 176,
+      "maxHeartRate": 190,
       "notes": "",
       "routeId": "route-apple-20240510-202920"
     },
@@ -1878,6 +1871,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:42",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 240.0,
+      "avgHeartRate": 165,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20240512-195911"
     },
@@ -1890,6 +1886,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:40",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 241.0,
+      "avgHeartRate": 168,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20240513-204226"
     },
@@ -1902,6 +1901,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:44",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.8,
+      "avgHeartRate": 167,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20240518-181301"
     },
@@ -1914,6 +1916,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:05",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 224.3,
+      "avgHeartRate": 162,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20240520-192018"
     },
@@ -1926,6 +1931,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 234.5,
+      "avgHeartRate": 163,
+      "maxHeartRate": 173,
       "notes": "",
       "routeId": "route-apple-20240521-190110"
     },
@@ -1938,6 +1946,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:40",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 204.0,
+      "avgHeartRate": 158,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20240522-195308"
     },
@@ -1950,6 +1961,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:52",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 232.6,
+      "avgHeartRate": 160,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20240528-183338"
     },
@@ -1962,6 +1976,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:14",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 217.3,
+      "avgHeartRate": 157,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20240529-184130"
     },
@@ -1974,6 +1991,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:34",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.3,
+      "avgHeartRate": 176,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20240615-192104"
     },
@@ -1986,6 +2006,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:20",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 215.2,
+      "avgHeartRate": 156,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20240630-200406"
     },
@@ -1998,6 +2021,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 216.6,
+      "avgHeartRate": 155,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20240706-175215"
     },
@@ -2010,6 +2036,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.9,
+      "avgHeartRate": 173,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20240713-161518"
     },
@@ -2022,6 +2051,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 208.5,
+      "avgHeartRate": 154,
+      "maxHeartRate": 161,
       "notes": "",
       "routeId": "route-apple-20240719-194124"
     },
@@ -2034,6 +2066,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.7,
+      "avgHeartRate": 164,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20240720-211109"
     },
@@ -2046,6 +2081,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.4,
+      "avgHeartRate": 173,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20240810-182538"
     },
@@ -2058,6 +2096,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:40",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 241.3,
+      "avgHeartRate": 176,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20240823-210300"
     },
@@ -2070,6 +2111,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:54",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 220.2,
+      "avgHeartRate": 143,
+      "maxHeartRate": 152,
       "notes": "",
       "routeId": "route-apple-20240830-211857"
     },
@@ -2082,6 +2126,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:50",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 235.7,
+      "avgHeartRate": 167,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20240830-212204"
     },
@@ -2094,6 +2141,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:52",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 233.0,
+      "avgHeartRate": 164,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20240906-211015"
     },
@@ -2106,6 +2156,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 231.3,
+      "avgHeartRate": 159,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20240914-210208"
     },
@@ -2118,6 +2171,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 262.7,
+      "avgHeartRate": 170,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20240923-184510"
     },
@@ -2130,6 +2186,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:41",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.1,
+      "avgHeartRate": 162,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20240927-215118"
     },
@@ -2153,6 +2212,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 286.9,
+      "avgHeartRate": 169,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20241009-212953"
     },
@@ -2165,6 +2227,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:58",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 266.6,
+      "avgHeartRate": 169,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20241012-210032"
     },
@@ -2177,6 +2242,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:17",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 218.0,
+      "avgHeartRate": 159,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20241018-210954"
     },
@@ -2189,6 +2257,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 227.9,
+      "avgHeartRate": 164,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20241024-092716"
     },
@@ -2201,6 +2272,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:51",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 271.6,
+      "avgHeartRate": 164,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20241102-183656"
     },
@@ -2213,6 +2287,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:48",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 277.5,
+      "avgHeartRate": 172,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20241107-121851"
     },
@@ -2225,6 +2302,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:53",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 271.2,
+      "avgHeartRate": 163,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20241108-122140"
     },
@@ -2237,6 +2317,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:47",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 275.2,
+      "avgHeartRate": 170,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20241109-140156"
     },
@@ -2249,6 +2332,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:59",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 266.7,
+      "avgHeartRate": 163,
+      "maxHeartRate": 176,
       "notes": "",
       "routeId": "route-apple-20241116-121757"
     },
@@ -2261,6 +2347,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:00",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 266.5,
+      "avgHeartRate": 175,
+      "maxHeartRate": 182,
       "notes": "",
       "routeId": "route-apple-20241130-122325"
     },
@@ -2273,6 +2362,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:57",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 267.0,
+      "avgHeartRate": 171,
+      "maxHeartRate": 186,
       "notes": "",
       "routeId": "route-apple-20241207-122932"
     },
@@ -2285,6 +2377,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:18",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 251.2,
+      "avgHeartRate": 163,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20241214-123013"
     },
@@ -2297,6 +2392,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:31",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 291.6,
+      "avgHeartRate": 180,
+      "maxHeartRate": 188,
       "notes": "",
       "routeId": "route-apple-20241222-194513"
     },
@@ -2309,6 +2407,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:55",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 269.5,
+      "avgHeartRate": 168,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20241228-123204"
     },
@@ -2332,6 +2433,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:32",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.1,
+      "avgHeartRate": 160,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20250104-162600"
     },
@@ -2344,6 +2448,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.7,
+      "avgHeartRate": 160,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20250130-165455"
     },
@@ -2356,6 +2463,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:48",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 274.9,
+      "avgHeartRate": 175,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20250216-095241"
     },
@@ -2368,6 +2478,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:09",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 254.7,
+      "avgHeartRate": 169,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20250223-095539"
     },
@@ -2380,6 +2493,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 260.6,
+      "avgHeartRate": 166,
+      "maxHeartRate": 171,
       "notes": "",
       "routeId": "route-apple-20250228-200750"
     },
@@ -2392,6 +2508,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:18",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.6,
+      "avgHeartRate": 172,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20250302-083145"
     },
@@ -2415,6 +2534,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 282.9,
+      "avgHeartRate": 177,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20250309-081222"
     },
@@ -2427,6 +2549,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 240.0,
+      "avgHeartRate": 163,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20250315-121648"
     },
@@ -2439,6 +2564,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:48",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 273.6,
+      "avgHeartRate": 171,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20250316-075434"
     },
@@ -2451,6 +2579,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:44",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 231.8,
+      "avgHeartRate": 156,
+      "maxHeartRate": 164,
       "notes": "",
       "routeId": "route-apple-20250318-183947"
     },
@@ -2463,6 +2594,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.4,
+      "avgHeartRate": 159,
+      "maxHeartRate": 169,
       "notes": "",
       "routeId": "route-apple-20250319-183957"
     },
@@ -2475,6 +2609,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:24",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.0,
+      "avgHeartRate": 161,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20250320-174253"
     },
@@ -2487,6 +2624,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.7,
+      "avgHeartRate": 152,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20250321-211352"
     },
@@ -2499,6 +2639,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "07:10",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 187.9,
+      "avgHeartRate": 144,
+      "maxHeartRate": 152,
       "notes": "",
       "routeId": "route-apple-20250325-183658"
     },
@@ -2511,6 +2654,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 235.2,
+      "avgHeartRate": 160,
+      "maxHeartRate": 169,
       "notes": "",
       "routeId": "route-apple-20250326-183541"
     },
@@ -2523,6 +2669,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:07",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 257.2,
+      "avgHeartRate": 165,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20250328-201400"
     },
@@ -2535,6 +2684,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:09",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 255.1,
+      "avgHeartRate": 160,
+      "maxHeartRate": 173,
       "notes": "",
       "routeId": "route-apple-20250329-203816"
     },
@@ -2547,6 +2699,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 236.1,
+      "avgHeartRate": 165,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20250401-183737"
     },
@@ -2559,6 +2714,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:54",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 268.4,
+      "avgHeartRate": 161,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20250403-201949"
     },
@@ -2571,6 +2729,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.3,
+      "avgHeartRate": 165,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20250410-183740"
     },
@@ -2583,6 +2744,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:17",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.0,
+      "avgHeartRate": 158,
+      "maxHeartRate": 163,
       "notes": "",
       "routeId": "route-apple-20250413-090205"
     },
@@ -2595,6 +2759,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:51",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 226.8,
+      "avgHeartRate": 166,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20250415-183746"
     },
@@ -2607,6 +2774,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 248.7,
+      "avgHeartRate": 167,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20250416-182400"
     },
@@ -2619,6 +2789,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 246.7,
+      "avgHeartRate": 157,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20250417-213055"
     },
@@ -2631,6 +2804,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.9,
+      "avgHeartRate": 154,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20250418-210405"
     },
@@ -2643,6 +2819,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:00",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 221.7,
+      "avgHeartRate": 146,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20250419-202647"
     },
@@ -2655,6 +2834,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 220.0,
+      "avgHeartRate": 149,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20250422-183751"
     },
@@ -2667,6 +2849,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 246.3,
+      "avgHeartRate": 161,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20250423-184900"
     },
@@ -2679,6 +2864,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:14",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.7,
+      "avgHeartRate": 158,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20250424-205910"
     },
@@ -2691,6 +2879,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:28",
       "runType": "long",
       "location": "南京",
+      "avgPower": 242.2,
+      "avgHeartRate": 160,
+      "maxHeartRate": 166,
       "notes": "",
       "routeId": "route-apple-20250425-201634"
     },
@@ -2703,6 +2894,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:13",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 215.9,
+      "avgHeartRate": 150,
+      "maxHeartRate": 158,
       "notes": "",
       "routeId": "route-apple-20250429-211527"
     },
@@ -2715,6 +2909,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 285.0,
+      "avgHeartRate": 164,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20250509-212815"
     },
@@ -2727,6 +2924,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:08",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 261.0,
+      "avgHeartRate": 162,
+      "maxHeartRate": 182,
       "notes": "",
       "routeId": "route-apple-20250509-213502"
     },
@@ -2739,6 +2939,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:08",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 256.4,
+      "avgHeartRate": 165,
+      "maxHeartRate": 173,
       "notes": "",
       "routeId": "route-apple-20250511-180035"
     },
@@ -2751,6 +2954,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.0,
+      "avgHeartRate": 164,
+      "maxHeartRate": 171,
       "notes": "",
       "routeId": "route-apple-20250514-211004"
     },
@@ -2763,6 +2969,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.1,
+      "avgHeartRate": 158,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20250516-205835"
     },
@@ -2775,6 +2984,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 243.1,
+      "avgHeartRate": 162,
+      "maxHeartRate": 169,
       "notes": "",
       "routeId": "route-apple-20250517-200316"
     },
@@ -2787,6 +2999,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:09",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.7,
+      "avgHeartRate": 161,
+      "maxHeartRate": 182,
       "notes": "",
       "routeId": "route-apple-20250523-210809"
     },
@@ -2799,6 +3014,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.6,
+      "avgHeartRate": 157,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20250524-202319"
     },
@@ -2811,6 +3029,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:16",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.6,
+      "avgHeartRate": 161,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20250529-205648"
     },
@@ -2823,6 +3044,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:34",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 236.4,
+      "avgHeartRate": 156,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20250530-184455"
     },
@@ -2835,6 +3059,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:36",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 235.8,
+      "avgHeartRate": 164,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20250604-212320"
     },
@@ -2847,6 +3074,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 233.9,
+      "avgHeartRate": 167,
+      "maxHeartRate": 187,
       "notes": "",
       "routeId": "route-apple-20250606-214412"
     },
@@ -2859,6 +3089,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:12",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 254.9,
+      "avgHeartRate": 161,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20250607-192542"
     },
@@ -2871,6 +3104,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.2,
+      "avgHeartRate": 165,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20250610-205732"
     },
@@ -2883,6 +3119,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:55",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 269.9,
+      "avgHeartRate": 170,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20250611-202650"
     },
@@ -2895,6 +3134,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:13",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.1,
+      "avgHeartRate": 158,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20250613-212628"
     },
@@ -2907,6 +3149,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:31",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 291.9,
+      "avgHeartRate": 180,
+      "maxHeartRate": 186,
       "notes": "",
       "routeId": "route-apple-20250615-063842"
     },
@@ -2919,6 +3164,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:05",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 260.3,
+      "avgHeartRate": 163,
+      "maxHeartRate": 176,
       "notes": "",
       "routeId": "route-apple-20250627-210715"
     },
@@ -2931,6 +3179,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 234.2,
+      "avgHeartRate": 158,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20250628-205253"
     },
@@ -2943,6 +3194,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "户外",
+      "avgPower": 248.0,
+      "avgHeartRate": 149,
+      "maxHeartRate": 163,
       "notes": "",
       "routeId": "route-apple-20250706-195304"
     },
@@ -2955,6 +3209,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.4,
+      "avgHeartRate": 167,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20250711-211031"
     },
@@ -2967,6 +3224,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 260.8,
+      "avgHeartRate": 162,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20250718-212844"
     },
@@ -2979,6 +3239,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:43",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 230.3,
+      "avgHeartRate": 153,
+      "maxHeartRate": 164,
       "notes": "",
       "routeId": "route-apple-20250725-210751"
     },
@@ -2991,6 +3254,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:36",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 201.2,
+      "avgHeartRate": 137,
+      "maxHeartRate": 144,
       "notes": "",
       "routeId": "route-apple-20250802-214638"
     },
@@ -3003,6 +3269,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 261.8,
+      "avgHeartRate": 165,
+      "maxHeartRate": 174,
       "notes": "",
       "routeId": "route-apple-20250808-213506"
     },
@@ -3015,6 +3284,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:13",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.6,
+      "avgHeartRate": 166,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20250809-211947"
     },
@@ -3027,6 +3299,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.2,
+      "avgHeartRate": 170,
+      "maxHeartRate": 186,
       "notes": "",
       "routeId": "route-apple-20250814-202146"
     },
@@ -3039,6 +3314,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 233.3,
+      "avgHeartRate": 155,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20250815-211004"
     },
@@ -3051,6 +3329,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:47",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 227.5,
+      "avgHeartRate": 155,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20250816-203104"
     },
@@ -3063,6 +3344,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 243.0,
+      "avgHeartRate": 158,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20250823-051207"
     },
@@ -3075,6 +3359,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:47",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 230.1,
+      "avgHeartRate": 164,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20250830-053344"
     },
@@ -3087,6 +3374,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.2,
+      "avgHeartRate": 170,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20250903-184212"
     },
@@ -3099,6 +3389,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:42",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 233.6,
+      "avgHeartRate": 168,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20250904-184305"
     },
@@ -3111,6 +3404,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.0,
+      "avgHeartRate": 168,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20250905-184941"
     },
@@ -3123,6 +3419,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:21",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 246.0,
+      "avgHeartRate": 160,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20250907-042716"
     },
@@ -3135,6 +3434,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:02",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 263.3,
+      "avgHeartRate": 171,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20250911-184223"
     },
@@ -3147,6 +3449,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:34",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 239.6,
+      "avgHeartRate": 162,
+      "maxHeartRate": 171,
       "notes": "",
       "routeId": "route-apple-20250912-185711"
     },
@@ -3159,6 +3464,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:30",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 239.6,
+      "avgHeartRate": 151,
+      "maxHeartRate": 158,
       "notes": "",
       "routeId": "route-apple-20250914-180432"
     },
@@ -3171,6 +3479,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:32",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 239.9,
+      "avgHeartRate": 165,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20250916-202137"
     },
@@ -3183,6 +3494,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.0,
+      "avgHeartRate": 158,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20250918-184526"
     },
@@ -3195,6 +3509,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 229.8,
+      "avgHeartRate": 144,
+      "maxHeartRate": 151,
       "notes": "",
       "routeId": "route-apple-20250919-203109"
     },
@@ -3207,6 +3524,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:37",
       "runType": "long",
       "location": "南京",
+      "avgPower": 234.8,
+      "avgHeartRate": 153,
+      "maxHeartRate": 163,
       "notes": "",
       "routeId": "route-apple-20250920-185809"
     },
@@ -3219,6 +3539,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:53",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 271.2,
+      "avgHeartRate": 176,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20250927-082938"
     },
@@ -3231,6 +3554,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:14",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.8,
+      "avgHeartRate": 155,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20250928-202856"
     },
@@ -3243,6 +3569,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:05",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 222.2,
+      "avgHeartRate": 143,
+      "maxHeartRate": 148,
       "notes": "",
       "routeId": "route-apple-20250929-184521"
     },
@@ -3255,6 +3584,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:01",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 222.1,
+      "avgHeartRate": 155,
+      "maxHeartRate": 161,
       "notes": "",
       "routeId": "route-apple-20251009-184355"
     },
@@ -3267,6 +3599,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:43",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 233.0,
+      "avgHeartRate": 157,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20251010-184710"
     },
@@ -3279,6 +3614,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "long",
       "location": "南京",
+      "avgPower": 234.3,
+      "avgHeartRate": 155,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20251011-200816"
     },
@@ -3291,6 +3629,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:32",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 202.9,
+      "avgHeartRate": 144,
+      "maxHeartRate": 150,
       "notes": "",
       "routeId": "route-apple-20251014-184442"
     },
@@ -3303,6 +3644,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:30",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 241.3,
+      "avgHeartRate": 158,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20251016-203948"
     },
@@ -3315,6 +3659,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.5,
+      "avgHeartRate": 158,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20251018-120947"
     },
@@ -3327,6 +3674,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:27",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.9,
+      "avgHeartRate": 157,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20251021-184050"
     },
@@ -3339,6 +3689,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:52",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 227.5,
+      "avgHeartRate": 149,
+      "maxHeartRate": 155,
       "notes": "",
       "routeId": "route-apple-20251022-184037"
     },
@@ -3351,6 +3704,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:51",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 228.1,
+      "avgHeartRate": 149,
+      "maxHeartRate": 157,
       "notes": "",
       "routeId": "route-apple-20251023-184026"
     },
@@ -3363,6 +3719,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:38",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 235.8,
+      "avgHeartRate": 151,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20251024-184704"
     },
@@ -3375,6 +3734,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 225.3,
+      "avgHeartRate": 150,
+      "maxHeartRate": 157,
       "notes": "",
       "routeId": "route-apple-20251025-121340"
     },
@@ -3387,6 +3749,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:37",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.1,
+      "avgHeartRate": 153,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20251028-184124"
     },
@@ -3399,6 +3764,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:47",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 229.9,
+      "avgHeartRate": 153,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20251030-184046"
     },
@@ -3411,6 +3779,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:36",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 286.0,
+      "avgHeartRate": 175,
+      "maxHeartRate": 186,
       "notes": "",
       "routeId": "route-apple-20251102-073200"
     },
@@ -3423,6 +3794,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 246.5,
+      "avgHeartRate": 152,
+      "maxHeartRate": 164,
       "notes": "",
       "routeId": "route-apple-20251104-184346"
     },
@@ -3435,6 +3809,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:40",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 234.9,
+      "avgHeartRate": 152,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20251105-184320"
     },
@@ -3447,6 +3824,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 267.3,
+      "avgHeartRate": 161,
+      "maxHeartRate": 172,
       "notes": "",
       "routeId": "route-apple-20251108-191733"
     },
@@ -3459,6 +3839,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:52",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 270.1,
+      "avgHeartRate": 164,
+      "maxHeartRate": 175,
       "notes": "",
       "routeId": "route-apple-20251109-180456"
     },
@@ -3471,6 +3854,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:36",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.6,
+      "avgHeartRate": 153,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20251111-184042"
     },
@@ -3483,6 +3869,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:39",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 236.0,
+      "avgHeartRate": 151,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20251113-184324"
     },
@@ -3495,6 +3884,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:01",
       "runType": "long",
       "location": "南京",
+      "avgPower": 263.2,
+      "avgHeartRate": 170,
+      "maxHeartRate": 178,
       "notes": "",
       "routeId": "route-apple-20251116-074728"
     },
@@ -3507,6 +3899,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:20",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 211.1,
+      "avgHeartRate": 143,
+      "maxHeartRate": 158,
       "notes": "",
       "routeId": "route-apple-20251119-184914"
     },
@@ -3519,6 +3914,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 203.8,
+      "avgHeartRate": 142,
+      "maxHeartRate": 153,
       "notes": "",
       "routeId": "route-apple-20251120-184501"
     },
@@ -3531,6 +3929,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:09",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 258.4,
+      "avgHeartRate": 166,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20251122-193256"
     },
@@ -3543,6 +3944,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:59",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 224.7,
+      "avgHeartRate": 148,
+      "maxHeartRate": 160,
       "notes": "",
       "routeId": "route-apple-20251125-184549"
     },
@@ -3555,6 +3959,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.7,
+      "avgHeartRate": 148,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20251205-210411"
     },
@@ -3567,6 +3974,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:46",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 231.0,
+      "avgHeartRate": 157,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20251206-082429"
     },
@@ -3579,6 +3989,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:41",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 235.6,
+      "avgHeartRate": 156,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20251208-184017"
     },
@@ -3591,6 +4004,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:29",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 244.4,
+      "avgHeartRate": 158,
+      "maxHeartRate": 167,
       "notes": "",
       "routeId": "route-apple-20251210-184731"
     },
@@ -3603,6 +4019,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:00",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 224.6,
+      "avgHeartRate": 152,
+      "maxHeartRate": 158,
       "notes": "",
       "routeId": "route-apple-20251215-184029"
     },
@@ -3615,6 +4034,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:47",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 232.8,
+      "avgHeartRate": 152,
+      "maxHeartRate": 160,
       "notes": "",
       "routeId": "route-apple-20251218-200334"
     },
@@ -3627,6 +4049,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:41",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 239.6,
+      "avgHeartRate": 155,
+      "maxHeartRate": 176,
       "notes": "",
       "routeId": "route-apple-20251219-202004"
     },
@@ -3639,6 +4064,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:10",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.7,
+      "avgHeartRate": 161,
+      "maxHeartRate": 173,
       "notes": "",
       "routeId": "route-apple-20260111-083231"
     },
@@ -3651,6 +4079,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:04",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 258.7,
+      "avgHeartRate": 161,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20260118-164546"
     },
@@ -3663,6 +4094,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 246.8,
+      "avgHeartRate": 159,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20260124-100601"
     },
@@ -3675,6 +4109,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:06",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 257.2,
+      "avgHeartRate": 160,
+      "maxHeartRate": 180,
       "notes": "",
       "routeId": "route-apple-20260201-170443"
     },
@@ -3687,6 +4124,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:02",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 260.5,
+      "avgHeartRate": 166,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20260222-154943"
     },
@@ -3699,6 +4139,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:53",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 269.6,
+      "avgHeartRate": 164,
+      "maxHeartRate": 185,
       "notes": "",
       "routeId": "route-apple-20260307-123149"
     },
@@ -3711,6 +4154,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:34",
       "runType": "easy",
       "location": "成都",
+      "avgPower": 288.1,
+      "avgHeartRate": 174,
+      "maxHeartRate": 186,
       "notes": "",
       "routeId": "route-apple-20260315-091811"
     },
@@ -3723,6 +4169,8 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:59",
       "runType": "easy",
       "location": "户外",
+      "avgHeartRate": 163,
+      "maxHeartRate": 181,
       "notes": ""
     },
     {
@@ -3734,6 +4182,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:05",
       "runType": "easy",
       "location": "杭州",
+      "avgPower": 258.6,
+      "avgHeartRate": 152,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20260322-063856"
     },
@@ -3746,6 +4197,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "long",
       "location": "户外",
+      "avgPower": 245.5,
+      "avgHeartRate": 162,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20260329-073028"
     },
@@ -3758,6 +4212,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:43",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 230.4,
+      "avgHeartRate": 151,
+      "maxHeartRate": 166,
       "notes": "",
       "routeId": "route-apple-20260402-185012"
     },
@@ -3770,6 +4227,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:14",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.4,
+      "avgHeartRate": 161,
+      "maxHeartRate": 176,
       "notes": "",
       "routeId": "route-apple-20260406-151101"
     },
@@ -3782,6 +4242,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 297.2,
+      "avgHeartRate": 172,
+      "maxHeartRate": 185,
       "notes": "",
       "routeId": "route-apple-20260412-073258"
     },
@@ -3794,6 +4257,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 261.5,
+      "avgHeartRate": 169,
+      "maxHeartRate": 190,
       "notes": "",
       "routeId": "route-apple-20260415-184203"
     },
@@ -3806,6 +4272,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:05",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 218.8,
+      "avgHeartRate": 143,
+      "maxHeartRate": 153,
       "notes": "",
       "routeId": "route-apple-20260416-184540"
     },
@@ -3818,6 +4287,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:52",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 226.0,
+      "avgHeartRate": 153,
+      "maxHeartRate": 166,
       "notes": "",
       "routeId": "route-apple-20260420-184150"
     },
@@ -3830,6 +4302,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 232.0,
+      "avgHeartRate": 144,
+      "maxHeartRate": 152,
       "notes": "",
       "routeId": "route-apple-20260424-184815"
     },
@@ -3842,6 +4317,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:00",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 265.1,
+      "avgHeartRate": 163,
+      "maxHeartRate": 184,
       "notes": "",
       "routeId": "route-apple-20260425-192403"
     },
@@ -3854,6 +4332,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:07",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 258.6,
+      "avgHeartRate": 165,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20260508-184509"
     },
@@ -3866,6 +4347,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:26",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.3,
+      "avgHeartRate": 149,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20260510-183441"
     },
@@ -3878,6 +4362,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:43",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 231.5,
+      "avgHeartRate": 150,
+      "maxHeartRate": 158,
       "notes": "",
       "routeId": "route-apple-20260511-184317"
     },
@@ -3890,6 +4377,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:13",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 253.6,
+      "avgHeartRate": 163,
+      "maxHeartRate": 171,
       "notes": "",
       "routeId": "route-apple-20260512-184408"
     },
@@ -3902,6 +4392,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:12",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.1,
+      "avgHeartRate": 163,
+      "maxHeartRate": 185,
       "notes": "",
       "routeId": "route-apple-20260513-184243"
     },
@@ -3914,6 +4407,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:03",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 229.1,
+      "avgHeartRate": 143,
+      "maxHeartRate": 155,
       "notes": "",
       "routeId": "route-apple-20260514-184422"
     },
@@ -3926,6 +4422,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:42",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 232.0,
+      "avgHeartRate": 150,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20260516-191958"
     },
@@ -3938,6 +4437,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:40",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.1,
+      "avgHeartRate": 147,
+      "maxHeartRate": 157,
       "notes": "",
       "routeId": "route-apple-20260519-185201"
     },
@@ -3950,6 +4452,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:15",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 252.3,
+      "avgHeartRate": 158,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20260521-184242"
     },
@@ -3962,6 +4467,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:02",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 219.2,
+      "avgHeartRate": 147,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20260522-184715"
     },
@@ -3974,6 +4482,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:51",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 226.0,
+      "avgHeartRate": 146,
+      "maxHeartRate": 154,
       "notes": "",
       "routeId": "route-apple-20260523-194632"
     },
@@ -3986,6 +4497,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "06:10",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 216.3,
+      "avgHeartRate": 148,
+      "maxHeartRate": 159,
       "notes": "",
       "routeId": "route-apple-20260526-184153"
     },
@@ -3998,6 +4512,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 223.6,
+      "avgHeartRate": 148,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20260527-184741"
     },
@@ -4010,6 +4527,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:35",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.0,
+      "avgHeartRate": 155,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20260528-184534"
     },
@@ -4022,6 +4542,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 269.5,
+      "avgHeartRate": 156,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20260529-204815"
     },
@@ -4034,6 +4557,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:45",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 279.5,
+      "avgHeartRate": 158,
+      "maxHeartRate": 177,
       "notes": "",
       "routeId": "route-apple-20260530-190439"
     },
@@ -4046,6 +4572,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:55",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 225.5,
+      "avgHeartRate": 156,
+      "maxHeartRate": 164,
       "notes": "",
       "routeId": "route-apple-20260602-184117"
     },
@@ -4058,6 +4587,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:25",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.4,
+      "avgHeartRate": 158,
+      "maxHeartRate": 169,
       "notes": "",
       "routeId": "route-apple-20260603-184412"
     },
@@ -4070,6 +4602,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:34",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 237.8,
+      "avgHeartRate": 153,
+      "maxHeartRate": 165,
       "notes": "",
       "routeId": "route-apple-20260604-185302"
     },
@@ -4082,6 +4617,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:31",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 293.3,
+      "avgHeartRate": 165,
+      "maxHeartRate": 183,
       "notes": "",
       "routeId": "route-apple-20260605-203958"
     },
@@ -4094,6 +4632,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:33",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 242.2,
+      "avgHeartRate": 149,
+      "maxHeartRate": 163,
       "notes": "",
       "routeId": "route-apple-20260605-213130"
     },
@@ -4106,6 +4647,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:59",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 222.5,
+      "avgHeartRate": 150,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20260608-184148"
     },
@@ -4118,6 +4662,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:56",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 224.4,
+      "avgHeartRate": 144,
+      "maxHeartRate": 151,
       "notes": "",
       "routeId": "route-apple-20260609-184225"
     },
@@ -4130,6 +4677,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:37",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 236.4,
+      "avgHeartRate": 150,
+      "maxHeartRate": 170,
       "notes": "",
       "routeId": "route-apple-20260610-184344"
     },
@@ -4142,6 +4692,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:23",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 245.7,
+      "avgHeartRate": 159,
+      "maxHeartRate": 181,
       "notes": "",
       "routeId": "route-apple-20260611-184356"
     },
@@ -4154,6 +4707,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:09",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 257.7,
+      "avgHeartRate": 157,
+      "maxHeartRate": 179,
       "notes": "",
       "routeId": "route-apple-20260612-184546"
     },
@@ -4166,6 +4722,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "04:06",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 323.9,
+      "avgHeartRate": 185,
+      "maxHeartRate": 194,
       "notes": "",
       "routeId": "route-apple-20260613-062716"
     },
@@ -4178,6 +4737,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 250.5,
+      "avgHeartRate": 149,
+      "maxHeartRate": 157,
       "notes": "",
       "routeId": "route-apple-20260617-210558"
     },
@@ -4190,6 +4752,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:22",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 247.6,
+      "avgHeartRate": 154,
+      "maxHeartRate": 162,
       "notes": "",
       "routeId": "route-apple-20260624-184429"
     },
@@ -4202,6 +4767,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:19",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 249.2,
+      "avgHeartRate": 152,
+      "maxHeartRate": 164,
       "notes": "",
       "routeId": "route-apple-20260625-184604"
     },
@@ -4214,6 +4782,9 @@ window.RUN_ARCHIVE_DATA = {
       "pace": "05:32",
       "runType": "easy",
       "location": "南京",
+      "avgPower": 238.5,
+      "avgHeartRate": 153,
+      "maxHeartRate": 168,
       "notes": "",
       "routeId": "route-apple-20260629-184455"
     }
