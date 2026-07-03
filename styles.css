@@ -390,12 +390,11 @@ button {
 /* Collapse toggle button */
 .hero-stats-overlay__toggle {
   position: absolute;
-  top: 50%;
-  right: 0;
+  top: 22px;
+  right: 6px;
   z-index: 2;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 40px;
+  width: 22px;
+  height: 42px;
   border: 0;
   border-left: 1px solid rgba(255,255,255,0.15);
   border-radius: 0 8px 8px 0;
@@ -411,6 +410,7 @@ button {
   padding: 0;
   line-height: 1;
   pointer-events: auto;
+  transform: translateY(-50%);
   transition: color 0.15s, border-color 0.15s;
 }
 .hero-stats-overlay__toggle:hover {
