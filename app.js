@@ -233,11 +233,12 @@
     if (!route) {
       return '<div class="route-empty">暂无路线</div>';
     }
-    const projected = projectRoutePoints(route.coordinates);
+    const projected = projectRoutePoints(route.coordinates, 420, 240, variant === "mini" ? 12 : 28);
     if (!projected.length) {
       return '<div class="route-empty">路线加载中</div>';
     }
     const c = getSvgColors();
+    const paperRadius = variant === "mini" ? 0 : 8;
     const points = projected.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
     const startPoint = projected[0];
     const endPoint = projected[projected.length - 1];
@@ -254,8 +255,8 @@
             <path d="M 28 0 L 0 0 0 28" fill="none" stroke="${c.grid}" stroke-width="1" />
           </pattern>
         </defs>
-        <rect width="420" height="240" rx="8" fill="url(#route-paper-${escapeAttr(route.id)})" />
-        <rect width="420" height="240" rx="8" fill="url(#route-grid-${escapeAttr(route.id)})" opacity="0.75" />
+        <rect width="420" height="240" rx="${paperRadius}" fill="url(#route-paper-${escapeAttr(route.id)})" />
+        <rect width="420" height="240" rx="${paperRadius}" fill="url(#route-grid-${escapeAttr(route.id)})" opacity="0.75" />
         <path d="M-18 204 C68 150 150 204 235 148 S342 86 442 122" fill="none" stroke="${c.decor1}" stroke-width="2" stroke-dasharray="8 9" opacity="0.5" />
         <path d="M26 58 C110 112 178 46 250 88 S336 166 398 78" fill="none" stroke="${c.decor2}" stroke-width="2" stroke-dasharray="4 7" opacity="0.4" />
         <path d="M16 28 H404 M16 212 H404 M22 22 V218 M398 22 V218" fill="none" stroke="${c.decor3}" stroke-width="1" />
@@ -626,10 +627,12 @@
     function renderGroupCard(race) {
       const hasPhoto = race.photos && race.photos.length > 0;
       const place = [race.city, race.country].filter(Boolean).join(" · ");
+      let hasPreviewStats = false;
       let media;
       if (hasPhoto) {
         media = `<img src="${race.photos[0]}" alt="${race.name}" />`;
       } else if (race.routeId && routeIndex[race.routeId]?.previewCoordinates?.length) {
+        hasPreviewStats = true;
         media = `
           <div class="race-route-preview">
             ${renderRouteSvg(routeWithPreview(routeIndex[race.routeId]), "mini")}
@@ -645,7 +648,7 @@
       const hasRoute = race.routeId && routeIndex[race.routeId];
       const isActive = hasRoute && race.routeId === heroActiveRouteId;
       return `
-        <article class="race-card ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
+        <article class="race-card ${hasPreviewStats ? "race-card--has-preview-stats" : ""} ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
           <div class="race-card__media">${media}</div>
           <div class="race-card__body">
             <div class="race-card__meta"><span>${formatDate(race.date)}</span>${race.isPB ? '<b class="badge badge--small">PB</b>' : ""}</div>
@@ -894,6 +897,17 @@
         : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
     }
 
+    function getTileOptions() {
+      const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+      return {
+        maxZoom: 19,
+        subdomains: "abcd",
+        updateWhenIdle: isMobile,
+        keepBuffer: isMobile ? 4 : 2,
+        crossOrigin: true,
+      };
+    }
+
     function renderHeroMap() {
       if (!window.L) return;
       heroMap = window.L.map(heroMapEl, {
@@ -901,10 +915,7 @@
         zoomControl: true,
         scrollWheelZoom: true,
       });
-      heroTileLayer = window.L.tileLayer(getTileUrl(), {
-        maxZoom: 19,
-        subdomains: "abcd",
-      }).addTo(heroMap);
+      heroTileLayer = window.L.tileLayer(getTileUrl(), getTileOptions()).addTo(heroMap);
 
       // City highlight areas
       heroCityLayer = window.L.featureGroup().addTo(heroMap);
@@ -1092,38 +1103,53 @@
     var activity = getActivityForRoute(routeId);
     if (!activity) return;
 
+    var compactOverlay = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
     var stats = [];
     if (activity.avgHeartRate) {
-      stats.push({ label: "平均心率", value: activity.avgHeartRate + " bpm", sub: activity.maxHeartRate ? "最高 " + activity.maxHeartRate : "" });
+      stats.push({
+        label: compactOverlay ? "心率" : "平均心率",
+        value: compactOverlay ? activity.avgHeartRate + "bpm" : activity.avgHeartRate + " bpm",
+        sub: compactOverlay ? "" : activity.maxHeartRate ? "最高 " + activity.maxHeartRate : "",
+        compact: true,
+      });
     }
-    if (activity.avgPower) {
-      stats.push({ label: "平均功率", value: activity.avgPower + " W" });
+    if (activity.avgPower && !compactOverlay) {
+      stats.push({ label: "平均功率", value: activity.avgPower + " W", compact: false });
     }
     if (activity.pace) {
-      stats.push({ label: "平均配速", value: activity.pace + " /km" });
+      stats.push({
+        label: compactOverlay ? "配速" : "平均配速",
+        value: compactOverlay ? activity.pace + "/km" : activity.pace + " /km",
+        compact: true,
+      });
     }
     if (activity.finishTime || activity.duration) {
-      stats.push({ label: "用时", value: activity.finishTime || activity.duration });
+      stats.push({ label: "用时", value: activity.finishTime || activity.duration, compact: true });
     }
     var elevGain = route.elevationGain;
     if (elevGain != null) {
-      stats.push({ label: "累计爬升", value: Math.round(elevGain) + " m" });
+      stats.push({
+        label: compactOverlay ? "爬升" : "累计爬升",
+        value: compactOverlay ? Math.round(elevGain) + "m" : Math.round(elevGain) + " m",
+        compact: true,
+      });
     }
 
     if (!stats.length) return;
 
     var mapContainer = document.querySelector("#heroMap");
-    if (!mapContainer) return;
+    var overlayContainer = document.querySelector(".hero") || mapContainer;
+    if (!mapContainer || !overlayContainer) return;
 
     // Build stat value row
     var valuesHtml = stats.map(function (s) {
-      return '<div class="hero-stats-overlay__item"><span class="hero-stats-overlay__label">' + s.label + '</span><strong>' + s.value + '</strong>' + (s.sub ? '<small>' + s.sub + '</small>' : '') + '</div>';
+      var itemClass = s.compact === false ? " hero-stats-overlay__item--optional" : "";
+      return '<div class="hero-stats-overlay__item' + itemClass + '"><span class="hero-stats-overlay__label">' + s.label + '</span><strong>' + s.value + '</strong>' + (s.sub ? '<small>' + s.sub + '</small>' : '') + '</div>';
     }).join("");
 
     var chartsHtml = "";
     var hasCharts = false;
 
-    // Try to get timeSeries from route detail
     var timeSeries = null;
     try {
       await loadRouteDetail(routeId);
@@ -1160,10 +1186,10 @@
       }
     }
 
-    var toggleHtml = hasCharts ? '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="折叠图表" aria-label="折叠图表">▼</button>' : '';
-    var html = '<div class="hero-stats-overlay" id="heroStatsOverlay"><div class="hero-stats-overlay__values">' + valuesHtml + toggleHtml + '</div>' + chartsHtml + '</div>';
+    var toggleHtml = hasCharts ? '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="折叠图表" aria-label="折叠图表" aria-expanded="true">⌄</button>' : '';
+    var html = '<div class="hero-stats-overlay" id="heroStatsOverlay">' + toggleHtml + '<div class="hero-stats-overlay__values">' + valuesHtml + '</div>' + chartsHtml + '</div>';
     if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
-    mapContainer.insertAdjacentHTML("beforeend", html);
+    overlayContainer.insertAdjacentHTML("beforeend", html);
     var insertedOverlay = document.querySelector("#heroStatsOverlay");
     var shouldCollapseCharts = hasCharts && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
     if (insertedOverlay && shouldCollapseCharts) {
@@ -1175,9 +1201,10 @@
       var toggleBtn = document.querySelector("#statsToggle");
       if (toggleBtn) {
         if (shouldCollapseCharts) {
-          toggleBtn.textContent = "▶";
+          toggleBtn.textContent = "⌃";
           toggleBtn.title = "展开图表";
           toggleBtn.setAttribute("aria-label", "展开图表");
+          toggleBtn.setAttribute("aria-expanded", "false");
         }
         toggleBtn.onclick = function(e) {
           e.stopPropagation();
@@ -1185,9 +1212,10 @@
           if (overlay) {
             overlay.classList.toggle("hero-stats-overlay--collapsed");
             var collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
-            toggleBtn.textContent = collapsed ? "▶" : "▼";
+            toggleBtn.textContent = collapsed ? "⌃" : "⌄";
             toggleBtn.title = collapsed ? "展开图表" : "折叠图表";
             toggleBtn.setAttribute("aria-label", collapsed ? "展开图表" : "折叠图表");
+            toggleBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
           }
         };
       }
@@ -1247,7 +1275,14 @@
     const url = document.documentElement.dataset.theme === "light"
       ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-    window.L.tileLayer(url, { maxZoom: 19, subdomains: "abcd" }).addTo(heroMap);
+    const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+    window.L.tileLayer(url, {
+      maxZoom: 19,
+      subdomains: "abcd",
+      updateWhenIdle: isMobile,
+      keepBuffer: isMobile ? 4 : 2,
+      crossOrigin: true,
+    }).addTo(heroMap);
   }
 
   document.querySelector("#themeToggle")?.addEventListener("click", () => {
