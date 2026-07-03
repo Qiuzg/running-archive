@@ -779,6 +779,7 @@ button {
   background: var(--panel-bg);
   backdrop-filter: blur(18px);
   color: var(--ink);
+  overflow: hidden;
 }
 
 .hero__panel-header {
@@ -870,11 +871,13 @@ button {
 .hero__panel-body {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 6px 12px 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--overlay) transparent;
+  contain: layout style;
 }
 
 /* ---- Panel Resize Handle ---- */
@@ -2393,6 +2396,10 @@ div.month-activity-bar {
 }
 
 @media (max-width: 760px) {
+  .leaflet-control-zoom {
+    margin-top: 72px !important;
+  }
+
   .topbar {
     min-height: 68px;
   }
