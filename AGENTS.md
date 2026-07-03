@@ -10,9 +10,9 @@ Static running archive site — pure HTML/CSS/JS, zero build tools. Displays mar
 
 ```
 index.html              # Single page: hero map + topbar nav + left panel
-app.js                  # All logic: data, rendering, Leaflet maps (IIFE, ~1577 lines)
+app.js                  # All logic: data, rendering, resilient Leaflet maps (IIFE, ~1715 lines)
 styles.css              # All styles: CSS custom properties, light/dark theme (~2965 lines)
-data.generated.js       # Auto-generated: profile, races[], runs[] (~4200 lines)
+data.generated.js       # Auto-generated: profile, races[], runs[] (~4800 lines)
 route-index.generated.js # Auto-generated: preview coordinates for all routes
 city-boundaries.generated.js # Auto-generated: GeoJSON boundaries for race cities
 routes/*.js             # ~300 files, one per route, full GPS coordinates (loaded on demand)
@@ -37,7 +37,7 @@ assets/                  # Static images (profile.png, etc.)
 - `window.RUN_CITY_BOUNDARIES` — GeoJSON boundaries for race cities
 - `window.RUN_ROUTE_DETAIL` — populated on demand with full coordinates per route (includes timeSeries)
 
-## app.js module structure (~1577 lines)
+## app.js module structure (~1715 lines)
 
 The entire app is a single IIFE. Key sections in order:
 
@@ -53,10 +53,11 @@ The entire app is a single IIFE. Key sections in order:
 - `escapeAttr()` — safe HTML attribute quoting
 - `positionTooltip()` — positions floating tooltip relative to chart-block bounds
 
-### Data loading (lines 360-415)
+### Data loading (roughly lines 360-590)
 - `loadRouteDetail(routeId)` — injects `<script>` for `routes/<id>.js`, uses promise + caching
-- `loadLeaflet()` — lazy-loads Leaflet CSS + JS from unpkg CDN, promise with singleton
-- `loadChartJs()` — lazy-loads Chart.js for sparkline charts in stats overlay
+- `loadLeaflet()` — lazy-loads Leaflet CSS + JS with fallback order: BootCDN → jsDelivr → unpkg
+- `loadChartJs()` — lazy-loads Chart.js for sparkline charts with the same CDN fallback pattern
+- `addResilientTileLayer()` — uses CartoDB light/dark tiles first, then falls back to OpenStreetMap when tile loading is sparse or errors
 
 ### State persistence
 - Theme: `localStorage.theme` — `"light"` (default) | `"dark"`
@@ -79,7 +80,8 @@ The entire app is a single IIFE. Key sections in order:
   - Toggle hidden on stats tab and mobile (≤760px)
 - **Drag-to-resize**: handle at panel top, drag to adjust `max-height`, saved to localStorage
   - On mobile with route selected: stats overlay dynamically follows panel height during drag (to avoid overlap)
-  - `resetPanelHeight()` — clears custom height, restores default
+  - Route/race clicks keep the user's custom panel height
+  - `resetPanelHeight()` — clears custom height only for stats-month route jumps where the overlay would otherwise collide
 
 ### Panel content renderers (lines 692-931)
 - `renderPanelRoutes(container)` — scrollable route list with SVG thumbnails, click highlights map on hero
@@ -89,14 +91,15 @@ The entire app is a single IIFE. Key sections in order:
 
 ### Route link handler (lines 1002-1027)
 - `initRouteLinks()` — binds `.race-card[data-route-target]` and `[data-route-target]` buttons
-  - Calls `resetPanelHeight()` to avoid overlap with stats overlay
+  - Preserves panel height for route/race list clicks
+  - Calls `resetPanelHeight()` only when jumping from the stats tab to a route
   - Triggers `updateHeroRoute()` and stats overlay rendering
 
-### Hero map (lines 1064-1230)
+### Hero map (roughly lines 1230-1370)
 - `initHeroMap()` — creates Leaflet map with city highlight areas (GeoJSON boundaries or circles), saves default bounds
   - Mobile: `zoomControl: false`, `scrollWheelZoom: false`, `doubleClickZoom: true`, `tap: true`, `touchZoom: true`
   - Desktop: `zoomControl: true`, `scrollWheelZoom: true`
-  - Tile URL switches between CartoDB light/dark based on theme
+  - Tile URL switches between CartoDB light/dark based on theme and can fall back to OpenStreetMap
   - `updateWhenIdle` and `keepBuffer` tuned for mobile performance
 - `updateHeroRoute(routeId, fit)` — swaps displayed polyline, optionally fits bounds, triggers stats overlay
 - `showAllRoutesOnMap()` — draws all routes as faint semi-transparent polylines, race routes in orange
@@ -113,7 +116,7 @@ The entire app is a single IIFE. Key sections in order:
 
 ### Theme toggle (lines 1521-1568)
 - `initTheme()` — reads localStorage, defaults to `"light"`
-- `switchMapTiles()` — hot-swaps Leaflet tile layer between dark/light CartoDB
+- `switchMapTiles()` — hot-swaps the resilient Leaflet tile layer for the current theme
 - Re-renders panel content on theme change to update SVG colors
 
 ### Initialization (last ~10 lines)

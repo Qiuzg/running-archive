@@ -117,7 +117,7 @@
   --tooltip-ink: #f0f3f8;
 
   --white: #fff;
-  --route-bg: #dde1e6;
+  --route-bg: linear-gradient(135deg, #f8fbff 0%, #eef8f3 54%, #fff3ec 100%);
   --fallback-bg-1: #e8eaef;
   --fallback-bg-2: #dde1e6;
 

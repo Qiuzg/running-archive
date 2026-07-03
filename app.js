@@ -59,6 +59,26 @@
   let selectedStatsYear = availableYears.includes(currentYear) ? currentYear : availableYears[0] || currentYear;
   let selectedStatsMonth = null;
 
+  const leafletSources = [
+    {
+      css: "https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.css",
+      js: "https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.js",
+    },
+    {
+      css: "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+      js: "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
+    },
+    {
+      css: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+      js: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+    },
+  ];
+  const chartJsSources = [
+    "https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.js",
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js",
+    "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js",
+  ];
+
   function getActivityForRoute(routeId) {
     return activityItems
       .filter((item) => item.routeId === routeId)
@@ -222,17 +242,17 @@
   function getSvgColors() {
     const light = document.documentElement.dataset.theme === "light";
     return {
-      bg1: light ? "#dde1e6" : "#0a0f18",
-      bg2: light ? "#e2e6eb" : "#0d141d",
-      bg3: light ? "#d9dde2" : "#0b1019",
-      grid: light ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)",
-      decor1: light ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.06)",
-      decor2: light ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.05)",
-      decor3: light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)",
+      bg1: light ? "#f7fbff" : "#0a0f18",
+      bg2: light ? "#eef8f3" : "#0d141d",
+      bg3: light ? "#fff3ec" : "#0b1019",
+      grid: light ? "rgba(37,99,235,0.08)" : "rgba(255,255,255,0.04)",
+      decor1: light ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.06)",
+      decor2: light ? "rgba(224,74,42,0.10)" : "rgba(255,255,255,0.05)",
+      decor3: light ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.08)",
       routeGlow: light ? "rgba(37,99,235,0.25)" : "rgba(59,139,255,0.3)",
       route: light ? "#2563eb" : "#3b8bff",
       routeAccent: light ? "#10b981" : "#2dd4a8",
-      startFill: light ? "#dde1e6" : "#0a0f18",
+      startFill: light ? "#f8fbff" : "#0a0f18",
       startStroke: light ? "#10b981" : "#2dd4a8",
       endFill: light ? "#e04a2a" : "#ff5e3a",
       endStroke: light ? "#dde1e6" : "#0a0f18",
@@ -384,34 +404,183 @@
     });
   }
 
+  function loadStylesheetOnce(href) {
+    if (document.querySelector(`link[href="${escapeAttr(href)}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  function loadScriptWithTimeout(src, timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${escapeAttr(src)}"]`);
+      if (existing?.dataset.loaded === "true") {
+        resolve();
+        return;
+      }
+
+      const script = existing || document.createElement("script");
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        script.remove();
+        reject(new Error(`Script load timed out: ${src}`));
+      }, timeoutMs);
+
+      script.async = true;
+      script.src = src;
+      script.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        script.dataset.loaded = "true";
+        resolve();
+      };
+      script.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        script.remove();
+        reject(new Error(`Script load failed: ${src}`));
+      };
+
+      if (!existing) document.body.appendChild(script);
+    });
+  }
+
   function loadLeaflet() {
     if (window.L) return Promise.resolve(window.L);
     if (leafletPromise) return leafletPromise;
-    leafletPromise = new Promise((resolve, reject) => {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = () => resolve(window.L);
-      script.onerror = () => reject(new Error("Leaflet load failed"));
-      document.body.appendChild(script);
-    });
+    leafletPromise = (async () => {
+      let lastError = null;
+      for (const source of leafletSources) {
+        try {
+          loadStylesheetOnce(source.css);
+          await loadScriptWithTimeout(source.js);
+          if (window.L) return window.L;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("Leaflet load failed");
+    })();
     return leafletPromise;
   }
 
   function loadChartJs() {
     if (window.Chart) return Promise.resolve(window.Chart);
     if (chartJsPromise) return chartJsPromise;
-    chartJsPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js";
-      script.onload = () => resolve(window.Chart);
-      script.onerror = () => reject(new Error("Chart.js load failed"));
-      document.body.appendChild(script);
-    });
+    chartJsPromise = (async () => {
+      let lastError = null;
+      for (const src of chartJsSources) {
+        try {
+          await loadScriptWithTimeout(src);
+          if (window.Chart) return window.Chart;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("Chart.js load failed");
+    })();
     return chartJsPromise;
+  }
+
+  function getTileProviders() {
+    const theme = document.documentElement.dataset.theme || "dark";
+    const cartoStyle = theme === "light" ? "light_all" : "dark_all";
+    return [
+      {
+        name: `carto-${cartoStyle}`,
+        url: `https://{s}.basemaps.cartocdn.com/${cartoStyle}/{z}/{x}/{y}{r}.png`,
+        subdomains: "abcd",
+      },
+      {
+        name: "openstreetmap",
+        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        subdomains: "abc",
+      },
+    ];
+  }
+
+  function getTileOptions(provider) {
+    const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+    return {
+      maxZoom: 19,
+      subdomains: provider.subdomains,
+      updateWhenIdle: isMobile,
+      keepBuffer: isMobile ? 4 : 2,
+      crossOrigin: true,
+    };
+  }
+
+  function addResilientTileLayer(map) {
+    const providers = getTileProviders();
+    let providerIndex = 0;
+    let activeLayer = null;
+    let loadStarted = 0;
+    let loadFinished = 0;
+    let loadFailed = 0;
+    let fallbackTimer = null;
+
+    function clearFallbackTimer() {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    }
+
+    function switchProvider() {
+      if (providerIndex >= providers.length - 1) return;
+      providerIndex += 1;
+      activateProvider(providerIndex);
+    }
+
+    function scheduleFallback() {
+      clearFallbackTimer();
+      fallbackTimer = setTimeout(() => {
+        if (loadStarted >= 4 && loadFinished < Math.min(4, Math.ceil(loadStarted / 2))) {
+          switchProvider();
+        }
+      }, 4500);
+    }
+
+    function activateProvider(index) {
+      clearFallbackTimer();
+      if (activeLayer && map.hasLayer(activeLayer)) {
+        map.removeLayer(activeLayer);
+      }
+
+      loadStarted = 0;
+      loadFinished = 0;
+      loadFailed = 0;
+      const provider = providers[index];
+      const layer = window.L.tileLayer(provider.url, getTileOptions(provider));
+      activeLayer = layer;
+      heroTileLayer = layer;
+      layer.on("tileloadstart", () => {
+        if (layer !== activeLayer) return;
+        loadStarted += 1;
+        scheduleFallback();
+      });
+      layer.on("tileload", () => {
+        if (layer !== activeLayer) return;
+        loadFinished += 1;
+        if (loadFinished >= 4) clearFallbackTimer();
+      });
+      layer.on("tileerror", () => {
+        if (layer !== activeLayer) return;
+        loadFailed += 1;
+        if (loadFailed >= 2 || (loadStarted >= 4 && loadFinished === 0)) {
+          switchProvider();
+        }
+      });
+      layer.addTo(map);
+    }
+
+    activateProvider(providerIndex);
+    return activeLayer;
   }
 
   function renderLeafletRoute(route, detail) {
@@ -763,7 +932,6 @@
     container.querySelectorAll("[data-hero-route]").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (btn.dataset.heroRoute === heroActiveRouteId) return;
-        resetPanelHeight();
         heroActiveRouteId = btn.dataset.heroRoute;
         updateHeroRoute(heroActiveRouteId, true, "route");
         updateActiveRouteUI(heroActiveRouteId);
@@ -1044,7 +1212,6 @@
         if (event.target.closest("button, a, input, select, textarea")) return;
         const routeId = card.dataset.routeTarget;
         if (routeId === heroActiveRouteId) return;
-        resetPanelHeight();
         heroActiveRouteId = routeId;
         updateHeroRoute(routeId, true, "race");
         updateActiveRouteUI(routeId);
@@ -1067,6 +1234,7 @@
 
   // Hero map state (shared with panel render functions)
   let heroMap = null;
+  let heroTileLayer = null;
   let heroRouteLine = null;
   let heroCityLayer = null;
   let heroActiveRouteId = null;
@@ -1147,26 +1315,6 @@
       );
     }
 
-    let heroTileLayer = null;
-
-    function getTileUrl() {
-      const theme = document.documentElement.dataset.theme || "dark";
-      return theme === "light"
-        ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-    }
-
-    function getTileOptions() {
-      const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-      return {
-        maxZoom: 19,
-        subdomains: "abcd",
-        updateWhenIdle: isMobile,
-        keepBuffer: isMobile ? 4 : 2,
-        crossOrigin: true,
-      };
-    }
-
     function renderHeroMap() {
       if (!window.L) return;
       var isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
@@ -1178,7 +1326,7 @@
         tap: true,
         touchZoom: true,
       });
-      heroTileLayer = window.L.tileLayer(getTileUrl(), getTileOptions()).addTo(heroMap);
+      heroTileLayer = addResilientTileLayer(heroMap);
 
       // City highlight areas
       heroCityLayer = window.L.featureGroup().addTo(heroMap);
@@ -1538,17 +1686,7 @@
         heroMap.removeLayer(layer);
       }
     });
-    const url = document.documentElement.dataset.theme === "light"
-      ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-    const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-    window.L.tileLayer(url, {
-      maxZoom: 19,
-      subdomains: "abcd",
-      updateWhenIdle: isMobile,
-      keepBuffer: isMobile ? 4 : 2,
-      crossOrigin: true,
-    }).addTo(heroMap);
+    heroTileLayer = addResilientTileLayer(heroMap);
   }
 
   document.querySelector("#themeToggle")?.addEventListener("click", () => {

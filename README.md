@@ -27,10 +27,11 @@ python3 -m http.server 8080
 
 ```
 index.html                 # 入口页面
-app.js                     # 主逻辑（IIFE，约 870 行）
-styles.css                 # 样式表（CSS 自定义属性，约 1515 行）
+app.js                     # 主逻辑（IIFE，约 1715 行）
+styles.css                 # 样式表（CSS 自定义属性，约 2969 行）
 data.generated.js          # 自动生成：跑步与比赛数据
 route-index.generated.js   # 自动生成：路线预览索引
+city-boundaries.generated.js # 自动生成：比赛城市 GeoJSON 边界
 routes/*.js                # 每条路线的完整 GPS 坐标（按需加载）
 sync/
   apple-health-import.py   # Apple Health 导出 → 生成数据文件
@@ -83,8 +84,10 @@ git push gitlab main
 
 ## 技术栈
 
-- **地图**：Leaflet.js（CDN 按需加载），CartoDB Dark Matter 暗色瓦片
-- **路线缩略图**：内联 SVG，Mercator 投影，暗色主题配色
+- **地图**：Leaflet.js（CDN 按需加载），CartoDB 瓦片优先，加载失败时自动切到 OpenStreetMap
+- **资源容错**：Leaflet / Chart.js 依次尝试 BootCDN、jsDelivr、unpkg，降低国内访问外部 CDN 时的白屏或缺块概率
+- **路线缩略图**：内联 SVG，Mercator 投影，亮暗主题独立配色，亮色模式使用浅色渐变底
+- **面板交互**：路线 / 比赛列表支持拖拽调整高度，点击记录后保持用户设置；统计页月记录跳转路线时会恢复默认高度避免遮挡
 - **样式**：CSS 自定义属性、backdrop-filter 毛玻璃、CSS Grid/Flexbox
 - **数据加载**：完整 GPS 坐标通过动态 `<script>` 注入按需加载
 - **零依赖**：不依赖任何框架或构建工具
