@@ -10,7 +10,7 @@ Static running archive site — pure HTML/CSS/JS, zero build tools. Displays mar
 
 ```
 index.html              # Single page: hero map + topbar nav + left panel
-app.js                  # All logic: data, rendering, resilient Leaflet maps (IIFE, ~1715 lines)
+app.js                  # All logic: data, rendering, resilient Leaflet maps (IIFE, ~1736 lines)
 styles.css              # All styles: CSS custom properties, light/dark theme (~2965 lines)
 data.generated.js       # Auto-generated: profile, races[], runs[] (~4800 lines)
 route-index.generated.js # Auto-generated: preview coordinates for all routes
@@ -37,7 +37,7 @@ assets/                  # Static images (profile.png, etc.)
 - `window.RUN_CITY_BOUNDARIES` — GeoJSON boundaries for race cities
 - `window.RUN_ROUTE_DETAIL` — populated on demand with full coordinates per route (includes timeSeries)
 
-## app.js module structure (~1715 lines)
+## app.js module structure (~1736 lines)
 
 The entire app is a single IIFE. Key sections in order:
 
@@ -79,7 +79,7 @@ The entire app is a single IIFE. Key sections in order:
   - Collapsed routes: shows 3 items; collapsed races: shows 1 item
   - Toggle hidden on stats tab and mobile (≤760px)
 - **Drag-to-resize**: handle at panel top, drag to adjust `max-height`, saved to localStorage
-  - On mobile with route selected: stats overlay dynamically follows panel height during drag (to avoid overlap)
+  - On mobile with route selected: stats overlay/detail card dynamically follows panel height and stays above the bottom record list
   - Route/race clicks keep the user's custom panel height
   - `resetPanelHeight()` — clears custom height only for stats-month route jumps where the overlay would otherwise collide
 

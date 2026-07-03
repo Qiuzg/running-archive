@@ -213,6 +213,37 @@
     el.style.top = y + "px";
   }
 
+  function isMobileViewport() {
+    return window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+  }
+
+  function getMaxPanelHeightWithOverlay() {
+    return Math.max(118, window.innerHeight - 220);
+  }
+
+  function syncMobileStatsOverlayLayout() {
+    const overlay = document.querySelector("#heroStatsOverlay");
+    if (!overlay) return;
+
+    const hero = document.querySelector(".hero");
+    const panel = document.querySelector(".hero__panel");
+    const routeSelected = hero && hero.classList.contains("hero--route-selected");
+    if (!isMobileViewport() || !routeSelected || activePanelTab === "stats" || !panel) {
+      overlay.style.bottom = "";
+      return;
+    }
+
+    const maxPanelHeight = getMaxPanelHeightWithOverlay();
+    let panelHeight = panel.getBoundingClientRect().height;
+    if (panelHeight > maxPanelHeight) {
+      panel.style.maxHeight = maxPanelHeight + "px";
+      panelHeight = panel.getBoundingClientRect().height;
+    }
+
+    // Overlay sits above the bottom panel (panel bottom: 8px, gap: 16px).
+    overlay.style.bottom = 8 + panelHeight + 16 + "px";
+  }
+
   function projectRoutePoints(coordinates, width = 420, height = 240, padding = 28) {
     if (!coordinates || coordinates.length < 2) return [];
     const mercator = coordinates.map(([lon, lat]) => {
@@ -842,27 +873,14 @@
       if (!dragging) return;
       var clientY = e.touches ? e.touches[0].clientY : e.clientY;
       var delta = startY - clientY;
-      var maxHeight = window.innerHeight - 80;
-      var newHeight = Math.max(200, Math.min(maxHeight, startHeight + delta));
-      panel.style.maxHeight = newHeight + "px";
-      // On mobile with route selected, move stats overlay to follow panel top edge
-      var isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+      var isMobile = isMobileViewport();
       var heroEl = document.querySelector(".hero");
       var routeSelected = heroEl && heroEl.classList.contains("hero--route-selected");
-      if (isMobile && routeSelected) {
-        var statsOverlay = document.querySelector("#heroStatsOverlay");
-        if (statsOverlay) {
-          // Overlay sits above the panel (panel bottom: 8px, gap: 16px)
-          statsOverlay.style.bottom = (8 + newHeight + 16) + "px";
-        }
-        // Cap panel height to leave room for overlay + topbar
-        var maxPanelWithOverlay = window.innerHeight - 220;
-        if (newHeight > maxPanelWithOverlay) {
-          newHeight = maxPanelWithOverlay;
-          panel.style.maxHeight = newHeight + "px";
-          if (statsOverlay) statsOverlay.style.bottom = (8 + newHeight + 16) + "px";
-        }
-      }
+      var maxHeight = isMobile && routeSelected ? getMaxPanelHeightWithOverlay() : window.innerHeight - 80;
+      var minHeight = isMobile && routeSelected ? 118 : 200;
+      var newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
+      panel.style.maxHeight = newHeight + "px";
+      syncMobileStatsOverlayLayout();
     }
 
     function onDragEnd() {
@@ -872,6 +890,7 @@
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       localStorage.setItem("panelHeight", panel.style.maxHeight);
+      syncMobileStatsOverlayLayout();
       if (heroMap) heroMap.invalidateSize();
     }
 
@@ -1609,6 +1628,7 @@
     if (insertedOverlay && shouldCollapseCharts) {
       insertedOverlay.classList.add("hero-stats-overlay--collapsed");
     }
+    syncMobileStatsOverlayLayout();
 
     // Bind collapse toggle
     if (hasCharts) {
@@ -1704,6 +1724,7 @@
       renderStatsOverlay(heroActiveRouteId);
     }
   });
+  window.addEventListener("resize", syncMobileStatsOverlayLayout);
 
   initTheme();
   renderSummary();
