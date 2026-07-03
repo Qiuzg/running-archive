@@ -390,18 +390,20 @@ button {
 /* Collapse toggle button */
 .hero-stats-overlay__toggle {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 50%;
+  right: 0;
   z-index: 2;
-  width: 28px;
-  height: 28px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 50%;
-  background: rgba(255,255,255,0.10);
-  color: rgba(255,255,255,0.82);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
-  font-size: 1rem;
-  font-weight: 850;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 40px;
+  border: 0;
+  border-left: 1px solid rgba(255,255,255,0.15);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  box-shadow: none;
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -409,11 +411,12 @@ button {
   padding: 0;
   line-height: 1;
   pointer-events: auto;
-  transition: background 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s;
 }
 .hero-stats-overlay__toggle:hover {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.85);
+  border-left-color: rgba(255,255,255,0.35);
+  background: transparent;
 }
 
 @media (max-width: 760px) {
@@ -531,13 +534,14 @@ button {
   color: #6b7280;
 }
 [data-theme="light"] .hero-stats-overlay__toggle {
-  border-color: rgba(0, 0, 0, 0.15);
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.6);
+  border-left-color: rgba(0, 0, 0, 0.12);
+  background: transparent;
+  color: rgba(0, 0, 0, 0.4);
 }
 [data-theme="light"] .hero-stats-overlay__toggle:hover {
-  background: rgba(0, 0, 0, 0.10);
-  border-color: rgba(0, 0, 0, 0.3);
+  background: transparent;
+  border-left-color: rgba(0, 0, 0, 0.28);
+  color: rgba(0, 0, 0, 0.65);
 }
 
 @media (max-width: 760px) {
