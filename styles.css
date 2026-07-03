@@ -785,26 +785,30 @@ button {
 .hero__panel-header {
   position: relative;
   flex-shrink: 0;
-  padding: 16px 22px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  padding: 10px 32px 10px 18px;
   border-bottom: 1px solid var(--panel-border);
 }
 
 .hero__panel-header .eyebrow {
-  margin-bottom: 4px;
+  margin: 0;
+  font-size: 0.72rem;
 }
 
 .hero__panel-header h2 {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   font-weight: 850;
   letter-spacing: -0.01em;
 }
 
 .hero__panel-header span {
-  display: inline-block;
-  margin-top: 6px;
+  margin: 0;
   color: var(--ink-dim);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 650;
 }
 
@@ -1721,19 +1725,26 @@ button {
 }
 
 /* ---- Stats: Year Navigator ---- */
+.stats-year-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+
 .stats-year-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 4px 0 0;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .stats-year-nav strong {
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   font-weight: 850;
   letter-spacing: -0.01em;
-  min-width: 60px;
+  min-width: 46px;
   text-align: center;
 }
 
@@ -1765,27 +1776,25 @@ button {
 
 /* ---- Stats: Hero Number ---- */
 .stats-hero-number {
-  padding: 10px 4px 4px;
-  text-align: center;
-}
-
-.stats-hero-number span {
-  display: block;
-  color: var(--ink-dim);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .stats-hero-number strong {
-  display: block;
-  margin-top: 2px;
   color: var(--ink);
-  font-size: 2.4rem;
+  font-size: 1.4rem;
   font-weight: 900;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+}
+
+.stats-hero-number span {
+  color: var(--ink-dim);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ---- Stats: Meta Row ---- */
@@ -2026,6 +2035,25 @@ button {
 .hero__panel-body .month-records {
   margin-top: 10px;
   padding: 14px;
+}
+
+.hero__panel-body .month-records__header {
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.hero__panel-body .month-records__header span {
+  font-size: 0.68rem;
+}
+
+.hero__panel-body .month-records__header strong {
+  font-size: 0.9rem;
+}
+
+.hero__panel-body .month-records__header small {
+  font-size: 0.66rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .chart-block,
@@ -2397,7 +2425,7 @@ div.month-activity-bar {
 
 @media (max-width: 760px) {
   .leaflet-control-zoom {
-    margin-top: 72px !important;
+    display: none !important;
   }
 
   .topbar {
@@ -2631,7 +2659,31 @@ div.month-activity-bar {
   }
 
   .stats-hero-number strong {
-    font-size: clamp(1.8rem, 5vw, 2.4rem);
+    font-size: clamp(1.1rem, 4vw, 1.4rem);
+  }
+
+  .stats-year-header {
+    gap: 8px;
+    padding: 2px 0 6px;
+  }
+
+  .stats-year-nav {
+    gap: 4px;
+  }
+
+  .stats-year-nav strong {
+    font-size: 1rem;
+    min-width: 38px;
+  }
+
+  .stats-year-arrow {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+  }
+
+  .stats-hero-number span {
+    font-size: 0.55rem;
   }
 
   .stats-meta-row {
@@ -2751,11 +2803,31 @@ div.month-activity-bar {
   }
 
   .bar small {
-    font-size: 0.68rem;
+    font-size: 0.6rem;
+    white-space: nowrap;
   }
 
   .hero--stats-full .hero__panel-body .bar {
     min-width: 0;
+  }
+
+  .hero__panel-body .bar small {
+    font-size: 0.6rem;
+    white-space: nowrap;
+  }
+
+  .hero__panel-body .month-records__header {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  .hero__panel-body .month-records__header strong {
+    font-size: 0.82rem;
+  }
+
+  .hero__panel-body .month-records__header small {
+    font-size: 0.62rem;
   }
 
   .month-detail-chart,
@@ -2784,8 +2856,6 @@ div.month-activity-bar {
 
   .month-activity-bar i {
     width: 8px;
-  }
-    height: 130px;
   }
 }
 
@@ -2862,6 +2932,34 @@ div.month-activity-bar {
   .month-activity-bar i {
     width: 7px;
   }
-    height: 120px;
+
+  .stats-year-header {
+    gap: 4px;
+  }
+
+  .stats-year-nav {
+    gap: 2px;
+  }
+
+  .stats-year-nav strong {
+    font-size: 0.92rem;
+    min-width: 32px;
+  }
+
+  .stats-year-arrow {
+    width: 24px;
+    height: 24px;
+  }
+
+  .stats-hero-number {
+    gap: 3px;
+  }
+
+  .stats-hero-number strong {
+    font-size: 1.05rem;
+  }
+
+  .stats-hero-number span {
+    font-size: 0.52rem;
   }
 }
