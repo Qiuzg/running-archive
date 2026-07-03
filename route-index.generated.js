@@ -226605,8 +226605,8 @@ window.RUN_ROUTE_INDEX = {
   },
   "route-apple-20260315-091811": {
     "id": "route-apple-20260315-091811",
-    "name": "成都长距离路线 2026-03-15",
-    "city": "成都",
+    "name": "眉山长距离路线 2026-03-15",
+    "city": "眉山",
     "distanceKm": 21.19,
     "privacy": "起终点附近已裁剪",
     "hiddenStartEndMeters": 800,
@@ -228391,8 +228391,8 @@ window.RUN_ROUTE_INDEX = {
   },
   "route-apple-20260329-073028": {
     "id": "route-apple-20260329-073028",
-    "name": "户外长距离路线 2026-03-29",
-    "city": "户外",
+    "name": "宿迁长距离路线 2026-03-29",
+    "city": "宿迁",
     "distanceKm": 42.38,
     "privacy": "起终点附近已裁剪",
     "hiddenStartEndMeters": 800,
