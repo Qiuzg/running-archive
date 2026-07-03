@@ -183,6 +183,16 @@
     return String(value ?? "").replace(/"/g, "&quot;");
   }
 
+  function positionTooltip(el, event) {
+    const chartBlock = el.closest(".chart-block");
+    if (!chartBlock) return;
+    const rect = chartBlock.getBoundingClientRect();
+    const x = (event.touches ? event.touches[0].clientX : event.clientX) - rect.left + 12;
+    const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top - 32;
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+  }
+
   function projectRoutePoints(coordinates, width = 420, height = 240, padding = 28) {
     if (!coordinates || coordinates.length < 2) return [];
     const mercator = coordinates.map(([lon, lat]) => {
@@ -212,9 +222,9 @@
   function getSvgColors() {
     const light = document.documentElement.dataset.theme === "light";
     return {
-      bg1: light ? "#f0f2f5" : "#0d141d",
-      bg2: light ? "#e8eaef" : "#111a24",
-      bg3: light ? "#dde1e6" : "#0f1820",
+      bg1: light ? "#dde1e6" : "#0a0f18",
+      bg2: light ? "#e2e6eb" : "#0d141d",
+      bg3: light ? "#d9dde2" : "#0b1019",
       grid: light ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)",
       decor1: light ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.06)",
       decor2: light ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.05)",
@@ -222,10 +232,10 @@
       routeGlow: light ? "rgba(37,99,235,0.25)" : "rgba(59,139,255,0.3)",
       route: light ? "#2563eb" : "#3b8bff",
       routeAccent: light ? "#10b981" : "#2dd4a8",
-      startFill: light ? "#f0f2f5" : "#0d141d",
+      startFill: light ? "#dde1e6" : "#0a0f18",
       startStroke: light ? "#10b981" : "#2dd4a8",
       endFill: light ? "#e04a2a" : "#ff5e3a",
-      endStroke: light ? "#f0f2f5" : "#0d141d",
+      endStroke: light ? "#dde1e6" : "#0a0f18",
     };
   }
 
@@ -243,6 +253,7 @@
     const startPoint = projected[0];
     const endPoint = projected[projected.length - 1];
 
+    const isMini = variant === "mini";
     return `
       <svg class="route-svg route-svg--${variant}" viewBox="0 0 420 240" role="img" aria-label="${escapeAttr(route.name)}路线图">
         <defs>
@@ -255,16 +266,18 @@
             <path d="M 28 0 L 0 0 0 28" fill="none" stroke="${c.grid}" stroke-width="1" />
           </pattern>
         </defs>
+        ${isMini ? "" : `
         <rect width="420" height="240" rx="${paperRadius}" fill="url(#route-paper-${escapeAttr(route.id)})" />
         <rect width="420" height="240" rx="${paperRadius}" fill="url(#route-grid-${escapeAttr(route.id)})" opacity="0.75" />
         <path d="M-18 204 C68 150 150 204 235 148 S342 86 442 122" fill="none" stroke="${c.decor1}" stroke-width="2" stroke-dasharray="8 9" opacity="0.5" />
         <path d="M26 58 C110 112 178 46 250 88 S336 166 398 78" fill="none" stroke="${c.decor2}" stroke-width="2" stroke-dasharray="4 7" opacity="0.4" />
         <path d="M16 28 H404 M16 212 H404 M22 22 V218 M398 22 V218" fill="none" stroke="${c.decor3}" stroke-width="1" />
-        <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${variant === "mini" ? 5 : 6}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
-        <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${variant === "mini" ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round" />
-        <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${variant === "mini" ? 1.5 : 2}" stroke-linecap="round" stroke-linejoin="round" />
-        <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="4" />
-        <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${variant === "mini" ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
+        `}
+        <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${isMini ? 5 : 6}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
+        <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${isMini ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${isMini ? 1.5 : 2}" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${isMini ? 6 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="4" />
+        <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${isMini ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
       </svg>
     `;
   }
@@ -526,31 +539,32 @@
       link.classList.toggle("is-active", link.dataset.panelTab === tab);
     });
     document.querySelector("#panelEyebrow").textContent =
-      tab === "routes" ? "Route Atlas" : tab === "races" ? "Race Records" : "";
+      tab === "routes" ? "Route Atlas" : tab === "races" ? "Race Records" : "Year in Motion";
     document.querySelector("#panelTitle").textContent =
-      tab === "routes" ? "路线足迹" : tab === "races" ? "比赛记录" : "";
-    // Stats tab: full-width, hide map, hide panel header
+      tab === "routes" ? "路线足迹" : tab === "races" ? "比赛记录" : "年度统计";
+    // Stats tab: keep map but show all routes as background
     const heroEl = document.querySelector(".hero");
     const mapContainer = document.querySelector("#heroMap");
     const summaryStrip = document.querySelector("#summaryStrip");
     const panelHeader = document.querySelector(".hero__panel-header");
+    heroEl.classList.remove("hero--stats-full");
+    if (mapContainer) mapContainer.style.display = "";
+    if (summaryStrip) summaryStrip.style.display = "";
+    if (panelHeader) panelHeader.style.display = "";
+    clearStatsOverlay();
+    setRouteSelectedState(false);
+    // Show all route traces on map for stats overview
     if (tab === "stats") {
-      heroEl.classList.add("hero--stats-full");
-      if (mapContainer) mapContainer.style.display = "none";
-      if (summaryStrip) summaryStrip.style.display = "none";
-      if (panelHeader) panelHeader.style.display = "none";
-      clearStatsOverlay();
+      showAllRoutesOnMap();
     } else {
-      heroEl.classList.remove("hero--stats-full");
-      if (mapContainer) mapContainer.style.display = "";
-      if (summaryStrip) summaryStrip.style.display = "";
-      if (panelHeader) panelHeader.style.display = "";
-      setTimeout(() => {
-        if (heroMap) {
-          heroMap.invalidateSize();
-        }
-      }, 100);
+      hideAllRoutesFromMap();
     }
+    // Hide collapse toggle on stats tab (not useful there)
+    const toggle = document.querySelector("#panelCollapseToggle");
+    if (toggle) toggle.style.display = tab === "stats" ? "none" : "";
+    setTimeout(() => {
+      if (heroMap) heroMap.invalidateSize();
+    }, 100);
     renderPanelContent();
   }
 
@@ -579,6 +593,102 @@
     });
   }
 
+  function initPanelCollapse() {
+    const header = document.querySelector(".hero__panel-header");
+    const panel = document.querySelector(".hero__panel");
+    if (!header || !panel) return;
+
+    // Inject toggle button into header
+    const btn = document.createElement("button");
+    btn.className = "panel-collapse-toggle";
+    btn.type = "button";
+    btn.id = "panelCollapseToggle";
+    btn.setAttribute("aria-label", "折叠面板");
+    btn.innerHTML = "<span>▼</span>";
+    header.appendChild(btn);
+
+    // Restore saved state
+    const collapsed = localStorage.getItem("panelCollapsed") === "true";
+    if (collapsed) {
+      panel.classList.add("hero__panel--collapsed");
+      btn.innerHTML = "<span>▲</span>";
+      btn.setAttribute("aria-label", "展开面板");
+    }
+
+    btn.addEventListener("click", () => {
+      panel.classList.toggle("hero__panel--collapsed");
+      const isCollapsed = panel.classList.contains("hero__panel--collapsed");
+      btn.innerHTML = isCollapsed ? "<span>▲</span>" : "<span>▼</span>";
+      btn.setAttribute("aria-label", isCollapsed ? "展开面板" : "折叠面板");
+      localStorage.setItem("panelCollapsed", isCollapsed);
+      // Re-render to show fewer/more items
+      renderPanelContent();
+      setTimeout(() => {
+        if (heroMap) heroMap.invalidateSize();
+      }, 300);
+    });
+
+    // ---- Drag-to-resize handle (at top of panel) ----
+    var handle = document.createElement("div");
+    handle.className = "panel-resize-handle";
+    handle.id = "panelResizeHandle";
+    panel.insertBefore(handle, panel.firstChild);
+
+    var savedHeight = localStorage.getItem("panelHeight");
+    if (savedHeight) {
+      panel.style.maxHeight = savedHeight;
+    }
+
+    var dragging = false;
+    var startY = 0;
+    var startHeight = 0;
+
+    function onDragStart(e) {
+      dragging = true;
+      handle.classList.add("is-dragging");
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      startHeight = panel.getBoundingClientRect().height;
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "ns-resize";
+      e.preventDefault();
+    }
+
+    function onDragMove(e) {
+      if (!dragging) return;
+      var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      var delta = startY - clientY;
+      var newHeight = Math.max(200, Math.min(window.innerHeight - 80, startHeight + delta));
+      panel.style.maxHeight = newHeight + "px";
+    }
+
+    function onDragEnd() {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove("is-dragging");
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      localStorage.setItem("panelHeight", panel.style.maxHeight);
+      if (heroMap) heroMap.invalidateSize();
+    }
+
+    handle.addEventListener("mousedown", onDragStart);
+    handle.addEventListener("touchstart", onDragStart, { passive: false });
+    document.addEventListener("mousemove", onDragMove);
+    document.addEventListener("touchmove", onDragMove, { passive: false });
+    document.addEventListener("mouseup", onDragEnd);
+    document.addEventListener("touchend", onDragEnd);
+  }
+
+  // Reset panel height to default (used when route is selected from stats)
+  function resetPanelHeight() {
+    var panel = document.querySelector(".hero__panel");
+    if (panel) {
+      panel.style.maxHeight = "";
+      localStorage.removeItem("panelHeight");
+      if (heroMap) setTimeout(function() { heroMap.invalidateSize(); }, 300);
+    }
+  }
+
   function renderPanelRoutes(container) {
     const routeEntries = [...activityItems]
       .filter((item) => item.routeId && routeIndex[item.routeId])
@@ -587,7 +697,10 @@
       container.innerHTML = '<p class="empty">暂无路线数据</p>';
       return;
     }
-    container.innerHTML = routeEntries
+    const panel = document.querySelector(".hero__panel");
+    const collapsed = panel && panel.classList.contains("hero__panel--collapsed");
+    const visible = collapsed ? routeEntries.slice(0, 3) : routeEntries;
+    container.innerHTML = visible
       .map((item) => {
         const route = routeIndex[item.routeId];
         const activity = getActivityForRoute(item.routeId);
@@ -609,6 +722,9 @@
         `;
       })
       .join("");
+    if (collapsed && routeEntries.length > 3) {
+      container.innerHTML += `<p class="panel-collapsed-hint">还有 ${routeEntries.length - 3} 条路线 · 点击 ▲ 展开</p>`;
+    }
     container.querySelectorAll("[data-hero-route]").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (btn.dataset.heroRoute === heroActiveRouteId) return;
@@ -663,24 +779,24 @@
       `;
     }
 
-    const sections = [];
-    if (marathonRaces.length) {
-      sections.push(`<div class="panel-section-header"><h3>全马 · ${marathonRaces.length} 场</h3></div>`);
-      sections.push(`<div class="record-grid">${marathonRaces.map(renderGroupCard).join("")}</div>`);
-    }
-    if (halfRaces.length) {
-      sections.push(`<div class="panel-section-header"><h3>半马 · ${halfRaces.length} 场</h3></div>`);
-      sections.push(`<div class="record-grid">${halfRaces.map(renderGroupCard).join("")}</div>`);
-    }
-    if (otherRaces.length) {
-      sections.push(`<div class="panel-section-header"><h3>其他比赛 · ${otherRaces.length} 场</h3></div>`);
-      sections.push(`<div class="record-grid">${otherRaces.map(renderGroupCard).join("")}</div>`);
+    const panel = document.querySelector(".hero__panel");
+    const collapsed = panel && panel.classList.contains("hero__panel--collapsed");
+    const allRaces = [...races].sort(byDateDesc);
+    const visibleRaces = collapsed ? allRaces.slice(0, 1) : allRaces;
+    const hiddenCount = collapsed ? Math.max(0, allRaces.length - 1) : 0;
+
+    let sections = [];
+    if (visibleRaces.length) {
+      sections.push(`<div class="record-grid">${visibleRaces.map(renderGroupCard).join("")}</div>`);
     }
     if (!sections.length) {
       sections.push('<p class="empty">还没有比赛记录。</p>');
     }
 
     container.innerHTML = sections.join("");
+    if (collapsed && hiddenCount > 0) {
+      container.innerHTML += `<p class="panel-collapsed-hint">还有 ${hiddenCount} 场比赛 · 点击 ▲ 展开</p>`;
+    }
     initRouteLinks();
   }
 
@@ -688,62 +804,127 @@
     const year = selectedStatsYear;
     const totals = getMonthlyTotals(year);
     const max = Math.max(...totals, 1);
-    const yearOptions = availableYears
-      .map((y) => `<option value="${y}" ${y === year ? "selected" : ""}>${y}</option>`)
-      .join("");
-    const bars = totals
-      .map((t, i) => {
-        const h = Math.max((t / max) * 100, t > 0 ? 8 : 2);
-        return `<button class="bar ${selectedStatsMonth === i ? "is-active" : ""}" type="button"
-          data-stats-month="${i}" data-tooltip="${i + 1}月 · ${formatKm(t)}"
-          aria-label="${year}年${i + 1}月跑量${formatKm(t)}" style="--bar-height: ${h}%">
-          <span>${t ? t.toFixed(0) : ""}</span><i></i><small>${i + 1}月</small></button>`;
-      })
-      .join("");
-
+    const yearDist = getYearDistance(year);
     const yearRaces = races.filter((r) => new Date(r.date).getFullYear() === year);
     const yearMarathonCount = yearRaces.filter((r) => r.type === "marathon").length;
     const yearHalfCount = yearRaces.filter((r) => r.type === "half_marathon").length;
-    const bestMonthDist = Math.max(...totals);
-    const bestMonth = totals.indexOf(bestMonthDist) + 1;
+    const activeMonths = totals.filter(t => t > 0).length;
+    const monthlyAvg = activeMonths > 0 ? yearDist / activeMonths : 0;
+    const longestRun = activityItems
+      .filter(item => new Date(item.date).getFullYear() === year)
+      .reduce((best, item) => Number(item.distanceKm || 0) > Number(best.distanceKm || 0) ? item : best, { distanceKm: 0 });
+    const yearIdx = availableYears.indexOf(year);
+    const hasPrev = yearIdx < availableYears.length - 1;
+    const hasNext = yearIdx > 0;
+
+    // Build reference lines at 100 km intervals
+    const step = 100;
+    const refLines = [];
+    for (let v = step; v <= Math.ceil(max / step) * step; v += step) {
+      const pct = (v / max) * 100;
+      if (pct <= 100) refLines.push({ value: v, pct: pct });
+    }
+
+    const bars = totals
+      .map((t, i) => {
+        const h = Math.max((t / max) * 100, t > 0 ? 6 : 2);
+        return `<button class="bar ${selectedStatsMonth === i ? "is-active" : ""}" type="button"
+          data-stats-month="${i}" data-bar-value="${t ? t.toFixed(0) : "0"}"
+          aria-label="${year}年${i + 1}月跑量${formatKm(t)}" style="--bar-height: ${h}%">
+          <i></i><small>${i + 1}月</small></button>`;
+      })
+      .join("");
 
     container.innerHTML = `
-      <div class="stats-kpi-row">
-        <div class="stats-kpi">
-          <span>最高月跑量</span>
-          <strong>${bestMonthDist.toFixed(1)} km</strong>
-          <small>${bestMonth} 月</small>
+      <div class="stats-year-nav">
+        <button class="stats-year-arrow" type="button" data-stats-year-prev ${hasPrev ? "" : "disabled"}>←</button>
+        <strong>${year}</strong>
+        <button class="stats-year-arrow" type="button" data-stats-year-next ${hasNext ? "" : "disabled"}>→</button>
+      </div>
+      <div class="stats-hero-number">
+        <span>年度总跑量</span>
+        <strong>${formatKm(yearDist)}</strong>
+      </div>
+      <div class="chart-block">
+        <div class="chart-block__header">
+          <h3>月度跑量</h3>
         </div>
-        <div class="stats-kpi">
+        <div class="bar-chart">
+          ${refLines.map(l => `<span class="bar-ref-line" style="bottom:${l.pct}%"><small>${l.value}</small></span>`).join("")}
+          ${bars}
+        </div>
+        <div class="bar-tooltip" id="barTooltip" hidden></div>
+      </div>
+      <div class="stats-meta-row">
+        <div class="stats-meta-item">
           <span>比赛</span>
           <strong>${yearRaces.length} 场</strong>
           <small>全马 ${yearMarathonCount} · 半马 ${yearHalfCount}</small>
         </div>
-      </div>
-      <div class="chart-block">
-        <div class="chart-block__header">
-          <h3>${year} 月度跑量</h3>
-          <div class="chart-block__header-right">
-            <span class="year-total-inline">年度总跑量 <strong>${formatKm(getYearDistance(year))}</strong></span>
-            <label class="year-select"><select data-stats-year-select>${yearOptions}</select></label>
-          </div>
+        <div class="stats-meta-item">
+          <span>月均跑量</span>
+          <strong>${formatKm(monthlyAvg)}</strong>
+          <small>${activeMonths} 个月有记录</small>
         </div>
-        <div class="bar-chart">${bars}</div>
+        <div class="stats-meta-item">
+          <span>最长距离</span>
+          <strong>${formatKm(longestRun.distanceKm || 0)}</strong>
+          <small>${longestRun.name || longestRun.title || "--"}</small>
+        </div>
       </div>
       <div class="month-records" id="monthRecords"></div>
     `;
 
-    document.querySelector("[data-stats-year-select]")?.addEventListener("change", (e) => {
-      selectedStatsYear = Number(e.target.value);
-      selectedStatsMonth = null;
-      renderPanelStats(container);
+    // Year navigation
+    container.querySelector("[data-stats-year-prev]")?.addEventListener("click", () => {
+      if (hasPrev) {
+        selectedStatsYear = availableYears[yearIdx + 1];
+        selectedStatsMonth = null;
+        renderPanelStats(container);
+      }
     });
+    container.querySelector("[data-stats-year-next]")?.addEventListener("click", () => {
+      if (hasNext) {
+        selectedStatsYear = availableYears[yearIdx - 1];
+        selectedStatsMonth = null;
+        renderPanelStats(container);
+      }
+    });
+    // Month bar clicks + hover tooltip
+    const tooltip = container.querySelector("#barTooltip");
     container.querySelectorAll("[data-stats-month]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const m = Number(btn.dataset.statsMonth);
         selectedStatsMonth = selectedStatsMonth === m ? null : m;
         renderPanelStats(container);
       });
+      btn.addEventListener("mouseenter", (e) => {
+        if (!tooltip) return;
+        const val = btn.dataset.barValue;
+        const month = Number(btn.dataset.statsMonth) + 1;
+        tooltip.textContent = `${month}月 · ${val} km`;
+        tooltip.hidden = false;
+        positionTooltip(tooltip, e);
+      });
+      btn.addEventListener("mousemove", (e) => {
+        if (tooltip && !tooltip.hidden) positionTooltip(tooltip, e);
+      });
+      btn.addEventListener("mouseleave", () => {
+        if (tooltip) tooltip.hidden = true;
+      });
+    });
+    // Touch: show on tap, hide after delay
+    container.querySelectorAll("[data-stats-month]").forEach((btn) => {
+      btn.addEventListener("touchstart", (e) => {
+        if (!tooltip) return;
+        const val = btn.dataset.barValue;
+        const month = Number(btn.dataset.statsMonth) + 1;
+        tooltip.textContent = `${month}月 · ${val} km`;
+        tooltip.hidden = false;
+        positionTooltip(tooltip, e);
+        clearTimeout(btn._tooltipTimer);
+        btn._tooltipTimer = setTimeout(() => { if (tooltip) tooltip.hidden = true; }, 1500);
+      }, { passive: true });
     });
     renderMonthRecords();
     initRouteLinks();
@@ -837,6 +1018,8 @@
         const routeId = el.dataset.routeTarget;
         if (routeId === heroActiveRouteId) return;
         heroActiveRouteId = routeId;
+        // Reset panel height to default when clicking route from stats
+        if (activePanelTab === "stats") resetPanelHeight();
         updateHeroRoute(routeId, true, "route");
         updateActiveRouteUI(routeId);
       };
@@ -848,6 +1031,40 @@
   let heroRouteLine = null;
   let heroCityLayer = null;
   let heroActiveRouteId = null;
+  let heroAllRoutesLayer = null;
+
+  function showAllRoutesOnMap() {
+    if (!heroMap || !window.L) return;
+    hideAllRoutesFromMap();
+    heroAllRoutesLayer = window.L.featureGroup().addTo(heroMap);
+    const allRouteEntries = Object.values(routeIndex);
+    // Sort so marathon/half routes are drawn on top
+    const marathonRouteIds = new Set(races.filter(r => r.type === "marathon" || r.type === "half_marathon").map(r => r.routeId).filter(Boolean));
+    const priorityRoutes = allRouteEntries.filter(r => marathonRouteIds.has(r.id));
+    const otherRoutes = allRouteEntries.filter(r => !marathonRouteIds.has(r.id));
+    const ordered = [...otherRoutes, ...priorityRoutes];
+    for (const route of ordered) {
+      const coords = route.previewCoordinates;
+      if (!coords || coords.length < 2) continue;
+      const latlngs = coords.map(([lon, lat]) => [lat, lon]);
+      const isRaceRoute = marathonRouteIds.has(route.id);
+      window.L.polyline(latlngs, {
+        color: isRaceRoute ? "#ff8a6e" : "#4a6a8a",
+        weight: isRaceRoute ? 1.5 : 0.8,
+        opacity: isRaceRoute ? 0.5 : 0.28,
+        lineJoin: "round",
+        lineCap: "round",
+        interactive: false,
+      }).addTo(heroAllRoutesLayer);
+    }
+  }
+
+  function hideAllRoutesFromMap() {
+    if (heroAllRoutesLayer && heroMap) {
+      heroMap.removeLayer(heroAllRoutesLayer);
+      heroAllRoutesLayer = null;
+    }
+  }
 
   function initHeroMap() {
     const heroMapEl = document.querySelector("#heroMap");
@@ -1254,7 +1471,7 @@
 
   // ---- Theme toggle ----
   function initTheme() {
-    const saved = localStorage.getItem("theme") || "dark";
+    const saved = localStorage.getItem("theme") || "light";
     document.documentElement.dataset.theme = saved;
     updateThemeIcon(saved);
   }
@@ -1304,6 +1521,7 @@
   initTheme();
   renderSummary();
   initPanelTabs();
+  initPanelCollapse();
   initHeroMap();
   switchPanelTab("routes");
   initRouteLinks();

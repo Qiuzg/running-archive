@@ -782,6 +782,7 @@ button {
 }
 
 .hero__panel-header {
+  position: relative;
   flex-shrink: 0;
   padding: 16px 22px 10px;
   border-bottom: 1px solid var(--panel-border);
@@ -806,13 +807,111 @@ button {
   font-weight: 650;
 }
 
+/* ---- Panel Collapse Toggle ---- */
+.panel-collapse-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 40px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  pointer-events: auto;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.panel-collapse-toggle:hover {
+  color: rgba(255, 255, 255, 0.8);
+  border-left-color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="light"] .panel-collapse-toggle {
+  border-left-color: rgba(0, 0, 0, 0.10);
+  color: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .panel-collapse-toggle:hover {
+  color: rgba(0, 0, 0, 0.65);
+  border-left-color: rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 760px) {
+  .panel-collapse-toggle {
+    display: none;
+  }
+}
+
+/* Collapsed panel — header stays, body shows fewer items */
+.hero__panel--collapsed .hero__panel-header {
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panel-collapsed-hint {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--ink-dim);
+  font-size: 0.76rem;
+  font-weight: 650;
+  text-align: center;
+}
+
 .hero__panel-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 6px 12px 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--overlay) transparent;
+}
+
+/* ---- Panel Resize Handle ---- */
+.panel-resize-handle {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 16px;
+  cursor: ns-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-resize-handle::before {
+  content: "";
+  width: 28px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--overlay);
+  transition: background 0.15s, width 0.15s;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle.is-dragging::before {
+  background: var(--overlay-strong);
+  width: 40px;
+}
+
+@media (max-width: 760px) {
+  .panel-resize-handle::before {
+    width: 36px;
+    height: 5px;
+  }
 }
 
 .hero__panel-body::-webkit-scrollbar {
@@ -1010,10 +1109,14 @@ button {
 .hero__panel-body .bar-chart {
   height: 200px;
   gap: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .hero__panel-body .bar {
   min-width: 0;
+  overflow: visible;
+  grid-template-rows: minmax(0, 1fr) 26px;
 }
 
 .hero__panel-body .bar i {
@@ -1021,6 +1124,49 @@ button {
 }
 
 .hero__panel-body .bar i::before {
+  display: none;
+}
+
+/* ---- Bar Chart Reference Lines ---- */
+.bar-ref-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--line-strong);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bar-ref-line small {
+  position: absolute;
+  left: 4px;
+  top: -9px;
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: var(--bg-card);
+  padding: 0 4px;
+}
+
+/* ---- Bar Cursor Tooltip ---- */
+.bar-tooltip {
+  position: absolute;
+  z-index: 50;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.1s;
+}
+
+.bar-tooltip[hidden] {
   display: none;
 }
 
@@ -1571,7 +1717,123 @@ button {
   gap: 20px;
 }
 
-/* Stats KPI row — compact cards above chart */
+/* ---- Stats: Year Navigator ---- */
+.stats-year-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 4px 0 0;
+}
+
+.stats-year-nav strong {
+  font-size: 1.35rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  min-width: 60px;
+  text-align: center;
+}
+
+.stats-year-arrow {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.stats-year-arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.stats-year-arrow:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* ---- Stats: Hero Number ---- */
+.stats-hero-number {
+  padding: 10px 4px 4px;
+  text-align: center;
+}
+
+.stats-hero-number span {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stats-hero-number strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 2.4rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+/* ---- Stats: Meta Row ---- */
+.stats-meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  min-width: 0;
+}
+
+.stats-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stats-meta-item span {
+  color: var(--ink-dim);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stats-meta-item strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+
+.stats-meta-item small {
+  color: var(--ink-muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Stats KPI row — compact cards above chart (deprecated, keep for compatibility) */
 .stats-kpi-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1765,6 +2027,7 @@ button {
 
 .chart-block,
 .month-records {
+  position: relative;
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1825,6 +2088,7 @@ button {
 
 /* ---- Bar Chart ---- */
 .bar-chart {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
@@ -1888,34 +2152,9 @@ button {
   font-weight: 700;
 }
 
-/* Tooltip on hover — monthly bars only */
+/* Tooltip on hover — monthly bars only (disabled, now uses JS floating tooltip) */
 .bar::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 4;
-  max-width: 220px;
-  padding: 8px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--tooltip-bg);
-  color: var(--tooltip-ink);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-  font-size: 0.78rem;
-  font-weight: 650;
-  line-height: 1.35;
-  white-space: nowrap;
-  transform: translateX(-50%) translateY(4px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.bar:hover::after,
-.bar:focus-visible::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  display: none;
 }
 
 /* ---- Insight List ---- */
@@ -1978,7 +2217,7 @@ button {
 /* ---- Month Records ---- */
 .month-records {
   margin-top: 20px;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .month-records__header {
@@ -2384,6 +2623,26 @@ div.month-activity-bar {
     padding: 0;
   }
 
+  .stats-hero-number strong {
+    font-size: clamp(1.8rem, 5vw, 2.4rem);
+  }
+
+  .stats-meta-row {
+    gap: 5px;
+  }
+
+  .stats-meta-item {
+    padding: 8px 4px;
+  }
+
+  .stats-meta-item strong {
+    font-size: 0.9rem;
+  }
+
+  .stats-meta-item small {
+    font-size: 0.6rem;
+  }
+
   .stats-kpi-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -2448,10 +2707,18 @@ div.month-activity-bar {
   }
 
   .bar-chart {
-    gap: 10px;
-    overflow-x: auto;
-    padding: 46px 0 0;
-    height: 260px;
+    gap: 8px;
+    overflow: hidden;
+    padding: 40px 0 0;
+    height: 180px;
+    min-width: 0;
+  }
+
+  .hero__panel-body .bar-chart {
+    height: 160px;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .hero--stats-full .hero__panel-body .bar-chart {
@@ -2460,8 +2727,24 @@ div.month-activity-bar {
     overflow-x: hidden;
   }
 
-  .bar {
-    min-width: 36px;
+  .bar,
+  .hero__panel-body .bar {
+    min-width: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr) 22px;
+  }
+
+  .bar span,
+  .hero__panel-body .bar span {
+    font-size: 0.66rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .bar small {
+    font-size: 0.68rem;
   }
 
   .hero--stats-full .hero__panel-body .bar {
@@ -2469,18 +2752,32 @@ div.month-activity-bar {
   }
 
   .month-detail-chart,
-  .month-detail-chart.is-sparse {
+  .month-detail-chart.is-sparse,
+  .hero__panel-body .month-detail-chart,
+  .hero__panel-body .month-detail-chart.is-sparse {
     justify-content: flex-start;
-    gap: 10px;
+    gap: 6px;
     width: 100%;
     max-width: 100%;
-    padding-inline: 8px;
+    padding-inline: 6px;
+    min-height: 100px;
   }
 
-  .month-activity-bar {
-    flex-basis: 32px;
-    width: 32px;
-    min-width: 32px;
+  .month-activity-bar,
+  .hero__panel-body .month-activity-bar {
+    flex-basis: 24px;
+    width: 24px;
+    min-width: 24px;
+    height: 100px;
+  }
+
+  .month-activity-bar small {
+    font-size: 0.62rem;
+  }
+
+  .month-activity-bar i {
+    width: 8px;
+  }
     height: 130px;
   }
 }
@@ -2508,6 +2805,22 @@ div.month-activity-bar {
     grid-template-columns: 1fr;
   }
 
+  .stats-meta-row {
+    gap: 4px;
+  }
+
+  .stats-meta-item {
+    padding: 6px 3px;
+  }
+
+  .stats-meta-item strong {
+    font-size: 0.82rem;
+  }
+
+  .stats-meta-item span {
+    font-size: 0.55rem;
+  }
+
   .summary-strip .metric {
     padding-inline: 3px;
   }
@@ -2522,16 +2835,26 @@ div.month-activity-bar {
   }
 
   .month-detail-chart,
-  .month-detail-chart.is-sparse {
+  .month-detail-chart.is-sparse,
+  .hero__panel-body .month-detail-chart,
+  .hero__panel-body .month-detail-chart.is-sparse {
     justify-content: flex-start;
-    gap: 8px;
-    padding-inline: 6px;
+    gap: 5px;
+    padding-inline: 4px;
+    min-height: 90px;
   }
 
-  .month-activity-bar {
-    flex-basis: 30px;
-    width: 30px;
-    min-width: 30px;
+  .month-activity-bar,
+  .hero__panel-body .month-activity-bar {
+    flex-basis: 22px;
+    width: 22px;
+    min-width: 22px;
+    height: 85px;
+  }
+
+  .month-activity-bar i {
+    width: 7px;
+  }
     height: 120px;
   }
 }
