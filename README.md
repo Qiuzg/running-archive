@@ -82,9 +82,45 @@ git push gitlab main
 
 两个远程互不冲突，同一份代码可以同时推送到 GitHub 和 GitLab。
 
+### Cloudflare Pages
+
+Cloudflare Pages 可直接连接 GitHub 仓库部署，构建命令留空，输出目录使用仓库根目录。
+
+页面默认使用 Leaflet + CartoDB/OpenStreetMap，以保持当前清淡地图视觉风格。
+
+如需临时验证高德 Web 端 JS API，可在当前域名的浏览器控制台开启：
+
+```js
+localStorage.setItem("RUN_USE_AMAP", "true");
+```
+
+关闭高德验证并恢复默认 Leaflet：
+
+```js
+localStorage.removeItem("RUN_USE_AMAP");
+```
+
+Cloudflare 域名 `running-archive.pages.dev` 开启高德验证时，会通过 Pages Function 代理高德安全请求。高德安全密钥不要提交到仓库，需要在 Cloudflare Pages 的环境变量中配置：
+
+```text
+AMAP_SECURITY_JSCODE=<高德安全密钥>
+```
+
+本地或 GitHub Pages 验证高德时，还需要临时设置安全密钥：
+
+```js
+localStorage.setItem("RUN_AMAP_SECURITY_JSCODE", "<高德安全密钥>");
+```
+
+清除本地调试密钥：
+
+```js
+localStorage.removeItem("RUN_AMAP_SECURITY_JSCODE");
+```
+
 ## 技术栈
 
-- **地图**：Leaflet.js（CDN 按需加载），CartoDB 瓦片优先，加载失败时自动切到 OpenStreetMap
+- **地图**：默认使用 Leaflet.js，CartoDB 瓦片优先，加载失败时自动切到 OpenStreetMap；可通过本地开关临时验证高德 Web 端 JS API
 - **资源容错**：Leaflet / Chart.js 依次尝试 BootCDN、jsDelivr、unpkg，降低国内访问外部 CDN 时的白屏或缺块概率
 - **路线缩略图**：内联 SVG，Mercator 投影，亮暗主题独立配色，亮色模式使用浅色渐变底
 - **面板交互**：路线 / 比赛列表支持拖拽调整高度，点击记录后保持用户设置；手机端路线详情浮层始终跟随列表高度并停在列表上方；统计页月记录跳转路线时会恢复默认高度避免遮挡

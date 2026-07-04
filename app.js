@@ -22,6 +22,16 @@
     无锡: 34,
     常州: 36,
   };
+  const amapConfig = {
+    key: "d27e9d7cea2761b3c3d1fa55b0a077dc",
+    cloudflareHosts: ["running-archive.pages.dev"],
+    enabledStorageKey: "RUN_USE_AMAP",
+    localSecurityStorageKey: "RUN_AMAP_SECURITY_JSCODE",
+  };
+  const amapStyles = {
+    light: "amap://styles/whitesmoke",
+    dark: "amap://styles/dark",
+  };
   const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
 
   // Filter out evening "races" — real races start in the morning (before noon).
@@ -67,6 +77,7 @@
   let routeMap = null;
   let routeLayer = null;
   let leafletPromise = null;
+  let amapPromise = null;
   let chartJsPromise = null;
   let statsCharts = [];      // active Chart.js instances
   let statsOverlayRequestId = 0;
@@ -398,11 +409,6 @@
     return `
       <div class="race-route-preview">
         ${renderRouteSvg(routeWithPreview(route), "mini")}
-        <div class="race-route-preview__stats">
-          <span>${formatKm(race.distanceKm)}</span>
-          <strong>${race.finishTime}</strong>
-          <small>${race.pace} /km</small>
-        </div>
       </div>
     `;
   }
@@ -547,6 +553,83 @@
       throw lastError || new Error("Leaflet load failed");
     })();
     return leafletPromise;
+  }
+
+  function shouldUseAmap() {
+    try {
+      return Boolean(amapConfig.key && localStorage.getItem(amapConfig.enabledStorageKey) === "true");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getLocalAmapSecurityCode() {
+    try {
+      return localStorage.getItem(amapConfig.localSecurityStorageKey) || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function getAmapSecurityConfig() {
+    const host = window.location.hostname;
+    if (amapConfig.cloudflareHosts.includes(host)) {
+      return { serviceHost: `${window.location.origin}/_AMapService` };
+    }
+    const localSecurityCode = getLocalAmapSecurityCode();
+    return localSecurityCode ? { securityJsCode: localSecurityCode } : {};
+  }
+
+  function loadAmap() {
+    if (window.AMap) return Promise.resolve(window.AMap);
+    if (amapPromise) return amapPromise;
+    amapPromise = (async () => {
+      window._AMapSecurityConfig = getAmapSecurityConfig();
+      const src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(amapConfig.key)}`;
+      await loadScriptWithTimeout(src, 9000);
+      if (window.AMap) return window.AMap;
+      throw new Error("AMap load failed");
+    })();
+    return amapPromise;
+  }
+
+  function isInChina(lon, lat) {
+    return lon >= 72.004 && lon <= 137.8347 && lat >= 0.8293 && lat <= 55.8271;
+  }
+
+  function transformLat(x, y) {
+    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+    ret += ((20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0) / 3.0;
+    ret += ((20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin((y / 3.0) * Math.PI)) * 2.0) / 3.0;
+    ret += ((160.0 * Math.sin((y / 12.0) * Math.PI) + 320 * Math.sin((y * Math.PI) / 30.0)) * 2.0) / 3.0;
+    return ret;
+  }
+
+  function transformLon(x, y) {
+    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+    ret += ((20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0) / 3.0;
+    ret += ((20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin((x / 3.0) * Math.PI)) * 2.0) / 3.0;
+    ret += ((150.0 * Math.sin((x / 12.0) * Math.PI) + 300.0 * Math.sin((x / 30.0) * Math.PI)) * 2.0) / 3.0;
+    return ret;
+  }
+
+  function wgs84ToGcj02(lon, lat) {
+    if (!isInChina(lon, lat)) return [lon, lat];
+    const a = 6378245.0;
+    const ee = 0.00669342162296594323;
+    let dLat = transformLat(lon - 105.0, lat - 35.0);
+    let dLon = transformLon(lon - 105.0, lat - 35.0);
+    const radLat = (lat / 180.0) * Math.PI;
+    let magic = Math.sin(radLat);
+    magic = 1 - ee * magic * magic;
+    const sqrtMagic = Math.sqrt(magic);
+    dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * Math.PI);
+    dLon = (dLon * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * Math.PI);
+    return [lon + dLon, lat + dLat];
+  }
+
+  function toAmapPoint(point) {
+    return wgs84ToGcj02(Number(point[0]), Number(point[1]));
   }
 
   function loadChartJs() {
@@ -842,31 +925,21 @@
     if (tab === "stats") {
       showAllRoutesOnMap();
       // Hide city boundary highlights on stats page
-      if (heroCityLayer && heroMap) {
-        heroMap.removeLayer(heroCityLayer);
-      }
+      hideHeroCityLayer();
       // Center map on route centroid with zoomed-in view
-      if (heroMap && window.L) {
-        heroMap.setView([32.02, 118.75], 12);
-      }
+      setHeroStatsView();
     } else {
       hideAllRoutesFromMap();
       // Restore city boundary highlights when leaving stats
-      if (heroCityLayer && heroMap && !heroMap.hasLayer(heroCityLayer)) {
-        heroCityLayer.addTo(heroMap);
-      }
+      showHeroCityLayer();
       // Reset map to default bounds
-      if (heroMap && defaultMapBounds) {
-        heroMap.fitBounds(defaultMapBounds, { padding: [80, 120] });
-      } else if (heroMap && defaultMapCenter && defaultMapZoom) {
-        heroMap.setView(defaultMapCenter, defaultMapZoom);
-      }
+      restoreHeroDefaultView();
     }
     // Hide collapse toggle on stats tab (not useful there)
     const toggle = document.querySelector("#panelCollapseToggle");
     if (toggle) toggle.style.display = tab === "stats" ? "none" : "";
     setTimeout(() => {
-      if (heroMap) heroMap.invalidateSize();
+      invalidateHeroMapSize();
     }, 100);
     renderPanelContent();
   }
@@ -927,7 +1000,7 @@
       // Re-render to show fewer/more items
       renderPanelContent();
       setTimeout(() => {
-        if (heroMap) heroMap.invalidateSize();
+        invalidateHeroMapSize();
       }, 300);
     });
 
@@ -978,7 +1051,7 @@
       document.body.style.cursor = "";
       localStorage.setItem("panelHeight", panel.style.maxHeight);
       syncMobileStatsOverlayLayout();
-      if (heroMap) heroMap.invalidateSize();
+      invalidateHeroMapSize();
     }
 
     handle.addEventListener("mousedown", onDragStart);
@@ -995,7 +1068,7 @@
     if (panel) {
       panel.style.maxHeight = "";
       localStorage.removeItem("panelHeight");
-      if (heroMap) setTimeout(function () { heroMap.invalidateSize(); }, 300);
+      if (heroMap) setTimeout(invalidateHeroMapSize, 300);
     }
   }
 
@@ -1050,20 +1123,13 @@
     function renderGroupCard(race) {
       const hasPhoto = race.photos && race.photos.length > 0;
       const place = [race.city, race.country].filter(Boolean).join(" · ");
-      let hasPreviewStats = false;
       let media;
       if (hasPhoto) {
         media = `<img src="${race.photos[0]}" alt="${race.name}" />`;
       } else if (race.routeId && routeIndex[race.routeId]?.previewCoordinates?.length) {
-        hasPreviewStats = true;
         media = `
           <div class="race-route-preview">
             ${renderRouteSvg(routeWithPreview(routeIndex[race.routeId]), "mini")}
-            <div class="race-route-preview__stats">
-              <span>${formatKm(race.distanceKm)}</span>
-              <strong>${race.finishTime}</strong>
-              <small>${race.pace} /km</small>
-            </div>
           </div>`;
       } else {
         media = `<div class="race-card__fallback"><span>${raceTypes[race.type] || "RUN"}</span><strong>${formatKm(race.distanceKm)}</strong></div>`;
@@ -1071,14 +1137,14 @@
       const hasRoute = race.routeId && routeIndex[race.routeId];
       const isActive = hasRoute && race.routeId === heroActiveRouteId;
       return `
-        <article class="race-card ${hasPreviewStats ? "race-card--has-preview-stats" : ""} ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
+        <article class="race-card ${isActive ? "is-active" : ""}" ${hasRoute ? `data-route-target="${escapeAttr(race.routeId)}"` : ""}>
           <div class="race-card__media">${media}</div>
           <div class="race-card__body">
             <div class="race-card__meta"><span>${formatDate(race.date)}</span>${race.isPB ? '<b class="badge badge--small">PB</b>' : ""}</div>
             <h3>${race.name}</h3>
             ${place || race.bibNumber ? `<p>${[place, race.bibNumber ? `号码 ${race.bibNumber}` : ""].filter(Boolean).join(" · ")}</p>` : ""}
             <div class="race-card__result">
-              <strong>${race.finishTime}</strong><span>${race.pace} /km</span>
+              <span>${formatKm(race.distanceKm)}</span><strong>${race.finishTime}</strong><span>${race.pace} /km</span>
             </div>
             ${race.notes ? `<p class="race-card__notes">${race.notes}</p>` : ""}
           </div>
@@ -1279,11 +1345,6 @@
           media = `
             <div class="race-route-preview">
               ${renderRouteSvg(routeWithPreview(routeIndex[race.routeId]), "mini")}
-              <div class="race-route-preview__stats">
-                <span>${formatKm(race.distanceKm)}</span>
-                <strong>${race.finishTime}</strong>
-                <small>${race.pace} /km</small>
-              </div>
             </div>`;
         } else {
           media = `<div class="race-card__fallback"><span>${raceTypes[race.type] || "RUN"}</span><strong>${formatKm(race.distanceKm)}</strong></div>`;
@@ -1298,7 +1359,7 @@
               <h3>${race.name}</h3>
               ${place || race.bibNumber ? `<p>${[place, race.bibNumber ? `号码 ${race.bibNumber}` : ""].filter(Boolean).join(" · ")}</p>` : ""}
               <div class="race-card__result">
-                <strong>${race.finishTime}</strong><span>${race.pace} /km</span>
+                <span>${formatKm(race.distanceKm)}</span><strong>${race.finishTime}</strong><span>${race.pace} /km</span>
                 ${race.isPB ? '<b class="badge badge--small">PB</b>' : ""}
               </div>
               ${race.notes ? `<p class="race-card__notes">${race.notes}</p>` : ""}
@@ -1337,6 +1398,7 @@
   }
 
   // Hero map state (shared with panel render functions)
+  let heroMapEngine = "leaflet";
   let heroMap = null;
   let heroTileLayer = null;
   let heroRouteLine = null;
@@ -1347,8 +1409,164 @@
   let defaultMapCenter = null;
   let defaultMapZoom = null;
 
+  function invalidateHeroMapSize() {
+    if (!heroMap) return;
+    if (heroMapEngine === "amap") {
+      heroMap.resize?.();
+    } else if (heroMap.invalidateSize) {
+      heroMap.invalidateSize();
+    }
+  }
+
+  function addAmapOverlays(overlays) {
+    if (!heroMap || !overlays?.length) return;
+    overlays.forEach((overlay) => heroMap.add(overlay));
+  }
+
+  function removeAmapOverlays(overlays) {
+    if (!heroMap || !overlays?.length) return;
+    overlays.forEach((overlay) => heroMap.remove(overlay));
+  }
+
+  function hideHeroCityLayer(clear = false) {
+    if (!heroCityLayer || !heroMap) return;
+    if (heroMapEngine === "amap") {
+      removeAmapOverlays(heroCityLayer);
+    } else {
+      heroMap.removeLayer(heroCityLayer);
+      if (clear) heroCityLayer = null;
+    }
+  }
+
+  function showHeroCityLayer() {
+    if (!heroCityLayer || !heroMap) return;
+    if (heroMapEngine === "amap") {
+      addAmapOverlays(heroCityLayer);
+    } else if (!heroMap.hasLayer(heroCityLayer)) {
+      heroCityLayer.addTo(heroMap);
+    }
+  }
+
+  function setHeroStatsView() {
+    if (!heroMap) return;
+    if (heroMapEngine === "amap") {
+      heroMap.setZoomAndCenter(12, toAmapPoint([118.75, 32.02]));
+    } else if (window.L) {
+      heroMap.setView([32.02, 118.75], 12);
+    }
+  }
+
+  function restoreHeroDefaultView() {
+    if (!heroMap) return;
+    if (heroMapEngine === "amap") {
+      if (defaultMapBounds?.length) {
+        heroMap.setFitView(defaultMapBounds, false, [80, 120, 80, 120]);
+      } else if (defaultMapCenter && defaultMapZoom) {
+        heroMap.setZoomAndCenter(defaultMapZoom, defaultMapCenter);
+      }
+    } else if (defaultMapBounds) {
+      heroMap.fitBounds(defaultMapBounds, { padding: [80, 120] });
+    } else if (defaultMapCenter && defaultMapZoom) {
+      heroMap.setView(defaultMapCenter, defaultMapZoom);
+    }
+  }
+
+  function getGeoJsonRings(geojson) {
+    const rings = [];
+    function readGeometry(geometry) {
+      if (!geometry) return;
+      if (geometry.type === "Polygon") {
+        if (geometry.coordinates?.[0]?.length) rings.push(geometry.coordinates[0]);
+      } else if (geometry.type === "MultiPolygon") {
+        geometry.coordinates?.forEach((polygon) => {
+          if (polygon?.[0]?.length) rings.push(polygon[0]);
+        });
+      }
+    }
+    if (geojson.type === "FeatureCollection") {
+      geojson.features?.forEach((feature) => readGeometry(feature.geometry));
+    } else if (geojson.type === "Feature") {
+      readGeometry(geojson.geometry);
+    } else {
+      readGeometry(geojson);
+    }
+    return rings;
+  }
+
+  function getCityCenter(coordinates) {
+    const lons = coordinates.map((point) => point[0]);
+    const lats = coordinates.map((point) => point[1]);
+    return [
+      lats.reduce((sum, value) => sum + value, 0) / lats.length,
+      lons.reduce((sum, value) => sum + value, 0) / lons.length,
+    ];
+  }
+
+  function createAmapCityOverlays(cityAreas) {
+    const overlays = [];
+    for (const area of cityAreas.values()) {
+      const boundary = cityBoundaries[area.city];
+      const rings = boundary ? getGeoJsonRings(boundary) : [];
+      if (rings.length) {
+        rings.forEach((ring) => {
+          overlays.push(new window.AMap.Polygon({
+            path: ring.map(toAmapPoint),
+            strokeColor: "#ff8a6e",
+            strokeOpacity: 0.32,
+            strokeWeight: 1,
+            fillColor: "#ff5e3a",
+            fillOpacity: 0.12,
+            zIndex: 12,
+          }));
+        });
+      } else {
+        const center = getCityCenter(area.coordinates);
+        const radiusKm = cityHighlightRadiusKm[area.city] || 36;
+        overlays.push(new window.AMap.Circle({
+          center: toAmapPoint([center[1], center[0]]),
+          radius: radiusKm * 1000,
+          strokeOpacity: 0,
+          strokeWeight: 0,
+          fillColor: "#ff5e3a",
+          fillOpacity: 0.11,
+          zIndex: 12,
+        }));
+      }
+    }
+    return overlays;
+  }
+
   function showAllRoutesOnMap() {
-    if (!heroMap || !window.L) return;
+    if (!heroMap) return;
+    if (heroMapEngine === "amap") {
+      if (heroAllRoutesLayer) {
+        addAmapOverlays(heroAllRoutesLayer);
+        return;
+      }
+      const marathonRouteIds = new Set(races.filter(r => r.type === "marathon" || r.type === "half_marathon").map(r => r.routeId).filter(Boolean));
+      const priorityRoutes = routeItems.filter(r => marathonRouteIds.has(r.id));
+      const otherRoutes = routeItems.filter(r => !marathonRouteIds.has(r.id));
+      const ordered = [...otherRoutes, ...priorityRoutes];
+      heroAllRoutesLayer = [];
+      for (const route of ordered) {
+        const coords = route.previewCoordinates;
+        if (!coords || coords.length < 2) continue;
+        const isRaceRoute = marathonRouteIds.has(route.id);
+        heroAllRoutesLayer.push(new window.AMap.Polyline({
+          path: coords.map(toAmapPoint),
+          strokeColor: isRaceRoute ? "#ff8a6e" : "#4a6a8a",
+          strokeWeight: isRaceRoute ? 2 : 1,
+          strokeOpacity: isRaceRoute ? 0.5 : 0.28,
+          lineJoin: "round",
+          lineCap: "round",
+          bubble: true,
+          zIndex: isRaceRoute ? 18 : 16,
+        }));
+      }
+      addAmapOverlays(heroAllRoutesLayer);
+      return;
+    }
+    if (!window.L) return;
     if (heroAllRoutesLayer) {
       if (!heroMap.hasLayer(heroAllRoutesLayer)) heroAllRoutesLayer.addTo(heroMap);
       return;
@@ -1377,7 +1595,10 @@
   }
 
   function hideAllRoutesFromMap() {
-    if (heroAllRoutesLayer && heroMap) {
+    if (!heroAllRoutesLayer || !heroMap) return;
+    if (heroMapEngine === "amap") {
+      removeAmapOverlays(heroAllRoutesLayer);
+    } else {
       heroMap.removeLayer(heroAllRoutesLayer);
     }
   }
@@ -1385,6 +1606,9 @@
   function initHeroMap() {
     const heroMapEl = document.querySelector("#heroMap");
     if (!heroMapEl) return;
+    let amapRuntimeFailed = false;
+    let amapFallbackStarted = false;
+    let restoreConsoleError = null;
 
     // City highlight areas for marathon/half-marathon races
     const cityAreas = new Map();
@@ -1403,15 +1627,6 @@
       cityAreas.set(cityKey, area);
     }
 
-    function getCityCenter(coordinates) {
-      const lons = coordinates.map((point) => point[0]);
-      const lats = coordinates.map((point) => point[1]);
-      return [
-        lats.reduce((sum, value) => sum + value, 0) / lats.length,
-        lons.reduce((sum, value) => sum + value, 0) / lons.length,
-      ];
-    }
-
     function getCircleBounds(center, radiusKm) {
       const latDelta = radiusKm / 111;
       const lonDelta = radiusKm / (111 * Math.max(Math.cos((center[0] * Math.PI) / 180), 0.2));
@@ -1421,9 +1636,114 @@
       );
     }
 
-    function renderHeroMap() {
+    function handleAmapRuntimeError(event) {
+      const filename = event.filename || "";
+      const message = event.message || "";
+      if (filename.includes("webapi.amap.com") || message.includes("INVALID_USER_DOMAIN")) {
+        amapRuntimeFailed = true;
+      }
+    }
+
+    function clearAmapRuntimeWatcher() {
+      window.removeEventListener("error", handleAmapRuntimeError, true);
+      if (restoreConsoleError) {
+        restoreConsoleError();
+        restoreConsoleError = null;
+      }
+    }
+
+    function watchAmapConsoleErrors() {
+      if (restoreConsoleError) return;
+      const originalConsoleError = console.error;
+      console.error = function (...args) {
+        const message = args.map((item) => String(item)).join(" ");
+        if (message.includes("INVALID_USER_DOMAIN") || message.includes("USERKEY")) {
+          amapRuntimeFailed = true;
+        }
+        originalConsoleError.apply(console, args);
+      };
+      restoreConsoleError = () => {
+        console.error = originalConsoleError;
+      };
+    }
+
+    function resetHeroMapState() {
+      if (heroMap?.destroy) {
+        try {
+          heroMap.destroy();
+        } catch (_) {
+          // Ignore cleanup failures while falling back to Leaflet.
+        }
+      }
+      heroMapEl.innerHTML = "";
+      heroMap = null;
+      heroTileLayer = null;
+      heroRouteLine = null;
+      heroCityLayer = null;
+      heroAllRoutesLayer = null;
+      defaultMapBounds = null;
+      defaultMapCenter = null;
+      defaultMapZoom = null;
+    }
+
+    function fallbackToLeaflet(error) {
+      if (amapFallbackStarted) return;
+      amapFallbackStarted = true;
+      clearAmapRuntimeWatcher();
+      console.warn("AMap unavailable, falling back to Leaflet:", error);
+      resetHeroMapState();
+      initLeafletFallback();
+    }
+
+    function renderAmapHeroMap() {
+      if (!window.AMap) return;
+      heroMapEngine = "amap";
+      const isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+      heroMapEl.dataset.mapEngine = "amap";
+      heroMap = new window.AMap.Map(heroMapEl, {
+        attributionControl: false,
+        center: toAmapPoint([118.75, 32.02]),
+        doubleClickZoom: true,
+        dragEnable: true,
+        jogEnable: false,
+        mapStyle: amapStyles[document.documentElement.dataset.theme || "light"],
+        resizeEnable: true,
+        scrollWheel: !isMobile,
+        touchZoom: true,
+        viewMode: "2D",
+        zoom: 5,
+        zoomEnable: true,
+      });
+
+      heroCityLayer = createAmapCityOverlays(cityAreas);
+      addAmapOverlays(heroCityLayer);
+      if (heroCityLayer.length) {
+        heroMap.setFitView(heroCityLayer, false, [80, 120, 80, 120]);
+        defaultMapBounds = heroCityLayer;
+        const center = heroMap.getCenter();
+        defaultMapCenter = [center.lng, center.lat];
+        defaultMapZoom = heroMap.getZoom();
+      }
+
+      const observer = new MutationObserver(() => {
+        setTimeout(invalidateHeroMapSize, 350);
+      });
+      observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+      setTimeout(() => {
+        if (amapRuntimeFailed) {
+          fallbackToLeaflet(new Error("AMap runtime error"));
+        } else {
+          clearAmapRuntimeWatcher();
+        }
+      }, 2500);
+    }
+
+    function renderLeafletHeroMap() {
       if (!window.L) return;
+      heroMapEngine = "leaflet";
       var isMobile = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+      heroMapEl.dataset.mapEngine = "leaflet";
       heroMap = window.L.map(heroMapEl, {
         attributionControl: false,
         zoomControl: !isMobile,
@@ -1483,28 +1803,64 @@
       }
 
       const observer = new MutationObserver(() => {
-        setTimeout(() => heroMap.invalidateSize(), 350);
+        setTimeout(invalidateHeroMapSize, 350);
       });
       observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
 
-    loadLeaflet().then(renderHeroMap).catch((error) => {
+    const initLeafletFallback = () => loadLeaflet().then(renderLeafletHeroMap).catch((error) => {
       console.warn("Hero map initialization failed:", error);
     });
+
+    if (shouldUseAmap()) {
+      window.addEventListener("error", handleAmapRuntimeError, true);
+      watchAmapConsoleErrors();
+      loadAmap().then(renderAmapHeroMap).catch((error) => {
+        fallbackToLeaflet(error);
+      });
+    } else {
+      initLeafletFallback();
+    }
   }
 
   // Expose updateHeroRoute at module level for panel functions
   function updateHeroRoute(routeId, fit, source = "route") {
-    if (!heroMap || !window.L) return;
+    if (!heroMap) return;
     setRouteSelectedState(true, source);
+
+    if (heroMapEngine === "amap") {
+      if (heroRouteLine) {
+        heroMap.remove(heroRouteLine);
+        heroRouteLine = null;
+      }
+      hideHeroCityLayer();
+      const route = routeIndex[routeId];
+      const coords = route && route.previewCoordinates;
+      if (coords && coords.length) {
+        heroRouteLine = new window.AMap.Polyline({
+          path: coords.map(toAmapPoint),
+          strokeColor: "#3b8bff",
+          strokeWeight: 5,
+          strokeOpacity: 0.92,
+          lineJoin: "round",
+          lineCap: "round",
+          zIndex: 30,
+        });
+        heroMap.add(heroRouteLine);
+        if (fit) {
+          heroMap.setFitView([heroRouteLine], false, [80, 120, 80, 120]);
+        }
+      }
+      renderStatsOverlay(routeId);
+      return;
+    }
+
+    if (!window.L) return;
     if (heroRouteLine) {
       heroMap.removeLayer(heroRouteLine);
       heroRouteLine = null;
     }
-    if (heroCityLayer) {
-      heroMap.removeLayer(heroCityLayer);
-      heroCityLayer = null;
-    }
+    hideHeroCityLayer(true);
     const route = routeIndex[routeId];
     const coords = route && route.previewCoordinates;
     if (coords && coords.length) {
@@ -1787,7 +2143,12 @@
   }
 
   function switchMapTiles() {
-    if (!heroMap || !window.L) return;
+    if (!heroMap) return;
+    if (heroMapEngine === "amap") {
+      heroMap.setMapStyle(amapStyles[document.documentElement.dataset.theme || "light"]);
+      return;
+    }
+    if (!window.L) return;
     // Remove old tile layer and add new one matching theme
     heroMap.eachLayer((layer) => {
       if (layer instanceof window.L.TileLayer) {
