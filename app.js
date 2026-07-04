@@ -48,6 +48,20 @@
   const availableYears = [...new Set(activityItems.map((item) => new Date(item.date).getFullYear()))]
     .filter((year) => Number.isFinite(year))
     .sort((a, b) => b - a);
+  const activityByRouteId = new Map();
+  activityItems.forEach((item) => {
+    if (!item.routeId) return;
+    const current = activityByRouteId.get(item.routeId);
+    if (!current || new Date(item.date) > new Date(current.date)) {
+      activityByRouteId.set(item.routeId, item);
+    }
+  });
+  const routeEntries = activityItems
+    .filter((item) => item.routeId && routeIndex[item.routeId])
+    .sort(byDateDesc);
+  const shortDateCache = new Map();
+  const dateCache = new Map();
+  const routeSvgCache = new Map();
   let activeRouteId = null;
   let routePage = 0;
   let routeMap = null;
@@ -80,9 +94,7 @@
   ];
 
   function getActivityForRoute(routeId) {
-    return activityItems
-      .filter((item) => item.routeId === routeId)
-      .sort(byDateDesc)[0];
+    return activityByRouteId.get(routeId) || null;
   }
 
   // Sync .is-active UI state across race cards and route items
@@ -125,22 +137,28 @@
   }
 
   function formatDate(value) {
-    return new Intl.DateTimeFormat("zh-CN", {
+    if (dateCache.has(value)) return dateCache.get(value);
+    const formatted = new Intl.DateTimeFormat("zh-CN", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     }).format(new Date(value));
+    dateCache.set(value, formatted);
+    return formatted;
   }
 
   function formatShortDate(value) {
+    if (shortDateCache.has(value)) return shortDateCache.get(value);
     const date = new Date(value);
-    return {
+    const formatted = {
       year: date.getFullYear(),
       monthDay: new Intl.DateTimeFormat("zh-CN", {
         month: "2-digit",
         day: "2-digit",
       }).format(date),
     };
+    shortDateCache.set(value, formatted);
+    return formatted;
   }
 
   function formatKm(value) {
@@ -244,6 +262,28 @@
     overlay.style.bottom = 8 + panelHeight + 16 + "px";
   }
 
+  function alignBarReferenceLines(scope = document) {
+    const chart = scope.querySelector(".bar-chart");
+    if (!chart) return;
+    const sampleBar = chart.querySelector(".bar");
+    const sampleTrack = chart.querySelector(".bar i");
+    if (!sampleBar || !sampleTrack) return;
+
+    const chartRect = chart.getBoundingClientRect();
+    const barRect = sampleBar.getBoundingClientRect();
+    const trackRect = sampleTrack.getBoundingClientRect();
+    const plotTop = barRect.top;
+    const plotBottom = trackRect.bottom;
+    const plotHeight = plotBottom - plotTop;
+    if (plotHeight <= 0) return;
+
+    chart.querySelectorAll(".bar-ref-line[data-ref-pct]").forEach((line) => {
+      const pct = Number(line.dataset.refPct || 0);
+      const y = plotBottom - (plotHeight * pct) / 100;
+      line.style.bottom = chartRect.bottom - y + "px";
+    });
+  }
+
   function projectRoutePoints(coordinates, width = 420, height = 240, padding = 28) {
     if (!coordinates || coordinates.length < 2) return [];
     const mercator = coordinates.map(([lon, lat]) => {
@@ -294,6 +334,13 @@
     if (!route) {
       return '<div class="route-empty">暂无路线</div>';
     }
+    const theme = document.documentElement.dataset.theme || "dark";
+    const cacheKey = route.id
+      ? `${theme}:${variant}:${route.id}:${route.coordinates?.length || route.previewCoordinates?.length || 0}`
+      : null;
+    if (cacheKey && routeSvgCache.has(cacheKey)) {
+      return routeSvgCache.get(cacheKey);
+    }
     const projected = projectRoutePoints(route.coordinates, 420, 240, variant === "mini" ? 12 : 28);
     if (!projected.length) {
       return '<div class="route-empty">路线加载中</div>';
@@ -305,7 +352,7 @@
     const endPoint = projected[projected.length - 1];
 
     const isMini = variant === "mini";
-    return `
+    const svg = `
       <svg class="route-svg route-svg--${variant}" viewBox="0 0 420 240" role="img" aria-label="${escapeAttr(route.name)}路线图">
         <defs>
           <linearGradient id="route-paper-${escapeAttr(route.id)}" x1="0" x2="1" y1="0" y2="1">
@@ -331,6 +378,8 @@
         <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${isMini ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
       </svg>
     `;
+    if (cacheKey) routeSvgCache.set(cacheKey, svg);
+    return svg;
   }
 
   function routeWithPreview(route) {
@@ -612,6 +661,44 @@
 
     activateProvider(providerIndex);
     return activeLayer;
+  }
+
+  function initMobileDoubleTapZoom(map, mapEl) {
+    if (!map || !mapEl || mapEl.dataset.doubleTapZoomBound === "true") return;
+    mapEl.dataset.doubleTapZoomBound = "true";
+
+    let lastTapTime = 0;
+    let lastTapPoint = null;
+    const maxTapGapMs = 320;
+    const maxTapDistancePx = 42;
+
+    mapEl.addEventListener("touchend", (event) => {
+      if (!isMobileViewport() || event.changedTouches.length !== 1 || event.touches.length) return;
+      if (event.target.closest?.(".leaflet-control")) return;
+
+      const touch = event.changedTouches[0];
+      const now = Date.now();
+      const point = { x: touch.clientX, y: touch.clientY };
+      const distance = lastTapPoint
+        ? Math.hypot(point.x - lastTapPoint.x, point.y - lastTapPoint.y)
+        : Infinity;
+      const isDoubleTap = now - lastTapTime <= maxTapGapMs && distance <= maxTapDistancePx;
+
+      if (isDoubleTap) {
+        event.preventDefault();
+        const rect = mapEl.getBoundingClientRect();
+        const containerPoint = window.L.point(point.x - rect.left, point.y - rect.top);
+        const latLng = map.containerPointToLatLng(containerPoint);
+        const maxZoom = map.getMaxZoom ? map.getMaxZoom() : 19;
+        map.setZoomAround(latLng, Math.min(map.getZoom() + 1, maxZoom));
+        lastTapTime = 0;
+        lastTapPoint = null;
+        return;
+      }
+
+      lastTapTime = now;
+      lastTapPoint = point;
+    }, { passive: false });
   }
 
   function renderLeafletRoute(route, detail) {
@@ -913,9 +1000,6 @@
   }
 
   function renderPanelRoutes(container) {
-    const routeEntries = [...activityItems]
-      .filter((item) => item.routeId && routeIndex[item.routeId])
-      .sort(byDateDesc);
     if (!routeEntries.length) {
       container.innerHTML = '<p class="empty">暂无路线数据</p>';
       return;
@@ -1075,7 +1159,7 @@
           <h3>月度跑量</h3>
         </div>
         <div class="bar-chart">
-          ${refLines.map(l => `<span class="bar-ref-line" style="bottom:${l.pct}%"><small>${l.value}</small></span>`).join("")}
+          ${refLines.map(l => `<span class="bar-ref-line" data-ref-pct="${l.pct}" style="bottom:${l.pct}%"><small>${l.value}</small></span>`).join("")}
           ${bars}
         </div>
         <div class="bar-tooltip" id="barTooltip" hidden></div>
@@ -1099,6 +1183,7 @@
       </div>
       <div class="month-records" id="monthRecords"></div>
     `;
+    alignBarReferenceLines(container);
 
     // Year navigation
     container.querySelector("[data-stats-year-prev]")?.addEventListener("click", () => {
@@ -1264,9 +1349,12 @@
 
   function showAllRoutesOnMap() {
     if (!heroMap || !window.L) return;
-    hideAllRoutesFromMap();
+    if (heroAllRoutesLayer) {
+      if (!heroMap.hasLayer(heroAllRoutesLayer)) heroAllRoutesLayer.addTo(heroMap);
+      return;
+    }
     heroAllRoutesLayer = window.L.featureGroup().addTo(heroMap);
-    const allRouteEntries = Object.values(routeIndex);
+    const allRouteEntries = routeItems;
     // Sort so marathon/half routes are drawn on top
     const marathonRouteIds = new Set(races.filter(r => r.type === "marathon" || r.type === "half_marathon").map(r => r.routeId).filter(Boolean));
     const priorityRoutes = allRouteEntries.filter(r => marathonRouteIds.has(r.id));
@@ -1291,7 +1379,6 @@
   function hideAllRoutesFromMap() {
     if (heroAllRoutesLayer && heroMap) {
       heroMap.removeLayer(heroAllRoutesLayer);
-      heroAllRoutesLayer = null;
     }
   }
 
@@ -1345,6 +1432,7 @@
         tap: true,
         touchZoom: true,
       });
+      initMobileDoubleTapZoom(heroMap, heroMapEl);
       heroTileLayer = addResilientTileLayer(heroMap);
 
       // City highlight areas
@@ -1724,7 +1812,10 @@
       renderStatsOverlay(heroActiveRouteId);
     }
   });
-  window.addEventListener("resize", syncMobileStatsOverlayLayout);
+  window.addEventListener("resize", () => {
+    syncMobileStatsOverlayLayout();
+    if (activePanelTab === "stats") alignBarReferenceLines(document);
+  });
 
   initTheme();
   renderSummary();
