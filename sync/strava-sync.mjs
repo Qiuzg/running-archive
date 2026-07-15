@@ -110,8 +110,6 @@ const dataOutput = `window.RUN_ARCHIVE_DATA = ${JSON.stringify(
     races: [],
     runs,
   },
-  null,
-  2,
 )};\n`;
 
 const routeIndex = {};
@@ -136,7 +134,7 @@ for (const [routeId, route] of Object.entries(routes)) {
   );
 }
 
-const routeOutput = `window.RUN_ROUTE_INDEX = ${JSON.stringify(routeIndex, null, 2)};\n`;
+const routeOutput = `window.RUN_ROUTE_INDEX=${JSON.stringify(routeIndex)};\n`;
 
 await writeFile(new URL("../data.generated.js", import.meta.url), dataOutput);
 await writeFile(new URL("../route-index.generated.js", import.meta.url), routeOutput);

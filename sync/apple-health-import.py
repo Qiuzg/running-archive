@@ -675,7 +675,7 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
     }
 
     (out_dir / "data.generated.js").write_text(
-        f"window.RUN_ARCHIVE_DATA = {json.dumps(data, ensure_ascii=False, indent=2)};\n",
+        f"window.RUN_ARCHIVE_DATA={json.dumps(data, ensure_ascii=False, separators=(',', ':'))};\n",
         encoding="utf-8",
     )
     route_dir = out_dir / "routes"
@@ -704,7 +704,7 @@ def write_outputs(out_dir, workouts, routes, privacy_radius):
         )
 
     (out_dir / "route-index.generated.js").write_text(
-        f"window.RUN_ROUTE_INDEX = {json.dumps(route_index, ensure_ascii=False, indent=2)};\n",
+        f"window.RUN_ROUTE_INDEX={json.dumps(route_index, ensure_ascii=False, separators=(',', ':'))};\n",
         encoding="utf-8",
     )
 

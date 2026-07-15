@@ -55,14 +55,14 @@
       .map((item) => ({ ...item, source: "run" })),
   ];
   const routesPerPage = 18;
-  const availableYears = [...new Set(activityItems.map((item) => new Date(item.date).getFullYear()))]
+  const availableYears = [...new Set(activityItems.map((item) => Number(String(item.date || "").slice(0, 4))))]
     .filter((year) => Number.isFinite(year))
     .sort((a, b) => b - a);
   const activityByRouteId = new Map();
   activityItems.forEach((item) => {
     if (!item.routeId) return;
     const current = activityByRouteId.get(item.routeId);
-    if (!current || new Date(item.date) > new Date(current.date)) {
+    if (!current || item.date > current.date) {
       activityByRouteId.set(item.routeId, item);
     }
   });
@@ -83,6 +83,17 @@
   let statsOverlayRequestId = 0;
   let selectedStatsYear = availableYears.includes(currentYear) ? currentYear : availableYears[0] || currentYear;
   let selectedStatsMonth = null;
+  let routeDistanceFilter = "all";
+  let routeVisibleCount = 80;
+  let routeHeatMode = false;
+  let routeOverlayKey = "";
+
+  const routeDistanceFilters = [
+    { key: "all", label: "全部" },
+    { key: "middle", label: "日常" },
+    { key: "long", label: "长距离" },
+    { key: "race", label: "比赛" },
+  ];
 
   const leafletSources = [
     {
@@ -99,6 +110,7 @@
     },
   ];
   const chartJsSources = [
+    "./assets/chart.umd.min.js?v=4.4.0",
     "https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.js",
     "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js",
     "https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js",
@@ -149,18 +161,19 @@
 
   function formatDate(value) {
     if (dateCache.has(value)) return dateCache.get(value);
+    const date = parseDateValue(value);
     const formatted = new Intl.DateTimeFormat("zh-CN", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-    }).format(new Date(value));
+    }).format(date);
     dateCache.set(value, formatted);
     return formatted;
   }
 
   function formatShortDate(value) {
     if (shortDateCache.has(value)) return shortDateCache.get(value);
-    const date = new Date(value);
+    const date = parseDateValue(value);
     const formatted = {
       year: date.getFullYear(),
       monthDay: new Intl.DateTimeFormat("zh-CN", {
@@ -174,6 +187,15 @@
 
   function formatKm(value) {
     return `${Number(value).toFixed(value >= 100 ? 0 : 1)} km`;
+  }
+
+  function parseDateValue(value) {
+    const text = String(value || "");
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+    return new Date(value);
   }
 
   function displayText(value, fallback = "--") {
@@ -194,16 +216,15 @@
 
   function getYearDistance(year) {
     return activityItems
-      .filter((item) => new Date(item.date).getFullYear() === year)
+      .filter((item) => String(item.date || "").startsWith(`${year}-`))
       .reduce((sum, item) => sum + Number(item.distanceKm || 0), 0);
   }
 
   function getMonthlyTotals(year) {
     const totals = Array.from({ length: 12 }, () => 0);
     activityItems.forEach((item) => {
-      const date = new Date(item.date);
-      if (date.getFullYear() === year) {
-        totals[date.getMonth()] += Number(item.distanceKm || 0);
+      if (String(item.date || "").startsWith(`${year}-`)) {
+        totals[Number(item.date.slice(5, 7)) - 1] += Number(item.distanceKm || 0);
       }
     });
     return totals;
@@ -212,10 +233,26 @@
   function getMonthActivities(year, month) {
     return activityItems
       .filter((item) => {
-        const date = new Date(item.date);
-        return date.getFullYear() === year && date.getMonth() === month;
+        const date = String(item.date || "");
+        return date.startsWith(`${year}-`) && Number(date.slice(5, 7)) - 1 === month;
       })
       .sort(byDateDesc);
+  }
+
+  function getRouteFilterBucket(item, route) {
+    const distance = Number(route?.distanceKm || item.distanceKm || 0);
+    if (item.source === "race") return "race";
+    if (distance < 8) return "short";
+    if (distance >= 16) return "long";
+    return "middle";
+  }
+
+  function getFilteredRouteEntries() {
+    return routeEntries.filter((item) => {
+      const route = routeIndex[item.routeId];
+      if (!route) return false;
+      return routeDistanceFilter === "all" || getRouteFilterBucket(item, route) === routeDistanceFilter;
+    });
   }
 
   function createMetric(label, value, detail) {
@@ -641,12 +678,18 @@
         try {
           await loadScriptWithTimeout(src);
           if (window.Chart) return window.Chart;
+          var script = document.querySelector(`script[src="${escapeAttr(src)}"]`);
+          if (script) script.remove();
+          lastError = new Error(`Chart.js did not expose window.Chart: ${src}`);
         } catch (error) {
           lastError = error;
         }
       }
       throw lastError || new Error("Chart.js load failed");
     })();
+    chartJsPromise.catch(() => {
+      chartJsPromise = null;
+    });
     return chartJsPromise;
   }
 
@@ -869,7 +912,7 @@
               (item) => {
                 const distance = Number(item.distanceKm || 0);
                 const height = Math.max((distance / maxDistance) * 100, distance > 0 ? 8 : 2);
-                const day = new Date(item.date).getDate();
+                const day = Number(String(item.date || "").slice(8, 10));
                 const title = item.name || item.title;
                 const tooltip = `${title} · ${formatKm(distance)} · ${item.pace}/km`;
                 const content = `
@@ -901,6 +944,7 @@
 
   function switchPanelTab(tab) {
     activePanelTab = tab;
+    heroActiveRouteId = null;
     setRouteSelectedState(false);
     clearStatsOverlay();
     document.querySelectorAll("[data-panel-tab]").forEach((link) => {
@@ -923,15 +967,19 @@
     setRouteSelectedState(false);
     // Show all route traces on map for stats overview
     if (tab === "stats") {
-      showAllRoutesOnMap();
+      showAllRoutesOnMap(routeItems, "stats");
       // Hide city boundary highlights on stats page
       hideHeroCityLayer();
       // Center map on route centroid with zoomed-in view
       setHeroStatsView();
     } else {
-      hideAllRoutesFromMap();
-      // Restore city boundary highlights when leaving stats
-      showHeroCityLayer();
+      if (tab === "routes" && routeHeatMode) {
+        syncRouteHeatOverlay();
+      } else {
+        hideAllRoutesFromMap();
+        // Restore city boundary highlights when leaving stats
+        showHeroCityLayer();
+      }
       // Reset map to default bounds
       restoreHeroDefaultView();
     }
@@ -1072,6 +1120,37 @@
     }
   }
 
+  function syncRouteHeatOverlay() {
+    if (activePanelTab !== "routes" || !routeHeatMode) {
+      if (activePanelTab !== "stats") {
+        hideAllRoutesFromMap();
+        showHeroCityLayer();
+      }
+      return;
+    }
+    const routes = getFilteredRouteEntries().map((item) => routeIndex[item.routeId]).filter(Boolean);
+    showAllRoutesOnMap(routes, "heat");
+    hideHeroCityLayer();
+  }
+
+  function renderRouteFilterBar(filteredCount, totalCount) {
+    return `
+      <div class="route-tools">
+        <div class="route-tools__filters" aria-label="路线距离筛选">
+          ${routeDistanceFilters.map((filter) => `
+            <button class="${routeDistanceFilter === filter.key ? "is-active" : ""}" type="button" data-route-filter="${filter.key}">
+              ${filter.label}
+            </button>
+          `).join("")}
+        </div>
+        <button class="route-heat-toggle ${routeHeatMode ? "is-active" : ""}" type="button" data-route-heat aria-pressed="${routeHeatMode ? "true" : "false"}" title="把当前筛选的路线叠加显示在地图上">
+          筛选叠图
+        </button>
+        <small>${filteredCount} / ${totalCount} 条</small>
+      </div>
+    `;
+  }
+
   function renderPanelRoutes(container) {
     if (!routeEntries.length) {
       container.innerHTML = '<p class="empty">暂无路线数据</p>';
@@ -1079,8 +1158,10 @@
     }
     const panel = document.querySelector(".hero__panel");
     const collapsed = panel && panel.classList.contains("hero__panel--collapsed");
-    const visible = collapsed ? routeEntries.slice(0, 3) : routeEntries;
-    container.innerHTML = visible
+    const filtered = getFilteredRouteEntries();
+    const visibleLimit = collapsed ? 3 : routeVisibleCount;
+    const visible = filtered.slice(0, visibleLimit);
+    const routeList = visible
       .map((item) => {
         const route = routeIndex[item.routeId];
         const activity = getActivityForRoute(item.routeId);
@@ -1102,9 +1183,29 @@
         `;
       })
       .join("");
-    if (collapsed && routeEntries.length > 3) {
-      container.innerHTML += `<p class="panel-collapsed-hint">还有 ${routeEntries.length - 3} 条路线 · 点击 ▲ 展开</p>`;
-    }
+    container.innerHTML = `
+      ${renderRouteFilterBar(filtered.length, routeEntries.length)}
+      ${routeList || '<p class="empty">当前筛选下没有路线。</p>'}
+      ${collapsed && filtered.length > 3 ? `<p class="panel-collapsed-hint">还有 ${filtered.length - 3} 条路线 · 点击 ▲ 展开</p>` : ""}
+      ${!collapsed && filtered.length > visible.length ? `<button class="panel-load-more" type="button" data-route-load-more>再显示 ${Math.min(80, filtered.length - visible.length)} 条</button>` : ""}
+    `;
+    container.querySelectorAll("[data-route-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        routeDistanceFilter = btn.dataset.routeFilter;
+        routeVisibleCount = 80;
+        renderPanelRoutes(container);
+        syncRouteHeatOverlay();
+      });
+    });
+    container.querySelector("[data-route-heat]")?.addEventListener("click", () => {
+      routeHeatMode = !routeHeatMode;
+      renderPanelRoutes(container);
+      syncRouteHeatOverlay();
+    });
+    container.querySelector("[data-route-load-more]")?.addEventListener("click", () => {
+      routeVisibleCount += 80;
+      renderPanelRoutes(container);
+    });
     container.querySelectorAll("[data-hero-route]").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (btn.dataset.heroRoute === heroActiveRouteId) return;
@@ -1178,13 +1279,13 @@
     const totals = getMonthlyTotals(year);
     const max = Math.max(...totals, 1);
     const yearDist = getYearDistance(year);
-    const yearRaces = races.filter((r) => new Date(r.date).getFullYear() === year);
+    const yearRaces = races.filter((r) => String(r.date || "").startsWith(`${year}-`));
     const yearMarathonCount = yearRaces.filter((r) => r.type === "marathon").length;
     const yearHalfCount = yearRaces.filter((r) => r.type === "half_marathon").length;
     const activeMonths = totals.filter(t => t > 0).length;
     const monthlyAvg = activeMonths > 0 ? yearDist / activeMonths : 0;
     const longestRun = activityItems
-      .filter(item => new Date(item.date).getFullYear() === year)
+      .filter(item => String(item.date || "").startsWith(`${year}-`))
       .reduce((best, item) => Number(item.distanceKm || 0) > Number(best.distanceKm || 0) ? item : best, { distanceKm: 0 });
     const yearIdx = availableYears.indexOf(year);
     const hasPrev = yearIdx < availableYears.length - 1;
@@ -1536,27 +1637,35 @@
     return overlays;
   }
 
-  function showAllRoutesOnMap() {
+  function showAllRoutesOnMap(routesToShow = routeItems, overlayMode = "stats") {
     if (!heroMap) return;
+    const overlayRoutes = routesToShow.filter((route) => route?.previewCoordinates?.length >= 2);
+    const nextOverlayKey = `${heroMapEngine}:${overlayMode}:${overlayRoutes.map((route) => route.id).join("|")}`;
+    if (heroAllRoutesLayer && routeOverlayKey !== nextOverlayKey) {
+      hideAllRoutesFromMap();
+      heroAllRoutesLayer = null;
+    }
+    routeOverlayKey = nextOverlayKey;
     if (heroMapEngine === "amap") {
       if (heroAllRoutesLayer) {
         addAmapOverlays(heroAllRoutesLayer);
         return;
       }
       const marathonRouteIds = new Set(races.filter(r => r.type === "marathon" || r.type === "half_marathon").map(r => r.routeId).filter(Boolean));
-      const priorityRoutes = routeItems.filter(r => marathonRouteIds.has(r.id));
-      const otherRoutes = routeItems.filter(r => !marathonRouteIds.has(r.id));
+      const priorityRoutes = overlayRoutes.filter(r => marathonRouteIds.has(r.id));
+      const otherRoutes = overlayRoutes.filter(r => !marathonRouteIds.has(r.id));
       const ordered = [...otherRoutes, ...priorityRoutes];
       heroAllRoutesLayer = [];
       for (const route of ordered) {
         const coords = route.previewCoordinates;
         if (!coords || coords.length < 2) continue;
         const isRaceRoute = marathonRouteIds.has(route.id);
+        const isHeatMode = overlayMode === "heat";
         heroAllRoutesLayer.push(new window.AMap.Polyline({
           path: coords.map(toAmapPoint),
-          strokeColor: isRaceRoute ? "#ff8a6e" : "#4a6a8a",
-          strokeWeight: isRaceRoute ? 2 : 1,
-          strokeOpacity: isRaceRoute ? 0.5 : 0.28,
+          strokeColor: isRaceRoute ? "#ff8a6e" : isHeatMode ? "#3b8bff" : "#4a6a8a",
+          strokeWeight: isRaceRoute ? 2.4 : isHeatMode ? 1.8 : 1,
+          strokeOpacity: isRaceRoute ? 0.58 : isHeatMode ? 0.44 : 0.28,
           lineJoin: "round",
           lineCap: "round",
           bubble: true,
@@ -1572,21 +1681,21 @@
       return;
     }
     heroAllRoutesLayer = window.L.featureGroup().addTo(heroMap);
-    const allRouteEntries = routeItems;
     // Sort so marathon/half routes are drawn on top
     const marathonRouteIds = new Set(races.filter(r => r.type === "marathon" || r.type === "half_marathon").map(r => r.routeId).filter(Boolean));
-    const priorityRoutes = allRouteEntries.filter(r => marathonRouteIds.has(r.id));
-    const otherRoutes = allRouteEntries.filter(r => !marathonRouteIds.has(r.id));
+    const priorityRoutes = overlayRoutes.filter(r => marathonRouteIds.has(r.id));
+    const otherRoutes = overlayRoutes.filter(r => !marathonRouteIds.has(r.id));
     const ordered = [...otherRoutes, ...priorityRoutes];
     for (const route of ordered) {
       const coords = route.previewCoordinates;
       if (!coords || coords.length < 2) continue;
       const latlngs = coords.map(([lon, lat]) => [lat, lon]);
       const isRaceRoute = marathonRouteIds.has(route.id);
+      const isHeatMode = overlayMode === "heat";
       window.L.polyline(latlngs, {
-        color: isRaceRoute ? "#ff8a6e" : "#4a6a8a",
-        weight: isRaceRoute ? 1.5 : 0.8,
-        opacity: isRaceRoute ? 0.5 : 0.28,
+        color: isRaceRoute ? "#ff8a6e" : isHeatMode ? "#3b8bff" : "#4a6a8a",
+        weight: isRaceRoute ? 1.8 : isHeatMode ? 1.2 : 0.8,
+        opacity: isRaceRoute ? 0.56 : isHeatMode ? 0.42 : 0.28,
         lineJoin: "round",
         lineCap: "round",
         interactive: false,
@@ -2024,6 +2133,154 @@
       return '<div class="hero-stats-overlay__item' + itemClass + '"><span class="hero-stats-overlay__label">' + s.label + '</span><strong>' + s.value + '</strong>' + (s.sub ? '<small>' + s.sub + '</small>' : '') + '</div>';
     }).join("");
 
+    function insertStatsOverlayHtml(html) {
+      var existing = document.querySelector("#heroStatsOverlay");
+      if (existing) existing.remove();
+      overlayContainer.insertAdjacentHTML("beforeend", html);
+      syncMobileStatsOverlayLayout();
+    }
+
+    function bindStatsToggle(toggleBtn) {
+      if (!toggleBtn) return;
+      toggleBtn.onclick = function (e) {
+        e.stopPropagation();
+        var overlay = document.querySelector("#heroStatsOverlay");
+        if (!overlay) return;
+        overlay.classList.toggle("hero-stats-overlay--collapsed");
+        var collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
+        toggleBtn.textContent = collapsed ? "⌃" : "⌄";
+        toggleBtn.title = collapsed ? "展开图表" : "折叠图表";
+        toggleBtn.setAttribute("aria-label", collapsed ? "展开图表" : "折叠图表");
+        toggleBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        syncMobileStatsOverlayLayout();
+        if (!collapsed) {
+          window.setTimeout(function () {
+            statsCharts.forEach(function (chart) {
+              if (chart && typeof chart.resize === "function") chart.resize();
+            });
+          }, 40);
+        }
+      };
+    }
+
+    function buildChartsHtml(timeSeries) {
+      if (!timeSeries) return "";
+      var showPace = timeSeries.pace && timeSeries.pace.some(function (p) { return p != null; });
+      var showElev = timeSeries.elevation && timeSeries.elevation.some(function (e) { return e != null; });
+      var showHR = timeSeries.heartRate && timeSeries.heartRate.some(function (h) { return h != null; });
+      if (!showPace && !showElev && !showHR) return "";
+      var html = '<div class="hero-stats-overlay__charts">';
+      if (showPace) html += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
+      if (showElev) html += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
+      if (showHR) html += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+      return html + '</div>';
+    }
+
+    function createStatsChartInstances(timeSeries) {
+      var colors = chartColors();
+      var labels = timeSeries.elapsed.map(formatElapsed);
+      var paceCanvas = document.querySelector("#chartPace");
+      if (paceCanvas) {
+        var paceCfg = makeSparkConfig(labels, timeSeries.pace, colors.line, colors.fill, "min/km", true);
+        statsCharts.push(new window.Chart(paceCanvas, paceCfg));
+      }
+      var elevCanvas = document.querySelector("#chartElev");
+      if (elevCanvas) {
+        var elevCfg = makeSparkConfig(labels, timeSeries.elevation, colors.elevation, "rgba(255,158,74,0.08)", "m", false);
+        statsCharts.push(new window.Chart(elevCanvas, elevCfg));
+      }
+      var hrCanvas = document.querySelector("#chartHR");
+      if (hrCanvas) {
+        var hrColor = "#ff5e3a";
+        var hrCfg = makeSparkConfig(labels, timeSeries.heartRate, hrColor, "rgba(255,94,58,0.10)", "bpm", false);
+        statsCharts.push(new window.Chart(hrCanvas, hrCfg));
+      }
+    }
+
+    if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
+    if (compactOverlay) {
+      var mobileHtml = '<div class="hero-stats-overlay hero-stats-overlay--collapsed" id="heroStatsOverlay">' +
+        '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="展开图表" aria-label="展开图表" aria-expanded="false">⌃</button>' +
+        '<div class="hero-stats-overlay__values">' + valuesHtml + '</div></div>';
+      insertStatsOverlayHtml(mobileHtml);
+
+      var mobileDetailPromise = loadRouteDetail(routeId)
+        .then(function () {
+          var detail = window.RUN_ROUTE_DETAIL[routeId];
+          if (detail && detail.timeSeries && detail.timeSeries.elapsed && detail.timeSeries.elapsed.length >= 2) {
+            return detail.timeSeries;
+          }
+          return null;
+        })
+        .catch(function () { return null; });
+
+      var mobileToggle = document.querySelector("#statsToggle");
+      if (mobileToggle) {
+        mobileToggle.onclick = async function (e) {
+          e.stopPropagation();
+          var overlay = document.querySelector("#heroStatsOverlay");
+          if (!overlay || requestId !== statsOverlayRequestId || routeId !== heroActiveRouteId) return;
+
+          var collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
+          if (!collapsed) {
+            overlay.classList.add("hero-stats-overlay--collapsed");
+            mobileToggle.textContent = "⌃";
+            mobileToggle.title = "展开图表";
+            mobileToggle.setAttribute("aria-label", "展开图表");
+            mobileToggle.setAttribute("aria-expanded", "false");
+            syncMobileStatsOverlayLayout();
+            return;
+          }
+
+          if (overlay.querySelector(".hero-stats-overlay__charts")) {
+            overlay.classList.remove("hero-stats-overlay--collapsed");
+            mobileToggle.textContent = "⌄";
+            mobileToggle.title = "折叠图表";
+            mobileToggle.setAttribute("aria-label", "折叠图表");
+            mobileToggle.setAttribute("aria-expanded", "true");
+            syncMobileStatsOverlayLayout();
+            window.setTimeout(function () {
+              statsCharts.forEach(function (chart) {
+                if (chart && typeof chart.resize === "function") chart.resize();
+              });
+            }, 40);
+            return;
+          }
+
+          mobileToggle.disabled = true;
+          mobileToggle.title = "图表加载中";
+          try {
+            var mobileTimeSeries = await mobileDetailPromise;
+            var mobileChartsHtml = buildChartsHtml(mobileTimeSeries);
+            if (!mobileChartsHtml) {
+              mobileToggle.remove();
+              return;
+            }
+            await loadChartJs();
+            if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
+            overlay.insertAdjacentHTML("beforeend", mobileChartsHtml);
+            overlay.classList.remove("hero-stats-overlay--collapsed");
+            createStatsChartInstances(mobileTimeSeries);
+            mobileToggle.textContent = "⌄";
+            mobileToggle.title = "折叠图表";
+            mobileToggle.setAttribute("aria-label", "折叠图表");
+            mobileToggle.setAttribute("aria-expanded", "true");
+            syncMobileStatsOverlayLayout();
+          } catch (error) {
+            var failedCharts = overlay.querySelector(".hero-stats-overlay__charts");
+            if (failedCharts) failedCharts.remove();
+            overlay.classList.add("hero-stats-overlay--collapsed");
+            mobileToggle.title = "展开图表";
+          } finally {
+            mobileToggle.disabled = false;
+          }
+        };
+      }
+      return;
+    }
+
+    insertStatsOverlayHtml('<div class="hero-stats-overlay" id="heroStatsOverlay"><div class="hero-stats-overlay__values">' + valuesHtml + '</div></div>');
+
     var chartsHtml = "";
     var hasCharts = false;
 
@@ -2041,89 +2298,31 @@
 
     if (timeSeries) {
       try {
-        await loadChartJs();
         if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
-        var labels = timeSeries.elapsed.map(formatElapsed);
-
-        // Determine which charts to show
-        var showPace = timeSeries.pace && timeSeries.pace.some(function (p) { return p != null; });
-        var showElev = timeSeries.elevation && timeSeries.elevation.some(function (e) { return e != null; });
-        var showHR = timeSeries.heartRate && timeSeries.heartRate.some(function (h) { return h != null; });
-
-        if (showPace || showElev || showHR) {
-          hasCharts = true;
-          chartsHtml = '<div class="hero-stats-overlay__charts">';
-          if (showPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
-          if (showElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
-          if (showHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
-          chartsHtml += '</div>';
-        }
+        chartsHtml = buildChartsHtml(timeSeries);
+        hasCharts = !!chartsHtml;
       } catch (e) {
         chartsHtml = "";
       }
     }
 
-    var toggleHtml = hasCharts ? '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="折叠图表" aria-label="折叠图表" aria-expanded="true">⌄</button>' : '';
-    var html = '<div class="hero-stats-overlay" id="heroStatsOverlay">' + toggleHtml + '<div class="hero-stats-overlay__values">' + valuesHtml + '</div>' + chartsHtml + '</div>';
+    var shouldCollapseCharts = false;
+    var overlayClass = "hero-stats-overlay" + (shouldCollapseCharts ? " hero-stats-overlay--collapsed" : "");
+    var toggleHtml = hasCharts
+      ? '<button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="' + (shouldCollapseCharts ? "展开图表" : "折叠图表") + '" aria-label="' + (shouldCollapseCharts ? "展开图表" : "折叠图表") + '" aria-expanded="' + (shouldCollapseCharts ? "false" : "true") + '">' + (shouldCollapseCharts ? "⌃" : "⌄") + '</button>'
+      : '';
+    var html = '<div class="' + overlayClass + '" id="heroStatsOverlay">' + toggleHtml + '<div class="hero-stats-overlay__values">' + valuesHtml + '</div>' + chartsHtml + '</div>';
     if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
-    overlayContainer.insertAdjacentHTML("beforeend", html);
-    var insertedOverlay = document.querySelector("#heroStatsOverlay");
-    var shouldCollapseCharts = hasCharts && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-    if (insertedOverlay && shouldCollapseCharts) {
-      insertedOverlay.classList.add("hero-stats-overlay--collapsed");
-    }
-    syncMobileStatsOverlayLayout();
-
-    // Bind collapse toggle
-    if (hasCharts) {
-      var toggleBtn = document.querySelector("#statsToggle");
-      if (toggleBtn) {
-        if (shouldCollapseCharts) {
-          toggleBtn.textContent = "⌃";
-          toggleBtn.title = "展开图表";
-          toggleBtn.setAttribute("aria-label", "展开图表");
-          toggleBtn.setAttribute("aria-expanded", "false");
-        }
-        toggleBtn.onclick = function (e) {
-          e.stopPropagation();
-          var overlay = document.querySelector("#heroStatsOverlay");
-          if (overlay) {
-            overlay.classList.toggle("hero-stats-overlay--collapsed");
-            var collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
-            toggleBtn.textContent = collapsed ? "⌃" : "⌄";
-            toggleBtn.title = collapsed ? "展开图表" : "折叠图表";
-            toggleBtn.setAttribute("aria-label", collapsed ? "展开图表" : "折叠图表");
-            toggleBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-          }
-        };
-      }
-    }
+    if (!hasCharts) return;
+    insertStatsOverlayHtml(html);
+    bindStatsToggle(document.querySelector("#statsToggle"));
 
     // Render charts after DOM insertion
-    if (timeSeries && window.Chart) {
+    if (timeSeries) {
       try {
+        await loadChartJs();
         if (requestId !== statsOverlayRequestId || activePanelTab === "stats" || routeId !== heroActiveRouteId) return;
-        var colors = chartColors();
-        var labels = timeSeries.elapsed.map(formatElapsed);
-
-        var paceCanvas = document.querySelector("#chartPace");
-        if (paceCanvas) {
-          var paceCfg = makeSparkConfig(labels, timeSeries.pace, colors.line, colors.fill, "min/km", true);
-          statsCharts.push(new window.Chart(paceCanvas, paceCfg));
-        }
-
-        var elevCanvas = document.querySelector("#chartElev");
-        if (elevCanvas) {
-          var elevCfg = makeSparkConfig(labels, timeSeries.elevation, colors.elevation, "rgba(255,158,74,0.08)", "m", false);
-          statsCharts.push(new window.Chart(elevCanvas, elevCfg));
-        }
-
-        var hrCanvas = document.querySelector("#chartHR");
-        if (hrCanvas) {
-          var hrColor = "#ff5e3a";
-          var hrCfg = makeSparkConfig(labels, timeSeries.heartRate, hrColor, "rgba(255,94,58,0.10)", "bpm", false);
-          statsCharts.push(new window.Chart(hrCanvas, hrCfg));
-        }
+        createStatsChartInstances(timeSeries);
       } catch (e) {
         console.warn("Stats chart creation failed:", e);
       }

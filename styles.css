@@ -419,6 +419,11 @@ button {
   background: transparent;
 }
 
+.hero-stats-overlay__toggle:disabled {
+  cursor: default;
+  color: rgba(255,255,255,0.28);
+}
+
 @media (max-width: 760px) {
   .hero-stats-overlay {
     bottom: 12px;
@@ -997,6 +1002,67 @@ button {
   color: var(--ink-dim);
   font-size: 0.76rem;
   font-weight: 650;
+}
+
+.route-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.route-tools__filters {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.route-tools__filters::-webkit-scrollbar {
+  display: none;
+}
+
+.route-tools button,
+.route-heat-toggle,
+.panel-load-more {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--overlay-dim);
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.route-tools button {
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.route-tools button:hover,
+.route-tools button.is-active,
+.route-heat-toggle.is-active {
+  border-color: rgba(255, 94, 58, 0.42);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.route-tools small {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.panel-load-more {
+  width: 100%;
+  min-height: 36px;
+  margin: 8px 0 4px;
 }
 
 /* ---- Panel Content (races / stats tabs) ---- */
@@ -2515,6 +2581,22 @@ div.month-activity-bar {
     white-space: nowrap;
   }
 
+  .route-tools {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding-inline: 0;
+  }
+
+  .route-tools small {
+    display: none;
+  }
+
+  .route-tools button {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+  }
+
   .hero--route-selected:not(.hero--stats-full) .hero__panel {
     position: absolute;
     top: auto;
@@ -2535,6 +2617,10 @@ div.month-activity-bar {
     overflow-y: auto;
     scroll-snap-type: y mandatory;
     overscroll-behavior: contain;
+  }
+
+  .hero--route-selected:not(.hero--stats-full) .route-tools {
+    display: none;
   }
 
   .hero--race-selected:not(.hero--stats-full) .panel-section-header {

@@ -10,16 +10,16 @@ Static running archive site — pure HTML/CSS/JS, zero build tools. Displays mar
 
 ```
 index.html              # Single page: hero map + topbar nav + left panel
-app.js                  # All logic: data, rendering, resilient Leaflet maps (IIFE, ~1736 lines)
-styles.css              # All styles: CSS custom properties, light/dark theme (~2965 lines)
-data.generated.js       # Auto-generated: profile, races[], runs[] (~4800 lines)
-route-index.generated.js # Auto-generated: preview coordinates for all routes
+app.js                  # All logic: data, rendering, resilient maps and charts (IIFE)
+styles.css              # All styles: responsive CSS custom properties and light/dark themes
+data.generated.js       # Auto-generated compact data: profile, races[], runs[]
+route-index.generated.js # Auto-generated compact preview coordinates for all routes
 city-boundaries.generated.js # Auto-generated: GeoJSON boundaries for race cities
 routes/*.js             # ~300 files, one per route, full GPS coordinates (loaded on demand)
 sync/
   apple-health-import.py # Apple Health export → generate data + routes
   strava-sync.mjs        # Strava API → generate data + routes
-assets/                  # Static images (profile.png, etc.)
+assets/                  # Static images and vendored Chart.js
 ```
 
 ## Data flow
@@ -37,7 +37,7 @@ assets/                  # Static images (profile.png, etc.)
 - `window.RUN_CITY_BOUNDARIES` — GeoJSON boundaries for race cities
 - `window.RUN_ROUTE_DETAIL` — populated on demand with full coordinates per route (includes timeSeries)
 
-## app.js module structure (~1736 lines)
+## app.js module structure
 
 The entire app is a single IIFE. Key sections in order:
 
@@ -56,7 +56,7 @@ The entire app is a single IIFE. Key sections in order:
 ### Data loading (roughly lines 360-590)
 - `loadRouteDetail(routeId)` — injects `<script>` for `routes/<id>.js`, uses promise + caching
 - `loadLeaflet()` — lazy-loads Leaflet CSS + JS with fallback order: BootCDN → jsDelivr → unpkg
-- `loadChartJs()` — lazy-loads Chart.js for sparkline charts with the same CDN fallback pattern
+- `loadChartJs()` — uses the vendored Chart.js first and retains CDN fallbacks
 - `addResilientTileLayer()` — uses CartoDB light/dark tiles first, then falls back to OpenStreetMap when tile loading is sparse or errors
 
 ### State persistence
@@ -84,7 +84,7 @@ The entire app is a single IIFE. Key sections in order:
   - `resetPanelHeight()` — clears custom height only for stats-month route jumps where the overlay would otherwise collide
 
 ### Panel content renderers (lines 692-931)
-- `renderPanelRoutes(container)` — scrollable route list with SVG thumbnails, click highlights map on hero
+- `renderPanelRoutes(container)` — scrollable route list with four filters, 80-item pagination, filtered route overlay, and map selection
 - `renderPanelRaces(container)` — grouped race cards with route preview + stats, collapsed shows 1 race
 - `renderPanelStats(container)` — year nav (left/right arrows), hero number (annual total), monthly bar chart with 100km reference lines + cursor-following tooltip, stat cards (races, monthly avg, longest), month detail chart
 - `renderMonthRecords()` — daily activity bars for selected month, clickable to show route on map
@@ -107,10 +107,11 @@ The entire app is a single IIFE. Key sections in order:
 - Map center point for stats tab: hardcoded `[32.00, 118.75]` at zoom 12
 - `fitBounds` padding: `[80, 120]`
 
-### Stats overlay (lines 1272-1520)
+### Stats overlay
 - `renderStatsOverlay(routeId)` — shows aggregate stats (heart rate, pace, duration, elevation) + sparkline charts
-  - Loads route detail timeSeries, renders Chart.js line charts for pace, elevation, heart rate
-  - Collapsible on mobile (charts hidden by default)
+  - Desktop loads route detail timeSeries and renders Chart.js line charts for pace, elevation, and heart rate
+  - Mobile initially creates only the collapsed aggregate row and preloads route data in the background
+  - Mobile chart DOM is created only after the user explicitly expands the overlay
   - Light/dark theme-aware chart colors via `chartColors()`
 - `clearStatsOverlay()` / `destroyStatsCharts()` — cleanup for tab switches and route changes
 
@@ -122,7 +123,7 @@ The entire app is a single IIFE. Key sections in order:
 ### Initialization (last ~10 lines)
 Order matters: `initTheme() → renderSummary() → initPanelTabs() → initPanelCollapse() → initHeroMap() → switchPanelTab("routes") → initRouteLinks()`
 
-## CSS architecture (~2965 lines)
+## CSS architecture
 
 Organized in sections:
 - **Design tokens** (`:root`): CSS custom properties for dark theme; `[data-theme="light"]` overrides

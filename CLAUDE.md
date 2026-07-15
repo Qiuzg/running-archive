@@ -10,16 +10,16 @@ Static running archive site — pure HTML/CSS/JS, zero build tools. Displays mar
 
 ```
 index.html              # Single page: hero map + topbar nav + left panel
-app.js                  # All logic: data, rendering, Leaflet maps (IIFE, ~1577 lines)
-styles.css              # All styles: CSS custom properties, light/dark theme (~2965 lines)
-data.generated.js       # Auto-generated: profile, races[], runs[] (~4200 lines)
-route-index.generated.js # Auto-generated: preview coordinates for all routes
+app.js                  # All logic: data, rendering, resilient maps and charts (IIFE)
+styles.css              # All styles: CSS custom properties and responsive light/dark themes
+data.generated.js       # Auto-generated compact data: profile, races[], runs[]
+route-index.generated.js # Auto-generated compact preview coordinates for all routes
 city-boundaries.generated.js # Auto-generated: GeoJSON boundaries for race cities
 routes/*.js             # ~300 files, one per route, full GPS coordinates (loaded on demand)
 sync/
   apple-health-import.py # Apple Health export → generate data + routes
   strava-sync.mjs        # Strava API → generate data + routes
-assets/                  # Static images (profile.png, etc.)
+assets/                  # Static images and vendored Chart.js
 ```
 
 ## Data flow
@@ -37,7 +37,7 @@ assets/                  # Static images (profile.png, etc.)
 - `window.RUN_CITY_BOUNDARIES` — GeoJSON boundaries for race cities
 - `window.RUN_ROUTE_DETAIL` — populated on demand with full coordinates per route (includes timeSeries)
 
-## app.js module structure (~1577 lines)
+## app.js module structure
 
 The entire app is a single IIFE. Key sections in order:
 
@@ -53,10 +53,10 @@ The entire app is a single IIFE. Key sections in order:
 - `escapeAttr()` — safe HTML attribute quoting
 - `positionTooltip()` — positions floating tooltip relative to chart-block bounds
 
-### Data loading (lines 360-415)
+### Data loading
 - `loadRouteDetail(routeId)` — injects `<script>` for `routes/<id>.js`, uses promise + caching
-- `loadLeaflet()` — lazy-loads Leaflet CSS + JS from unpkg CDN, promise with singleton
-- `loadChartJs()` — lazy-loads Chart.js for sparkline charts in stats overlay
+- `loadLeaflet()` — lazy-loads Leaflet CSS + JS with CDN fallbacks
+- `loadChartJs()` — uses the vendored Chart.js first and retains CDN fallbacks
 
 ### State persistence
 - Theme: `localStorage.theme` — `"light"` (default) | `"dark"`
@@ -81,8 +81,8 @@ The entire app is a single IIFE. Key sections in order:
   - On mobile with route selected: stats overlay dynamically follows panel height during drag (to avoid overlap)
   - `resetPanelHeight()` — clears custom height, restores default
 
-### Panel content renderers (lines 692-931)
-- `renderPanelRoutes(container)` — scrollable route list with SVG thumbnails, click highlights map on hero
+### Panel content renderers
+- `renderPanelRoutes(container)` — scrollable route list with SVG thumbnails, four route filters, 80-item pagination, and filtered route overlay
 - `renderPanelRaces(container)` — grouped race cards with route preview + stats, collapsed shows 1 race
 - `renderPanelStats(container)` — year nav (left/right arrows), hero number (annual total), monthly bar chart with 100km reference lines + cursor-following tooltip, stat cards (races, monthly avg, longest), month detail chart
 - `renderMonthRecords()` — daily activity bars for selected month, clickable to show route on map
@@ -92,22 +92,23 @@ The entire app is a single IIFE. Key sections in order:
   - Calls `resetPanelHeight()` to avoid overlap with stats overlay
   - Triggers `updateHeroRoute()` and stats overlay rendering
 
-### Hero map (lines 1064-1230)
-- `initHeroMap()` — creates Leaflet map with city highlight areas (GeoJSON boundaries or circles), saves default bounds
+### Hero map
+- `initHeroMap()` — creates a resilient Leaflet/AMap map with city highlight areas and saved default bounds
   - Mobile: `zoomControl: false`, `scrollWheelZoom: false`, `doubleClickZoom: true`, `tap: true`, `touchZoom: true`
   - Desktop: `zoomControl: true`, `scrollWheelZoom: true`
   - Tile URL switches between CartoDB light/dark based on theme
   - `updateWhenIdle` and `keepBuffer` tuned for mobile performance
 - `updateHeroRoute(routeId, fit)` — swaps displayed polyline, optionally fits bounds, triggers stats overlay
-- `showAllRoutesOnMap()` — draws all routes as faint semi-transparent polylines, race routes in orange
+- `showAllRoutesOnMap()` — draws the stats overview or the current filtered route set; race routes remain highlighted
 - `hideAllRoutesFromMap()` — removes the all-routes feature group
 - Map center point for stats tab: hardcoded `[32.00, 118.75]` at zoom 12
 - `fitBounds` padding: `[80, 120]`
 
-### Stats overlay (lines 1272-1520)
+### Stats overlay
 - `renderStatsOverlay(routeId)` — shows aggregate stats (heart rate, pace, duration, elevation) + sparkline charts
-  - Loads route detail timeSeries, renders Chart.js line charts for pace, elevation, heart rate
-  - Collapsible on mobile (charts hidden by default)
+  - Desktop loads route detail timeSeries and renders Chart.js charts for pace, elevation, and heart rate
+  - Mobile initially renders only the collapsed aggregate row and preloads route detail in the background
+  - Mobile chart DOM is created only after the user explicitly expands the overlay, preventing first-click flashes
   - Light/dark theme-aware chart colors via `chartColors()`
 - `clearStatsOverlay()` / `destroyStatsCharts()` — cleanup for tab switches and route changes
 
@@ -119,7 +120,7 @@ The entire app is a single IIFE. Key sections in order:
 ### Initialization (last ~10 lines)
 Order matters: `initTheme() → renderSummary() → initPanelTabs() → initPanelCollapse() → initHeroMap() → switchPanelTab("routes") → initRouteLinks()`
 
-## CSS architecture (~2965 lines)
+## CSS architecture
 
 Organized in sections:
 - **Design tokens** (`:root`): CSS custom properties for dark theme; `[data-theme="light"]` overrides
