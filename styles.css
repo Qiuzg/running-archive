@@ -1837,6 +1837,12 @@ button {
   background: transparent;
 }
 
+.app-load-warning {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  color: var(--accent);
+}
+
 /* ---- Stats Layout ---- */
 .stats-layout {
   display: grid;

@@ -12,17 +12,62 @@ import { initPanelCollapse, syncMobileStatsOverlayLayout } from "./ui/panel.js";
 import { initRouter, handleRoute, syncUrlFromState, navigate } from "./ui/router.js";
 
 async function loadData() {
-  const [races, routes, runs, cities] = await Promise.all([
-    fetchRaces(),
-    fetchRoutes(),
-    fetchRuns(),
-    fetchCities(),
-  ]);
-  store.races = races || [];
-  store.routes = routes || [];
-  store.runs = runs || [];
-  store.cityBoundaries = cities || [];
+  const loaders = [
+    ["races", fetchRaces],
+    ["routes", fetchRoutes],
+    ["runs", fetchRuns],
+    ["cityBoundaries", fetchCities],
+  ];
+  const results = await Promise.allSettled(loaders.map(([, fn]) => fn()));
+  const failures = [];
+
+  results.forEach((result, index) => {
+    const [key] = loaders[index];
+    if (result.status === "fulfilled") {
+      store[key] = result.value || [];
+      return;
+    }
+    store[key] = [];
+    failures.push({ key, error: result.reason });
+    console.error(`Failed to load ${key}:`, result.reason);
+  });
+
   rebuildDerivedData();
+  return failures;
+}
+
+function renderLoadWarning(failures) {
+  if (!failures.length) return;
+  const body = document.getElementById("heroPanelBody");
+  if (!body) return;
+
+  const labels = {
+    races: "比赛",
+    routes: "路线",
+    runs: "训练",
+    cityBoundaries: "城市边界",
+  };
+  const warning = document.createElement("p");
+  warning.className = "empty empty--compact app-load-warning";
+  warning.textContent = `${failures.map((item) => labels[item.key] || item.key).join("、")}数据暂时加载失败，页面已先显示可用内容。`;
+  body.prepend(warning);
+}
+
+function renderLoadingState() {
+  const body = document.getElementById("heroPanelBody");
+  if (!body) return;
+  body.innerHTML = '<p class="empty app-load-warning">数据加载中...</p>';
+}
+
+function renderFatalInitError(err) {
+  console.error("App initialization failed:", err);
+  const body = document.getElementById("heroPanelBody");
+  if (!body) return;
+  body.innerHTML = "";
+  const message = document.createElement("p");
+  message.className = "empty app-load-warning";
+  message.textContent = "页面初始化失败，请刷新重试。";
+  body.append(message);
 }
 
 function switchPanelTab(tab) {
@@ -86,12 +131,14 @@ async function init() {
     }
   });
 
+  renderLoadingState();
   initRouter();
 
-  await loadData();
+  const loadFailures = await loadData();
 
   renderSummary();
   renderPanelContent();
+  renderLoadWarning(loadFailures);
   initHeroMap();
 
   document.querySelectorAll("[data-panel-tab]").forEach(link => {
@@ -107,4 +154,4 @@ async function init() {
   renderPanelContent();
 }
 
-init().catch(err => console.error("App initialization failed:", err));
+init().catch(renderFatalInitError);

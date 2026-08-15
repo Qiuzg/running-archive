@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 from ..database import get_db
 from ..models import Route
 from ..schemas import RouteSummary, RouteDetail
@@ -16,7 +16,16 @@ def list_routes(
     db: Session = Depends(get_db),
 ):
     """List routes. No default limit — returns all records unless limit is explicitly set."""
-    q = db.query(Route)
+    q = db.query(Route).options(
+        load_only(
+            Route.id,
+            Route.name,
+            Route.city,
+            Route.distance_km,
+            Route.elevation_gain,
+            Route.preview_coordinates,
+        )
+    )
     if city:
         q = q.filter(Route.city == city)
     if search:
