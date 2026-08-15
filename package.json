@@ -1,0 +1,19 @@
+{
+  "name": "running-archive",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "import:apple": "bash scripts/import-apple-health.sh",
+    "preview": "vite preview",
+    "api": "python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0"
+  }
+}

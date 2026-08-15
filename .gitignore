@@ -2,3 +2,8 @@ sync/__pycache__/
 *.pyc
 .DS_Store
 node_modules/
+dist/
+server/running.db
+server/running.db.backup.*
+sync/backups/
+share-output/

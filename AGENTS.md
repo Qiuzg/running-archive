@@ -1,179 +1,70 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for Codex when working in this repository.
 
 ## Overview
 
-Static running archive site — pure HTML/CSS/JS, zero build tools. Displays marathon/half-marathon races, training runs, route maps, and yearly statistics in a single-page UI with light/dark theme support.
+Running Archive is a personal marathon/running log. The current app is a Vite frontend with a FastAPI API and a local SQLite database. Apple Health exports are still converted into generated JS data files first, then migrated into `server/running.db`.
 
-## File architecture
+## Architecture
 
+```text
+index.html                  # Vite entry
+src/                        # Frontend modules
+  main.js                   # App bootstrap: data fetch, router, panel, map
+  api.js                    # Fetch helpers for /api/*
+  state.js                  # Shared client state and derived data
+  map.js                    # Leaflet/Amap map runtime and route rendering
+  render/                   # Summary, overlay, route/race/stats panels
+  ui/                       # Router, theme, panel collapse/layout
+styles.css                  # Global responsive styles and themes
+server/                     # FastAPI API, SQLAlchemy models, migration, deploy
+scripts/import-apple-health.sh # Safe Apple Health import pipeline
+sync/apple-health-import.py # Apple Health XML/GPX parser
+data.generated.js           # Generated runs/races/profile data
+route-index.generated.js    # Generated route preview index
+city-boundaries.generated.js # Generated city GeoJSON
+routes/*.js                 # Generated full route details and time series
+assets/                     # Static assets
 ```
-index.html              # Single page: hero map + topbar nav + left panel
-app.js                  # All logic: data, rendering, resilient maps and charts (IIFE)
-styles.css              # All styles: responsive CSS custom properties and light/dark themes
-data.generated.js       # Auto-generated compact data: profile, races[], runs[]
-route-index.generated.js # Auto-generated compact preview coordinates for all routes
-city-boundaries.generated.js # Auto-generated: GeoJSON boundaries for race cities
-routes/*.js             # ~300 files, one per route, full GPS coordinates (loaded on demand)
-sync/
-  apple-health-import.py # Apple Health export → generate data + routes
-  strava-sync.mjs        # Strava API → generate data + routes
-assets/                  # Static images and vendored Chart.js
-```
 
-## Data flow
+## Data Flow
 
-1. `data.generated.js` sets `window.RUN_ARCHIVE_DATA` (profile, races, runs)
-2. `route-index.generated.js` sets `window.RUN_ROUTE_INDEX` (lightweight: preview coordinates only)
-3. `city-boundaries.generated.js` sets `window.RUN_CITY_BOUNDARIES` (GeoJSON for city highlight areas)
-4. `app.js` reads both globals, builds derived state, renders UI
-5. Full GPS data for a route is lazy-loaded from `routes/<routeId>.js` via dynamic `<script>` injection
+1. User exports Apple Health data as either an extracted `apple_health_export` directory or zip.
+2. `scripts/import-apple-health.sh <path>` backs up generated data and `server/running.db`.
+3. `sync/apple-health-import.py` updates `data.generated.js`, `route-index.generated.js`, and `routes/*.js`.
+4. `server/migrate.py` rebuilds SQLite tables from the generated files.
+5. The import script validates generated JS, route references, FastAPI responses, and `npm run build`.
+6. The frontend fetches data from `/api/routes`, `/api/races`, `/api/runs`, `/api/stats/*`, and `/api/cities`.
 
-## Key globals (window namespace)
+## Common Commands
 
-- `window.RUN_ARCHIVE_DATA` — `{ profile, races[], runs[] }`
-- `window.RUN_ROUTE_INDEX` — `{ [routeId]: { id, name, distanceKm, previewCoordinates, ... } }`
-- `window.RUN_CITY_BOUNDARIES` — GeoJSON boundaries for race cities
-- `window.RUN_ROUTE_DETAIL` — populated on demand with full coordinates per route (includes timeSeries)
-
-## app.js module structure
-
-The entire app is a single IIFE. Key sections in order:
-
-### Data layer (lines 1-60)
-- Reads globals, filters evening "races" via `isMorningRace()` (extracts hour from `sourceRunId` format `apple-YYYYMMDD-HHMMSS`, keeps only `hour < 12`)
-- Builds `races` (filtered + sorted), `activityItems` (races + non-race runs), `routeItems`
-- Computes derived data: `availableYears`, PBs, yearly/monthly totals
-
-### Utility functions (lines 62-240)
-- `formatDate()`, `formatKm()`, `parseTimeToSeconds()`, `findPB()`, `getYearDistance()`, `getMonthlyTotals()`, `getMonthActivities()`
-- `projectRoutePoints()` — Mercator projection for SVG route thumbnails
-- `renderRouteSvg()` — generates inline SVG for route previews (theme-aware colors via `getSvgColors()`, supports `large` and `mini` variants)
-- `escapeAttr()` — safe HTML attribute quoting
-- `positionTooltip()` — positions floating tooltip relative to chart-block bounds
-
-### Data loading (roughly lines 360-590)
-- `loadRouteDetail(routeId)` — injects `<script>` for `routes/<id>.js`, uses promise + caching
-- `loadLeaflet()` — lazy-loads Leaflet CSS + JS with fallback order: BootCDN → jsDelivr → unpkg
-- `loadChartJs()` — uses the vendored Chart.js first and retains CDN fallbacks
-- `addResilientTileLayer()` — uses CartoDB light/dark tiles first, then falls back to OpenStreetMap when tile loading is sparse or errors
-
-### State persistence
-- Theme: `localStorage.theme` — `"light"` (default) | `"dark"`
-- Panel collapsed: `localStorage.panelCollapsed` — `"true"` | `"false"`
-- Panel height: `localStorage.panelHeight` — CSS max-height value (set by drag resize)
-
-### Summary strip (lines 310-323)
-- `renderSummary()` → `#summaryStrip` — 5 floating metrics over the map (total km, yearly km, marathon PB, half PB, race count)
-
-### Panel tab system (lines 532-595)
-- `activePanelTab` state: `"routes"` | `"races"` | `"stats"`
-- `switchPanelTab(tab)` — updates nav active state, manages all-routes layer, city boundary visibility, map viewport
-  - **Stats tab**: shows all routes as faint overlay on map, hides city boundaries, centers map on center point at zoom 12, hides collapse toggle
-  - **Routes/races**: hides all-routes layer, restores city boundaries, restores default map bounds
-- `initPanelTabs()` — binds click handlers on `[data-panel-tab]` links
-
-### Panel collapse & resize (lines 596-690)
-- `initPanelCollapse()` — injects toggle button into panel header, manages collapse/expand state
-  - Collapsed routes: shows 3 items; collapsed races: shows 1 item
-  - Toggle hidden on stats tab and mobile (≤760px)
-- **Drag-to-resize**: handle at panel top, drag to adjust `max-height`, saved to localStorage
-  - On mobile with route selected: stats overlay/detail card dynamically follows panel height and stays above the bottom record list
-  - Route/race clicks keep the user's custom panel height
-  - `resetPanelHeight()` — clears custom height only for stats-month route jumps where the overlay would otherwise collide
-
-### Panel content renderers (lines 692-931)
-- `renderPanelRoutes(container)` — scrollable route list with four filters, 80-item pagination, filtered route overlay, and map selection
-- `renderPanelRaces(container)` — grouped race cards with route preview + stats, collapsed shows 1 race
-- `renderPanelStats(container)` — year nav (left/right arrows), hero number (annual total), monthly bar chart with 100km reference lines + cursor-following tooltip, stat cards (races, monthly avg, longest), month detail chart
-- `renderMonthRecords()` — daily activity bars for selected month, clickable to show route on map
-
-### Route link handler (lines 1002-1027)
-- `initRouteLinks()` — binds `.race-card[data-route-target]` and `[data-route-target]` buttons
-  - Preserves panel height for route/race list clicks
-  - Calls `resetPanelHeight()` only when jumping from the stats tab to a route
-  - Triggers `updateHeroRoute()` and stats overlay rendering
-
-### Hero map (roughly lines 1230-1370)
-- `initHeroMap()` — creates Leaflet map with city highlight areas (GeoJSON boundaries or circles), saves default bounds
-  - Mobile: `zoomControl: false`, `scrollWheelZoom: false`, `doubleClickZoom: true`, `tap: true`, `touchZoom: true`
-  - Desktop: `zoomControl: true`, `scrollWheelZoom: true`
-  - Tile URL switches between CartoDB light/dark based on theme and can fall back to OpenStreetMap
-  - `updateWhenIdle` and `keepBuffer` tuned for mobile performance
-- `updateHeroRoute(routeId, fit)` — swaps displayed polyline, optionally fits bounds, triggers stats overlay
-- `showAllRoutesOnMap()` — draws all routes as faint semi-transparent polylines, race routes in orange
-- `hideAllRoutesFromMap()` — removes the all-routes feature group
-- Map center point for stats tab: hardcoded `[32.00, 118.75]` at zoom 12
-- `fitBounds` padding: `[80, 120]`
-
-### Stats overlay
-- `renderStatsOverlay(routeId)` — shows aggregate stats (heart rate, pace, duration, elevation) + sparkline charts
-  - Desktop loads route detail timeSeries and renders Chart.js line charts for pace, elevation, and heart rate
-  - Mobile initially creates only the collapsed aggregate row and preloads route data in the background
-  - Mobile chart DOM is created only after the user explicitly expands the overlay
-  - Light/dark theme-aware chart colors via `chartColors()`
-- `clearStatsOverlay()` / `destroyStatsCharts()` — cleanup for tab switches and route changes
-
-### Theme toggle (lines 1521-1568)
-- `initTheme()` — reads localStorage, defaults to `"light"`
-- `switchMapTiles()` — hot-swaps the resilient Leaflet tile layer for the current theme
-- Re-renders panel content on theme change to update SVG colors
-
-### Initialization (last ~10 lines)
-Order matters: `initTheme() → renderSummary() → initPanelTabs() → initPanelCollapse() → initHeroMap() → switchPanelTab("routes") → initRouteLinks()`
-
-## CSS architecture
-
-Organized in sections:
-- **Design tokens** (`:root`): CSS custom properties for dark theme; `[data-theme="light"]` overrides
-- **Chart colors**: Theme-independent bar/fill colors
-- **Reset & Base**: box-sizing, body background with radial gradients + track-line texture
-- **Animations**: `fadeInUp`, `pulseGlow` (PB badge), `breathe`, `shimmer`
-- **Hero section**: `.hero` (100vh grid), `.hero__map` (absolute full-bleed), `.hero__map-shade` (gradient overlay, theme-aware)
-- **Stats overlay**: `.hero-stats-overlay` — absolute bottom-right card with aggregate values + sparkline charts, collapsible on mobile, light/dark variants
-- **Hero panel**: 380px fixed width, `backdrop-filter: blur(18px)`, flex column layout, `contain: layout style` for grid isolation
-- **Panel header**: flex row with wrap, English eyebrow + Chinese title on same line (10px padding, compact)
-- **Panel collapse toggle**: edge-attached pill button, hidden on mobile
-- **Panel resize handle**: horizontal grab bar at panel top, cursor ns-resize
-- **Route items**: 84px thumb + text, active state with orange accent
-- **Race cards**: side-by-side media/body layout, responsive stacking, route preview with overlay stats
-- **Bar charts**: 12-column CSS grid, `--bar-height` custom property, blue→orange gradient on hover, 100km reference lines (dashed), JS floating tooltip
-- **Month detail chart**: flexbox with `overflow-x: auto`, daily activity bars
-- **Stats year nav**: centered flex row with arrow buttons
-- **Stats hero number**: large centered distance display
-- **Stats meta row**: 3-column stat cards
-- **Summary strip**: absolute positioned over map at `top: 76px; left: 380px`
-- **Zoom controls**: hidden on mobile (≤760px) via `display: none`
-- **Responsive**: 4 breakpoints (1120/900/760/460px), mobile-first patterns for panel, charts, and overlays
-
-## Race classification rules
-
-The sync script (`apple-health-import.py`) and frontend (`app.js`) both apply the same logic:
-1. Distance: 41-44km → marathon, 20-23km → half marathon
-2. **Time of day**: Only morning starts (hour < 12) count as races. Extracted from `sourceRunId` format `apple-YYYYMMDD-HHMMSS`. Evening runs of similar distance are treated as training.
-
-## Adding new data
-
-### From Apple Health export
 ```bash
-python3 sync/apple-health-import.py /path/to/apple_health_export.zip
+npm run import:apple -- /path/to/apple_health_export
+npm run api
+npm run dev
+npm run build
+./server/deploy.sh user@server
 ```
-Generates `data.generated.js`, `route-index.generated.js`, `city-boundaries.generated.js`, and `routes/*.js`.
 
-### From Strava
-Edit `sync/strava-sync.mjs` with API credentials, then run with Node.
+Use `npm run import:apple` for routine Apple Health updates. It restores the previous generated data and local DB automatically if any validation step fails.
 
 ## Deployment
 
-- **GitHub Pages**: Push to `main` branch, served from root
-- **GitLab Pages**: `.gitlab-ci.yml` copies files to `public/`, deployed on push to `main`
+`server/deploy.sh` builds the frontend, rsyncs `dist/`, `server/`, generated data, and `routes/` to `/opt/running-archive`, then backs up the remote SQLite database and runs `server/migrate.py` on every deployment.
 
-## Testing locally
+If no host argument is supplied, `server/deploy.sh` only performs a local build and prints local run instructions.
 
-```bash
-python3 -m http.server 8080
-# Open http://localhost:8080
-```
+## Race Classification
 
-No build step, no npm install needed. Just serve the directory.
+`sync/apple-health-import.py` classifies races by:
+
+1. Distance: 41-44km -> marathon, 20-23km -> half marathon
+2. Time: only morning starts (`hour < 12`) count as races
+3. Optional display names: `RACE_NAME_OVERRIDES`
+
+## Notes
+
+- Do not commit `dist/`, `node_modules/`, `server/running.db`, `sync/backups/`, or `share-output/`.
+- Generated route files are large and numerous; use explicit git pathspecs when staging.
+- The app still keeps generated JS data files as the portable source for migration and static fallback workflows.

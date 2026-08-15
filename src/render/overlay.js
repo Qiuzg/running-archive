@@ -1,0 +1,253 @@
+import { store } from "../state.js";
+import { formatElapsed, isMobileViewport } from "../utils.js";
+import { fetchRoute } from "../api.js";
+
+let statsCharts = [];
+let overlayRequestId = 0;
+
+function chartColors() {
+  const isLight = document.documentElement.dataset.theme === "light";
+  return {
+    grid: isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.10)",
+    text: isLight ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.45)",
+    line: isLight ? "#1a73e8" : "#5b9aff",
+    fill: isLight ? "rgba(26,115,232,0.08)" : "rgba(91,154,255,0.10)",
+    elevation: isLight ? "#e87a20" : "#ff9e4a",
+  };
+}
+
+function destroyCharts() {
+  statsCharts.forEach(c => c.destroy?.());
+  statsCharts = [];
+}
+
+function makeSparkConfig(labels, data, lineColor, fillColor, reverseY) {
+  const colors = chartColors();
+  const validData = data.filter(v => v != null);
+  let yMin, yMax;
+  if (validData.length >= 2) {
+    yMin = Math.min(...validData);
+    yMax = Math.max(...validData);
+    const pad = (yMax - yMin) * 0.12 || 1;
+    yMin = Math.floor(yMin - pad);
+    yMax = Math.ceil(yMax + pad);
+  }
+  return {
+    type: "line",
+    data: { labels, datasets: [{ data, borderColor: lineColor, backgroundColor: fillColor, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: lineColor, tension: 0.2, fill: true, spanGaps: true }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { intersect: false, mode: "nearest" },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: true, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 }, grid: { color: colors.grid, drawTicks: false } },
+        y: { display: true, position: "right", reverse: reverseY || false, min: yMin, max: yMax, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 3, callback: v => v }, grid: { color: colors.grid, drawTicks: false } },
+      },
+    },
+  };
+}
+
+export function clearStatsOverlay() {
+  overlayRequestId += 1;
+  const existing = document.getElementById("heroStatsOverlay");
+  if (existing) existing.remove();
+  destroyCharts();
+}
+
+function insertOverlayHtml(html) {
+  const existing = document.getElementById("heroStatsOverlay");
+  if (existing) existing.remove();
+  const overlayContainer = document.querySelector(".hero") || document.getElementById("heroMap");
+  if (overlayContainer) {
+    overlayContainer.insertAdjacentHTML("beforeend", html);
+  }
+}
+
+export async function renderStatsOverlay(routeId) {
+  clearStatsOverlay();
+  const requestId = overlayRequestId;
+  if (store.activePanelTab === "stats" || routeId !== store.heroActiveRouteId) return;
+
+  const route = store.routes.find(r => r.id === routeId);
+  if (!route) return;
+  const activity = store.activityItems.find(a => a.route_id === routeId);
+  if (!activity) return;
+
+  const compact = isMobileViewport();
+  const stats = [];
+  if (activity.avg_heart_rate) {
+    stats.push({
+      label: compact ? "心率" : "平均心率",
+      value: compact ? activity.avg_heart_rate + "bpm" : activity.avg_heart_rate + " bpm",
+      sub: compact ? "" : activity.max_heart_rate ? "最高 " + activity.max_heart_rate : "",
+      compact: true,
+    });
+  }
+  if (activity.avg_power && !compact) {
+    stats.push({ label: "平均功率", value: activity.avg_power + " W", compact: false });
+  }
+  if (activity.pace) {
+    stats.push({ label: compact ? "配速" : "平均配速", value: compact ? activity.pace + "/km" : activity.pace + " /km", compact: true });
+  }
+  if (activity.finish_time || activity.duration) {
+    stats.push({ label: "用时", value: activity.finish_time || activity.duration, compact: true });
+  }
+  if (route.elevation_gain != null) {
+    stats.push({
+      label: compact ? "爬升" : "累计爬升",
+      value: compact ? Math.round(route.elevation_gain) + "m" : Math.round(route.elevation_gain) + " m",
+      compact: true,
+    });
+  }
+  if (!stats.length) return;
+
+  const valuesHtml = stats.map(s => {
+    const cls = s.compact === false ? " hero-stats-overlay__item--optional" : "";
+    return `<div class="hero-stats-overlay__item${cls}"><span class="hero-stats-overlay__label">${s.label}</span><strong>${s.value}</strong>${s.sub ? `<small>${s.sub}</small>` : ""}</div>`;
+  }).join("");
+
+  if (compact) {
+    const mobileHtml = `<div class="hero-stats-overlay hero-stats-overlay--collapsed" id="heroStatsOverlay">
+      <button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="展开图表" aria-label="展开图表">⌃</button>
+      <div class="hero-stats-overlay__values">${valuesHtml}</div></div>`;
+    insertOverlayHtml(mobileHtml);
+    bindMobileToggle(requestId, routeId);
+    return;
+  }
+
+  // Desktop: load route detail and render charts
+  insertOverlayHtml(`<div class="hero-stats-overlay" id="heroStatsOverlay"><div class="hero-stats-overlay__values">${valuesHtml}</div></div>`);
+
+  try {
+    const detail = await fetchRoute(routeId);
+    if (requestId !== overlayRequestId) return;
+    if (!detail?.time_series?.elapsed?.length || detail.time_series.elapsed.length < 2) return;
+
+    const ts = detail.time_series;
+    const labels = ts.elapsed.map(formatElapsed);
+    const colors = chartColors();
+
+    const hasPace = ts.pace?.some(p => p != null);
+    const hasElev = ts.elevation?.some(e => e != null);
+    const hasHR = ts.heartRate?.some(h => h != null);
+
+    if (!hasPace && !hasElev && !hasHR) return;
+
+    let chartsHtml = '<div class="hero-stats-overlay__charts">';
+    if (hasPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
+    if (hasElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
+    if (hasHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+    chartsHtml += '</div>';
+
+    const html = `<div class="hero-stats-overlay" id="heroStatsOverlay">
+      <button class="hero-stats-overlay__toggle" id="statsToggle" type="button" title="折叠图表" aria-label="折叠图表">⌄</button>
+      <div class="hero-stats-overlay__values">${valuesHtml}</div>${chartsHtml}</div>`;
+    insertOverlayHtml(html);
+
+    if (requestId !== overlayRequestId) return;
+
+    const { Chart } = await import("chart.js/auto");
+
+    const paceCanvas = document.getElementById("chartPace");
+    if (paceCanvas && hasPace) {
+      const cfg = makeSparkConfig(labels, ts.pace, colors.line, colors.fill, true);
+      statsCharts.push(new Chart(paceCanvas, cfg));
+    }
+    const elevCanvas = document.getElementById("chartElev");
+    if (elevCanvas && hasElev) {
+      const cfg = makeSparkConfig(labels, ts.elevation, colors.elevation, "rgba(255,158,74,0.08)", false);
+      statsCharts.push(new Chart(elevCanvas, cfg));
+    }
+    const hrCanvas = document.getElementById("chartHR");
+    if (hrCanvas && hasHR) {
+      const cfg = makeSparkConfig(labels, ts.heartRate, "#ff5e3a", "rgba(255,94,58,0.10)", false);
+      statsCharts.push(new Chart(hrCanvas, cfg));
+    }
+
+    bindDesktopToggle();
+  } catch (e) {
+    console.warn("Stats overlay chart creation failed:", e);
+  }
+}
+
+function bindDesktopToggle() {
+  const toggle = document.getElementById("statsToggle");
+  if (!toggle) return;
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    const overlay = document.getElementById("heroStatsOverlay");
+    if (!overlay) return;
+    overlay.classList.toggle("hero-stats-overlay--collapsed");
+    const collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
+    toggle.textContent = collapsed ? "⌃" : "⌄";
+    if (!collapsed) {
+      setTimeout(() => statsCharts.forEach(c => c?.resize?.()), 40);
+    }
+  };
+}
+
+let mobileDetailPromise = null;
+
+function bindMobileToggle(requestId, routeId) {
+  const toggle = document.getElementById("statsToggle");
+  if (!toggle) return;
+
+  mobileDetailPromise = fetchRoute(routeId)
+    .then(detail => detail?.time_series?.elapsed?.length >= 2 ? detail.time_series : null)
+    .catch(() => null);
+
+  toggle.onclick = async (e) => {
+    e.stopPropagation();
+    const overlay = document.getElementById("heroStatsOverlay");
+    if (!overlay || requestId !== overlayRequestId || routeId !== store.heroActiveRouteId) return;
+
+    const collapsed = overlay.classList.contains("hero-stats-overlay--collapsed");
+    if (!collapsed) {
+      overlay.classList.add("hero-stats-overlay--collapsed");
+      toggle.textContent = "⌃";
+      return;
+    }
+
+    if (overlay.querySelector(".hero-stats-overlay__charts")) {
+      overlay.classList.remove("hero-stats-overlay--collapsed");
+      toggle.textContent = "⌄";
+      setTimeout(() => statsCharts.forEach(c => c?.resize?.()), 40);
+      return;
+    }
+
+    toggle.disabled = true;
+    try {
+      const ts = await mobileDetailPromise;
+      const hasPace = ts?.pace?.some(p => p != null);
+      const hasElev = ts?.elevation?.some(e => e != null);
+      const hasHR = ts?.heartRate?.some(h => h != null);
+      if (!hasPace && !hasElev && !hasHR) { toggle.remove(); return; }
+
+      const { Chart } = await import("chart.js/auto");
+      if (requestId !== overlayRequestId || routeId !== store.heroActiveRouteId) return;
+
+      const colors = chartColors();
+      const labels = ts.elapsed.map(formatElapsed);
+      let chartsHtml = '<div class="hero-stats-overlay__charts">';
+      if (hasPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
+      if (hasElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
+      if (hasHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+      chartsHtml += '</div>';
+
+      overlay.insertAdjacentHTML("beforeend", chartsHtml);
+      overlay.classList.remove("hero-stats-overlay--collapsed");
+
+      if (hasPace) { const c = document.getElementById("chartPace"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.pace, colors.line, colors.fill, true))); }
+      if (hasElev) { const c = document.getElementById("chartElev"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.elevation, colors.elevation, "rgba(255,158,74,0.08)", false))); }
+      if (hasHR) { const c = document.getElementById("chartHR"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.heartRate, "#ff5e3a", "rgba(255,94,58,0.10)", false))); }
+
+      toggle.textContent = "⌄";
+    } catch (err) {
+      const chartsEl = overlay.querySelector(".hero-stats-overlay__charts");
+      if (chartsEl) chartsEl.remove();
+      overlay.classList.add("hero-stats-overlay--collapsed");
+    } finally {
+      toggle.disabled = false;
+    }
+  };
+}

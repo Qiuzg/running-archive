@@ -1689,6 +1689,60 @@ button {
   margin-top: 0;
 }
 
+/* ---- Map Engine Toggle ---- */
+.map-engine-toggle {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(10, 14, 22, 0.8);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.map-engine-toggle:hover {
+  background: rgba(30, 40, 60, 0.88);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.map-engine-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+[data-theme="light"] .map-engine-toggle {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .map-engine-toggle:hover {
+  background: rgba(255, 255, 255, 0.95);
+  color: rgba(0, 0, 0, 0.7);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 760px) {
+  .map-engine-toggle {
+    bottom: auto;
+    top: 98px;
+    left: 12px;
+    transform: none;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    border-radius: 16px;
+  }
+}
+
 /* ---- Leaflet Container ---- */
 .leaflet-container {
   font: inherit;

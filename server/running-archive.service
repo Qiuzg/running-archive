@@ -1,0 +1,31 @@
+# Systemd service for the FastAPI backend
+# Place at: /etc/systemd/system/running-archive.service
+#
+# Enable:  sudo systemctl enable running-archive
+# Start:   sudo systemctl start running-archive
+# Status:  sudo systemctl status running-archive
+# Logs:    sudo journalctl -u running-archive -f
+
+[Unit]
+Description=Running Archive API Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/running-archive
+Environment=PATH=/opt/running-archive/venv/bin:/usr/bin
+ExecStart=/opt/running-archive/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/running-archive/server
+
+[Install]
+WantedBy=multi-user.target
