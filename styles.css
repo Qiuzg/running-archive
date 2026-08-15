@@ -531,18 +531,17 @@ button {
     box-shadow: none;
   }
   .hero-stats-overlay__chart {
-    height: 96px;
-    padding: 8px 8px 4px 10px;
+    height: 124px;
+    padding: 10px 8px 8px 10px;
   }
   .hero-stats-overlay__chart-head {
-    padding-right: 22px;
-    font-size: 0.68rem;
+    display: none;
   }
   .hero-stats-overlay__chart-head small {
-    font-size: 0.58rem;
+    display: none;
   }
   .hero-stats-overlay__charts {
-    max-height: 240px;
+    max-height: 390px;
     margin-top: 8px;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 16px;
@@ -2833,7 +2832,7 @@ div.month-activity-bar {
   }
 
   .hero--route-selected:not(.hero--stats-full) .hero-stats-overlay__chart {
-    height: 64px;
+    height: 124px;
   }
 
   .hero--stats-full {
