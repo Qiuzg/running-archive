@@ -531,8 +531,8 @@ button {
     box-shadow: none;
   }
   .hero-stats-overlay__chart {
-    height: 96px;
-    padding: 8px 8px 4px 10px;
+    height: 104px;
+    padding: 8px 6px 6px 8px;
   }
   .hero-stats-overlay__chart-head {
     display: none;
@@ -541,7 +541,7 @@ button {
     display: none;
   }
   .hero-stats-overlay__charts {
-    max-height: 240px;
+    max-height: 330px;
     margin-top: 8px;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 16px;
@@ -2832,7 +2832,7 @@ div.month-activity-bar {
   }
 
   .hero--route-selected:not(.hero--stats-full) .hero-stats-overlay__chart {
-    height: 64px;
+    height: 104px;
   }
 
   .hero--stats-full {

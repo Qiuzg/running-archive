@@ -26,28 +26,34 @@ const CHART_DEFS = {
     id: "chartPace",
     title: "配速趋势",
     unit: "分钟/公里",
+    axisUnit: "min/km",
     note: "越高越快",
     reverseY: true,
     sanitize: value => Number.isFinite(value) && value >= 2.5 && value <= 12 ? value : null,
     tick: value => formatPaceValue(value),
+    mobileTick: value => Math.round(value),
   },
   elevation: {
     id: "chartElev",
     title: "海拔变化",
     unit: "米",
+    axisUnit: "m",
     note: "路线起伏",
     reverseY: false,
     sanitize: value => Number.isFinite(value) ? value : null,
     tick: value => `${Math.round(value)}m`,
+    mobileTick: value => Math.round(value),
   },
   heartRate: {
     id: "chartHR",
     title: "心率趋势",
     unit: "bpm",
+    axisUnit: "bpm",
     note: "运动强度",
     reverseY: false,
     sanitize: value => Number.isFinite(value) && value >= 60 && value <= 230 ? value : null,
     tick: value => `${Math.round(value)}`,
+    mobileTick: value => Math.round(value),
   },
 };
 
@@ -80,6 +86,7 @@ function buildChartHtml(type) {
 function makeSparkConfig(labels, data, lineColor, fillColor, type) {
   const colors = chartColors();
   const def = CHART_DEFS[type];
+  const mobile = isMobileViewport();
   const validData = data.filter(v => v != null);
   let yMin, yMax;
   if (validData.length >= 2) {
@@ -99,14 +106,47 @@ function makeSparkConfig(labels, data, lineColor, fillColor, type) {
   }
   return {
     type: "line",
-    data: { labels, datasets: [{ data, borderColor: lineColor, backgroundColor: fillColor, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: lineColor, tension: 0.2, fill: true, spanGaps: true }] },
+    data: { labels, datasets: [{ data, borderColor: lineColor, backgroundColor: fillColor, borderWidth: mobile ? 1.8 : 1.5, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: lineColor, tension: 0.2, fill: true, spanGaps: true }] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { intersect: false, mode: "nearest" },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      layout: { padding: mobile ? { top: 2, right: 2, bottom: 0, left: 0 } : 0 },
       scales: {
-        x: { display: true, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 }, grid: { color: colors.grid, drawTicks: false } },
-        y: { display: true, position: "right", reverse: def.reverseY, min: yMin, max: yMax, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 3, callback: v => def.tick(Number(v)) }, grid: { color: colors.grid, drawTicks: false } },
+        x: {
+          display: true,
+          ticks: {
+            color: colors.text,
+            font: { size: mobile ? 10 : 9, weight: mobile ? 600 : 400 },
+            maxTicksLimit: mobile ? 6 : 6,
+            maxRotation: 0,
+            autoSkip: true,
+          },
+          grid: { color: colors.grid, drawTicks: false },
+          border: { color: colors.grid },
+        },
+        y: {
+          display: true,
+          position: "right",
+          reverse: def.reverseY,
+          min: yMin,
+          max: yMax,
+          title: {
+            display: mobile,
+            text: def.axisUnit,
+            color: colors.text,
+            font: { size: 10, weight: 700 },
+            padding: { top: 0, bottom: 0 },
+          },
+          ticks: {
+            color: colors.text,
+            font: { size: mobile ? 10 : 9, weight: mobile ? 650 : 400 },
+            maxTicksLimit: 3,
+            callback: v => mobile ? def.mobileTick(Number(v)) : def.tick(Number(v)),
+          },
+          grid: { color: colors.grid, drawTicks: false },
+          border: { color: colors.grid },
+        },
       },
     },
   };
