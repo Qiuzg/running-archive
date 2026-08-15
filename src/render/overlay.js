@@ -21,8 +21,65 @@ function destroyCharts() {
   statsCharts = [];
 }
 
-function makeSparkConfig(labels, data, lineColor, fillColor, reverseY) {
+const CHART_DEFS = {
+  pace: {
+    id: "chartPace",
+    title: "配速趋势",
+    unit: "分钟/公里",
+    note: "越高越快",
+    reverseY: true,
+    sanitize: value => Number.isFinite(value) && value >= 2.5 && value <= 12 ? value : null,
+    tick: value => formatPaceValue(value),
+  },
+  elevation: {
+    id: "chartElev",
+    title: "海拔变化",
+    unit: "米",
+    note: "路线起伏",
+    reverseY: false,
+    sanitize: value => Number.isFinite(value) ? value : null,
+    tick: value => `${Math.round(value)}m`,
+  },
+  heartRate: {
+    id: "chartHR",
+    title: "心率趋势",
+    unit: "bpm",
+    note: "运动强度",
+    reverseY: false,
+    sanitize: value => Number.isFinite(value) && value >= 60 && value <= 230 ? value : null,
+    tick: value => `${Math.round(value)}`,
+  },
+};
+
+function formatPaceValue(value) {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const seconds = Math.round(value * 60);
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}/km`;
+}
+
+function sanitizeSeries(data, type) {
+  const def = CHART_DEFS[type];
+  return (data || []).map(value => def.sanitize(Number(value)));
+}
+
+function hasSeriesData(data) {
+  return data?.some(value => value != null);
+}
+
+function buildChartHtml(type) {
+  const def = CHART_DEFS[type];
+  return `<div class="hero-stats-overlay__chart hero-stats-overlay__chart--${type}">
+    <div class="hero-stats-overlay__chart-head">
+      <span>${def.title}</span>
+      <small>${def.unit} · ${def.note}</small>
+    </div>
+    <canvas id="${def.id}"></canvas>
+  </div>`;
+}
+
+function makeSparkConfig(labels, data, lineColor, fillColor, type) {
   const colors = chartColors();
+  const def = CHART_DEFS[type];
   const validData = data.filter(v => v != null);
   let yMin, yMax;
   if (validData.length >= 2) {
@@ -31,6 +88,14 @@ function makeSparkConfig(labels, data, lineColor, fillColor, reverseY) {
     const pad = (yMax - yMin) * 0.12 || 1;
     yMin = Math.floor(yMin - pad);
     yMax = Math.ceil(yMax + pad);
+    if (type === "pace") {
+      yMin = Math.max(2, yMin);
+      yMax = Math.min(14, yMax);
+    }
+    if (type === "heartRate") {
+      yMin = Math.max(40, yMin);
+      yMax = Math.min(230, yMax);
+    }
   }
   return {
     type: "line",
@@ -41,10 +106,16 @@ function makeSparkConfig(labels, data, lineColor, fillColor, reverseY) {
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: { display: true, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 }, grid: { color: colors.grid, drawTicks: false } },
-        y: { display: true, position: "right", reverse: reverseY || false, min: yMin, max: yMax, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 3, callback: v => v }, grid: { color: colors.grid, drawTicks: false } },
+        y: { display: true, position: "right", reverse: def.reverseY, min: yMin, max: yMax, ticks: { color: colors.text, font: { size: 9 }, maxTicksLimit: 3, callback: v => def.tick(Number(v)) }, grid: { color: colors.grid, drawTicks: false } },
       },
     },
   };
+}
+
+function createStatsChart(Chart, type, labels, data, lineColor, fillColor) {
+  const canvas = document.getElementById(CHART_DEFS[type].id);
+  if (!canvas || !hasSeriesData(data)) return;
+  statsCharts.push(new Chart(canvas, makeSparkConfig(labels, data, lineColor, fillColor, type)));
 }
 
 export function clearStatsOverlay() {
@@ -127,16 +198,19 @@ export async function renderStatsOverlay(routeId) {
     const labels = ts.elapsed.map(formatElapsed);
     const colors = chartColors();
 
-    const hasPace = ts.pace?.some(p => p != null);
-    const hasElev = ts.elevation?.some(e => e != null);
-    const hasHR = ts.heartRate?.some(h => h != null);
+    const paceData = sanitizeSeries(ts.pace, "pace");
+    const elevData = sanitizeSeries(ts.elevation, "elevation");
+    const hrData = sanitizeSeries(ts.heartRate, "heartRate");
+    const hasPace = hasSeriesData(paceData);
+    const hasElev = hasSeriesData(elevData);
+    const hasHR = hasSeriesData(hrData);
 
     if (!hasPace && !hasElev && !hasHR) return;
 
     let chartsHtml = '<div class="hero-stats-overlay__charts">';
-    if (hasPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
-    if (hasElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
-    if (hasHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+    if (hasPace) chartsHtml += buildChartHtml("pace");
+    if (hasElev) chartsHtml += buildChartHtml("elevation");
+    if (hasHR) chartsHtml += buildChartHtml("heartRate");
     chartsHtml += '</div>';
 
     const html = `<div class="hero-stats-overlay" id="heroStatsOverlay">
@@ -147,22 +221,9 @@ export async function renderStatsOverlay(routeId) {
     if (requestId !== overlayRequestId) return;
 
     const { Chart } = await import("chart.js/auto");
-
-    const paceCanvas = document.getElementById("chartPace");
-    if (paceCanvas && hasPace) {
-      const cfg = makeSparkConfig(labels, ts.pace, colors.line, colors.fill, true);
-      statsCharts.push(new Chart(paceCanvas, cfg));
-    }
-    const elevCanvas = document.getElementById("chartElev");
-    if (elevCanvas && hasElev) {
-      const cfg = makeSparkConfig(labels, ts.elevation, colors.elevation, "rgba(255,158,74,0.08)", false);
-      statsCharts.push(new Chart(elevCanvas, cfg));
-    }
-    const hrCanvas = document.getElementById("chartHR");
-    if (hrCanvas && hasHR) {
-      const cfg = makeSparkConfig(labels, ts.heartRate, "#ff5e3a", "rgba(255,94,58,0.10)", false);
-      statsCharts.push(new Chart(hrCanvas, cfg));
-    }
+    createStatsChart(Chart, "pace", labels, paceData, colors.line, colors.fill);
+    createStatsChart(Chart, "elevation", labels, elevData, colors.elevation, "rgba(255,158,74,0.08)");
+    createStatsChart(Chart, "heartRate", labels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
 
     bindDesktopToggle();
   } catch (e) {
@@ -218,9 +279,12 @@ function bindMobileToggle(requestId, routeId) {
     toggle.disabled = true;
     try {
       const ts = await mobileDetailPromise;
-      const hasPace = ts?.pace?.some(p => p != null);
-      const hasElev = ts?.elevation?.some(e => e != null);
-      const hasHR = ts?.heartRate?.some(h => h != null);
+      const paceData = sanitizeSeries(ts?.pace, "pace");
+      const elevData = sanitizeSeries(ts?.elevation, "elevation");
+      const hrData = sanitizeSeries(ts?.heartRate, "heartRate");
+      const hasPace = hasSeriesData(paceData);
+      const hasElev = hasSeriesData(elevData);
+      const hasHR = hasSeriesData(hrData);
       if (!hasPace && !hasElev && !hasHR) { toggle.remove(); return; }
 
       const { Chart } = await import("chart.js/auto");
@@ -229,17 +293,17 @@ function bindMobileToggle(requestId, routeId) {
       const colors = chartColors();
       const labels = ts.elapsed.map(formatElapsed);
       let chartsHtml = '<div class="hero-stats-overlay__charts">';
-      if (hasPace) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartPace"></canvas></div>';
-      if (hasElev) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartElev"></canvas></div>';
-      if (hasHR) chartsHtml += '<div class="hero-stats-overlay__chart"><canvas id="chartHR"></canvas></div>';
+      if (hasPace) chartsHtml += buildChartHtml("pace");
+      if (hasElev) chartsHtml += buildChartHtml("elevation");
+      if (hasHR) chartsHtml += buildChartHtml("heartRate");
       chartsHtml += '</div>';
 
       overlay.insertAdjacentHTML("beforeend", chartsHtml);
       overlay.classList.remove("hero-stats-overlay--collapsed");
 
-      if (hasPace) { const c = document.getElementById("chartPace"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.pace, colors.line, colors.fill, true))); }
-      if (hasElev) { const c = document.getElementById("chartElev"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.elevation, colors.elevation, "rgba(255,158,74,0.08)", false))); }
-      if (hasHR) { const c = document.getElementById("chartHR"); if (c) statsCharts.push(new Chart(c, makeSparkConfig(labels, ts.heartRate, "#ff5e3a", "rgba(255,94,58,0.10)", false))); }
+      createStatsChart(Chart, "pace", labels, paceData, colors.line, colors.fill);
+      createStatsChart(Chart, "elevation", labels, elevData, colors.elevation, "rgba(255,158,74,0.08)");
+      createStatsChart(Chart, "heartRate", labels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
 
       toggle.textContent = "⌄";
     } catch (err) {
