@@ -1,7 +1,18 @@
-# Running Archive Sync for iPhone
+# Running Archive for iPhone
 
-这是一个只面向个人使用的 SwiftUI + HealthKit 同步工具。它读取 Apple Watch 写入
-健康数据库的跑步、路线与心率数据，并增量上传到 Running Archive。
+这是一个只面向个人使用的原生 SwiftUI 跑步档案 App。界面沿用手机网页端的地图、
+指标卡片和路线面板风格，同时保留 Apple Watch / HealthKit 增量同步能力。
+
+## App 功能
+
+- **档案**：在原生地图上汇总路线，展示累计里程、年度跑量、全马/半马 PB 和最近记录。
+- **记录**：按训练或比赛筛选、搜索，查看路线地图、配速、海拔和心率趋势。
+- **分享**：选择任意带路线的记录，自动生成 1080×1680 精简图或 1080×2800 详细图，
+  支持日间/夜间样式，并通过 iOS 分享面板保存到相册或发送给其他 App。
+- **同步**：授权读取 HealthKit，选择一条或多条跑步，分条上传到 Running Archive。
+
+首页、记录与分享数据直接读取已部署网站的公开 API。首次打开以及下拉刷新时会更新；
+同步页中的服务器地址也会同时作为 App 的数据源地址。
 
 ## 运行
 
@@ -9,7 +20,7 @@
 2. 在 Xcode 中直接打开本目录的 `RunningArchiveSync.xcodeproj`，不要选择整个网页仓库作为工程。
 3. 在 Target → Signing & Capabilities 中选择自己的 Personal Team。
 4. 使用数据线连接 iPhone，并在手机上开启“开发者模式”。
-5. 在真机上运行。HealthKit 数据不能在普通模拟器中完整验证。
+5. 在真机上运行。档案、记录和分享可在模拟器预览，HealthKit 同步必须在真机验证。
 
 免费 Personal Team 的签名约 7 天后失效，到期后重新连接手机，在 Xcode 中运行一次即可。
 

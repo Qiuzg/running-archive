@@ -6,7 +6,7 @@ final class HealthSyncViewModel: ObservableObject {
     @Published var selectedIDs: Set<String> = []
     @Published var status = "先授权健康数据，再检查新增跑步。"
     @Published var isWorking = false
-    @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+    @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ArchiveAPI.defaultBaseURL
     @Published var token = KeychainStore.read("syncToken")
 
     private let health = HealthKitService()
@@ -108,54 +108,79 @@ final class HealthSyncViewModel: ObservableObject {
 }
 
 struct ContentView: View {
+    @StateObject private var archiveStore = ArchiveStore()
+
+    var body: some View {
+        TabView {
+            DashboardView()
+                .tabItem { Label("档案", systemImage: "map.fill") }
+            NavigationStack { ActivityListView() }
+                .tabItem { Label("记录", systemImage: "figure.run") }
+            NavigationStack { ShareStudioView() }
+                .tabItem { Label("分享", systemImage: "photo.on.rectangle.angled") }
+            NavigationStack { HealthSyncView() }
+                .tabItem { Label("同步", systemImage: "arrow.triangle.2.circlepath") }
+        }
+        .environmentObject(archiveStore)
+        .tint(RunTheme.accent)
+    }
+}
+
+struct HealthSyncView: View {
     @StateObject private var model = HealthSyncViewModel()
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("服务器") {
-                    TextField("https://你的域名", text: $model.serverURL)
-                        .textInputAutocapitalization(.never).keyboardType(.URL)
-                    SecureField("同步令牌", text: $model.token)
-                }
-                Section("待同步跑步（\(model.previews.count)）") {
-                    if model.previews.isEmpty {
-                        Text("暂无记录").foregroundStyle(.secondary)
-                    } else {
-                        HStack {
-                            Button("全选") { model.selectAll() }
-                            Spacer()
-                            Button("取消全选") { model.clearSelection() }
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                    ForEach(model.previews) { workout in
-                        Button {
-                            if model.selectedIDs.contains(workout.id) { model.selectedIDs.remove(workout.id) }
-                            else { model.selectedIDs.insert(workout.id) }
-                        } label: {
-                            HStack {
-                                Image(systemName: model.selectedIDs.contains(workout.id) ? "checkmark.circle.fill" : "circle")
-                                VStack(alignment: .leading) {
-                                    Text(workout.date.formatted(date: .abbreviated, time: .shortened))
-                                    Text(String(format: "%.2f km · %@", workout.distanceKm, duration(workout.duration)))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }.buttonStyle(.plain)
-                    }
-                }
-                Section {
-                    Button("授权并检查新增跑步") { Task { await model.authorizeAndRefresh() } }
-                    Button("同步所选记录（\(model.selectedIDs.count)）") { Task { await model.syncSelected() } }
-                        .disabled(model.selectedIDs.isEmpty)
-                }
-                Section("状态") { Text(model.status).foregroundStyle(.secondary) }
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Apple Health 同步", systemImage: "heart.fill")
+                        .font(.title3.bold()).foregroundStyle(RunTheme.accent)
+                    Text("从这台 iPhone 读取 Apple Watch 跑步，并安全上传到你的个人档案。")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }.padding(.vertical, 6)
             }
-            .navigationTitle("Running Archive")
-            .disabled(model.isWorking)
-            .overlay { if model.isWorking { ProgressView().controlSize(.large) } }
+            Section("服务器") {
+                TextField("https://你的域名", text: $model.serverURL)
+                    .textInputAutocapitalization(.never).keyboardType(.URL)
+                SecureField("同步令牌", text: $model.token)
+            }
+            Section("待同步跑步（\(model.previews.count)）") {
+                if model.previews.isEmpty {
+                    Text("暂无记录").foregroundStyle(.secondary)
+                } else {
+                    HStack {
+                        Button("全选") { model.selectAll() }
+                        Spacer()
+                        Button("取消全选") { model.clearSelection() }
+                    }
+                    .buttonStyle(.borderless)
+                }
+                ForEach(model.previews) { workout in
+                    Button {
+                        if model.selectedIDs.contains(workout.id) { model.selectedIDs.remove(workout.id) }
+                        else { model.selectedIDs.insert(workout.id) }
+                    } label: {
+                        HStack {
+                            Image(systemName: model.selectedIDs.contains(workout.id) ? "checkmark.circle.fill" : "circle")
+                            VStack(alignment: .leading) {
+                                Text(workout.date.formatted(date: .abbreviated, time: .shortened))
+                                Text(String(format: "%.2f km · %@", workout.distanceKm, duration(workout.duration)))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }.buttonStyle(.plain)
+                }
+            }
+            Section {
+                Button("授权并检查新增跑步") { Task { await model.authorizeAndRefresh() } }
+                Button("同步所选记录（\(model.selectedIDs.count)）") { Task { await model.syncSelected() } }
+                    .disabled(model.selectedIDs.isEmpty)
+            }
+            Section("状态") { Text(model.status).foregroundStyle(.secondary) }
         }
+        .navigationTitle("数据同步")
+        .disabled(model.isWorking)
+        .overlay { if model.isWorking { ProgressView().controlSize(.large) } }
     }
 
     private func duration(_ seconds: TimeInterval) -> String {
