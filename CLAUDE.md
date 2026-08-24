@@ -4,7 +4,7 @@ Guidance for coding assistants working in this repository.
 
 ## Overview
 
-Running Archive is a personal marathon/running log. The current app is a Vite frontend with a FastAPI API and a local SQLite database. Apple Health exports are converted into generated JS data files, then migrated into `server/running.db`.
+Running Archive is a personal marathon/running log. The current app is a Vite frontend with a FastAPI API and a local SQLite database. Apple Health data can arrive through the full export importer or the personal SwiftUI HealthKit sync app.
 
 ## Key Files
 
@@ -20,6 +20,9 @@ route-index.generated.js
 city-boundaries.generated.js
 routes/*.js
 assets/
+src/share-lab.js
+server/routers/apple_sync.py
+ios/RunningArchiveSync/
 ```
 
 ## Routine Data Update
@@ -44,6 +47,12 @@ npm run dev
 ```
 
 The deploy script builds `dist/`, syncs frontend/server/generated data/routes to `/opt/running-archive`, backs up the remote DB, and runs migration on every deployment so the server uses the newest Apple Health data.
+
+The Xcode project is committed to Git but is not uploaded to the web server. Open `ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` locally. The remote API needs `RUNNING_SYNC_TOKEN` in `/etc/running-archive.env` before iPhone uploads are enabled.
+
+## Hidden Share Lab
+
+Seven avatar taps or `/#/share-lab-7k3m9x2p` opens the browser-only image generator. It supports compact and detailed PNG layouts and auto-renders when the activity, layout, theme, or title changes.
 
 ## Race Classification
 

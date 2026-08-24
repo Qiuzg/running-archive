@@ -5,7 +5,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import engine, Base
-from .routers import routes, races, runs, stats, cities, admin, config
+from .routers import routes, races, runs, stats, cities, admin, config, apple_sync
 
 # Create tables on startup if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -34,6 +34,7 @@ app.include_router(stats.router)
 app.include_router(cities.router)
 app.include_router(admin.router)
 app.include_router(config.router)
+app.include_router(apple_sync.router)
 
 
 @app.get("/api/health")

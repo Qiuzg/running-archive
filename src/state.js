@@ -93,6 +93,22 @@ export function cacheRouteDetail(routeId, detail) {
   store.routeDetailCache[routeId] = detail;
 }
 
+export function getAtlasEntries() {
+  const routeMap = new Map(store.routes.map(route => [route.id, route]));
+  const seen = new Set();
+
+  return store.routeEntries.filter(item => {
+    const route = routeMap.get(item.route_id);
+    if (!route || seen.has(route.id)) return false;
+    const distance = Number(route.distance_km || item.distance_km || 0);
+    const year = Number(String(item.date || "").slice(0, 4));
+    if (distance <= 10 || !Number.isFinite(year)) return false;
+    if (!(route.preview_coordinates || route.coordinates)?.length) return false;
+    seen.add(route.id);
+    return true;
+  });
+}
+
 // ---- Derived data builders (called after fetching) ----
 export function rebuildDerivedData() {
   const { races, runs } = store;

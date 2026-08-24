@@ -10,6 +10,7 @@ import { initHeroMap, showAllRoutesOnMap, hideAllRoutesFromMap, hideCityLayer, s
 import { initTheme, bindThemeToggle } from "./ui/theme.js";
 import { initPanelCollapse, syncMobileStatsOverlayLayout } from "./ui/panel.js";
 import { initRouter, handleRoute, syncUrlFromState, navigate } from "./ui/router.js";
+import { initShareLab } from "./share-lab.js";
 
 async function loadData() {
   const loaders = [
@@ -81,16 +82,30 @@ function switchPanelTab(tab) {
     link.classList.toggle("is-active", link.dataset.panelTab === tab);
   });
 
+  const panelLabels = {
+    routes: ["Route Atlas", "路线足迹"],
+    atlas: ["Long Run Atlas", "长距离轨迹"],
+    races: ["Race Records", "比赛记录"],
+    stats: ["Year in Motion", "年度统计"],
+  };
+  const [eyebrowText, titleText] = panelLabels[tab] || panelLabels.routes;
   const eyebrow = document.getElementById("panelEyebrow");
   const title = document.getElementById("panelTitle");
-  if (eyebrow) eyebrow.textContent = tab === "routes" ? "Route Atlas" : tab === "races" ? "Race Records" : "Year in Motion";
-  if (title) title.textContent = tab === "routes" ? "路线足迹" : tab === "races" ? "比赛记录" : "年度统计";
+  if (eyebrow) eyebrow.textContent = eyebrowText;
+  if (title) title.textContent = titleText;
+
+  const hero = document.querySelector(".hero");
+  hero?.classList.toggle("hero--atlas", tab === "atlas");
 
   const toggle = document.getElementById("panelCollapseToggle");
   if (tab === "stats") {
     showAllRoutesOnMap(store.routes, "stats");
     hideCityLayer();
     setStatsView();
+    if (toggle) toggle.style.display = "none";
+  } else if (tab === "atlas") {
+    hideAllRoutesFromMap();
+    hideCityLayer();
     if (toggle) toggle.style.display = "none";
   } else {
     hideAllRoutesFromMap();
@@ -111,6 +126,13 @@ async function init() {
 
   // Must subscribe BEFORE initRouter — router triggers setActiveTab → notify("tab")
   subscribe("tab", () => switchPanelTab(store.activePanelTab));
+  subscribe("map-ready", () => {
+    if (store.activePanelTab === "stats") {
+      showAllRoutesOnMap(store.routes, "stats");
+      hideCityLayer();
+      setStatsView();
+    }
+  });
   subscribe("route", () => {
     const routeId = store.heroActiveRouteId;
     document.querySelectorAll(".race-card[data-route-target], [data-hero-route]").forEach(el => {
@@ -135,6 +157,8 @@ async function init() {
   initRouter();
 
   const loadFailures = await loadData();
+
+  initShareLab();
 
   renderSummary();
   renderPanelContent();

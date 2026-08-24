@@ -433,10 +433,11 @@ export function showCityLayer() {
   else if (!heroMap.hasLayer(heroCityLayer)) heroCityLayer.addTo(heroMap);
 }
 
-export function setStatsView() {
+export function fitRoutesView(routesToFit = store.routes) {
+  if (!heroMap) return;
   // Fit map to show the extent of all routes
   let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
-  for (const route of store.routes) {
+  for (const route of routesToFit) {
     const coords = route.preview_coordinates || route.coordinates;
     if (!coords?.length) continue;
     const lats = coords.map(p => p[1]);
@@ -462,6 +463,10 @@ export function setStatsView() {
   } else if (window.L) {
     heroMap?.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [80, 120] });
   }
+}
+
+export function setStatsView() {
+  fitRoutesView(store.routes);
 }
 
 export function restoreDefaultView() {

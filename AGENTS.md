@@ -15,10 +15,12 @@ src/                        # Frontend modules
   api.js                    # Fetch helpers for /api/*
   state.js                  # Shared client state and derived data
   map.js                    # Leaflet/Amap map runtime and route rendering
+  share-lab.js              # Hidden compact/detailed PNG share generator
   render/                   # Summary, overlay, route/race/stats panels
   ui/                       # Router, theme, panel collapse/layout
 styles.css                  # Global responsive styles and themes
 server/                     # FastAPI API, SQLAlchemy models, migration, deploy
+  routers/apple_sync.py     # Token-protected HealthKit incremental ingestion
 scripts/import-apple-health.sh # Safe Apple Health import pipeline
 sync/apple-health-import.py # Apple Health XML/GPX parser
 data.generated.js           # Generated runs/races/profile data
@@ -26,6 +28,7 @@ route-index.generated.js    # Generated route preview index
 city-boundaries.generated.js # Generated city GeoJSON
 routes/*.js                 # Generated full route details and time series
 assets/                     # Static assets
+ios/RunningArchiveSync/     # Personal SwiftUI HealthKit sync Xcode project
 ```
 
 ## Data Flow
@@ -36,6 +39,8 @@ assets/                     # Static assets
 4. `server/migrate.py` rebuilds SQLite tables from the generated files.
 5. The import script validates generated JS, route references, FastAPI responses, and `npm run build`.
 6. The frontend fetches data from `/api/routes`, `/api/races`, `/api/runs`, `/api/stats/*`, and `/api/cities`.
+
+Alternatively, the personal iPhone app reads new HealthKit workouts and posts them to `/api/sync/apple-workouts` with `RUNNING_SYNC_TOKEN`. The API trims the first and last 600 route meters and upserts the route/run. `server/migrate.py` preserves these `healthkit` records across generated-data rebuilds.
 
 ## Common Commands
 
@@ -53,6 +58,8 @@ Use `npm run import:apple` for routine Apple Health updates. It restores the pre
 
 `server/deploy.sh` builds the frontend, rsyncs `dist/`, `server/`, generated data, and `routes/` to `/opt/running-archive`, then backs up the remote SQLite database and runs `server/migrate.py` on every deployment.
 
+The Xcode project is versioned in Git but is not uploaded by the web deployment. Open `ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` locally and sign it with a Personal Team. Production HealthKit uploads require HTTPS and `/etc/running-archive.env` containing `RUNNING_SYNC_TOKEN`.
+
 If no host argument is supplied, `server/deploy.sh` only performs a local build and prints local run instructions.
 
 ## Race Classification
@@ -68,3 +75,4 @@ If no host argument is supplied, `server/deploy.sh` only performs a local build 
 - Do not commit `dist/`, `node_modules/`, `server/running.db`, `sync/backups/`, or `share-output/`.
 - Generated route files are large and numerous; use explicit git pathspecs when staging.
 - The app still keeps generated JS data files as the portable source for migration and static fallback workflows.
+- The hidden share lab is available through seven avatar taps or `/#/share-lab-7k3m9x2p`; route/layout/theme/title changes auto-render compact or detailed PNGs in the browser.

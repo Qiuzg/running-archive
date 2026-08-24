@@ -57,6 +57,24 @@ def extract_json_from_js(filepath: Path) -> dict | list:
 
 
 def migrate_data():
+    # HealthKit records arrive directly on the server and do not exist in the
+    # generated JS source. Preserve them while rebuilding the portable data.
+    synced_runs = []
+    synced_routes = []
+    try:
+        existing = SessionLocal()
+        for run in existing.query(RunRecord).filter(RunRecord.source == "healthkit").all():
+            synced_runs.append({column.name: getattr(run, column.name) for column in RunRecord.__table__.columns})
+            if run.route_id:
+                route = existing.get(Route, run.route_id)
+                if route:
+                    synced_routes.append({column.name: getattr(route, column.name) for column in Route.__table__.columns})
+        existing.close()
+    except Exception:
+        # First migration or an older/incompatible database.
+        synced_runs = []
+        synced_routes = []
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -167,6 +185,18 @@ def migrate_data():
                 print(f"Loaded city boundaries: {len(boundaries)} cities")
                 for city_name, geojson in boundaries.items():
                     db.add(CityBoundary(city=city_name, geojson=geojson))
+
+            # Restore server-synced records unless the generated import now
+            # contains the same deterministic workout/route id.
+            db.flush()
+            for route_data in synced_routes:
+                if db.get(Route, route_data["id"]) is None:
+                    db.add(Route(**route_data))
+            db.flush()
+            for run_data in synced_runs:
+                is_migrated_race = db.query(Race).filter(Race.source_run_id == run_data["id"]).first() is not None
+                if db.get(RunRecord, run_data["id"]) is None and not is_migrated_race:
+                    db.add(RunRecord(**run_data))
 
             db.commit()
             print("Migration completed successfully!")

@@ -7,3 +7,4 @@ server/running.db
 server/running.db.backup.*
 sync/backups/
 share-output/
+share/

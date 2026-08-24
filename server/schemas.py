@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -156,3 +156,46 @@ class RaceCreate(BaseModel):
     notes: str = ""
     avg_heart_rate: Optional[int] = None
     avg_power: Optional[float] = None
+
+
+# ---- Apple Health incremental sync ----
+class HealthRoutePoint(BaseModel):
+    timestamp: datetime
+    latitude: float
+    longitude: float
+    altitude: float = 0
+    speed_mps: Optional[float] = None
+
+
+class HealthMetricSample(BaseModel):
+    elapsed_seconds: float
+    value: float
+
+
+class AppleWorkoutSync(BaseModel):
+    id: str
+    name: str = "户外跑步"
+    start_date: datetime
+    distance_km: float
+    duration_seconds: float
+    city: str = ""
+    avg_heart_rate: Optional[int] = None
+    max_heart_rate: Optional[int] = None
+    avg_cadence: Optional[float] = None
+    avg_power: Optional[float] = None
+    route_points: list[HealthRoutePoint] = []
+    heart_rate_samples: list[HealthMetricSample] = []
+
+
+class AppleWorkoutSyncRequest(BaseModel):
+    workouts: list[AppleWorkoutSync]
+
+
+class AppleWorkoutSyncResult(BaseModel):
+    id: str
+    status: str
+    route_points: int = 0
+
+
+class AppleWorkoutSyncResponse(BaseModel):
+    synced: list[AppleWorkoutSyncResult]

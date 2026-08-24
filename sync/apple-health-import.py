@@ -122,6 +122,25 @@ def trim_points(points, count):
     return points[count : len(points) - count]
 
 
+def privacy_trim_bounds(points, radius_meters, fallback_count=0):
+    """Return slice bounds after removing a real route distance at each end."""
+    if radius_meters <= 0:
+        if len(points) <= fallback_count * 2 + 2:
+            return 0, 0
+        return fallback_count, len(points) - fallback_count
+    if len(points) < 3:
+        return 0, 0
+    cumulative = [0.0]
+    for previous, current in zip(points, points[1:]):
+        cumulative.append(cumulative[-1] + haversine_km(previous, current) * 1000)
+    total = cumulative[-1]
+    if total <= radius_meters * 2:
+        return 0, 0
+    start = next((i for i, distance in enumerate(cumulative) if distance >= radius_meters), len(points))
+    end = next((i for i, distance in enumerate(cumulative) if total - distance <= radius_meters), len(points))
+    return start, end
+
+
 def downsample_list(values, max_items):
     """Downsample a 1D list to max_items elements, preserving first and last."""
     if max_items <= 0 or not values or len(values) <= max_items:
@@ -423,15 +442,13 @@ def parse_gpx(path):
     return points, elevations, timestamps, speeds
 
 
-def compute_time_series(timestamps, speeds, elevations, trim_count, max_points, heart_rates=None):
+def compute_time_series(timestamps, speeds, elevations, slice_start, slice_end, max_points, heart_rates=None):
     """Downsample time-series arrays to max_points, preserving alignment.
     Returns dict with elapsed, speed, elevation, pace, and optionally heartRate."""
+    timestamps = timestamps[slice_start:slice_end]
+    speeds = speeds[slice_start:slice_end]
+    elevations = elevations[slice_start:slice_end]
     n = len(timestamps)
-    if trim_count > 0 and n > trim_count * 2:
-        timestamps = timestamps[trim_count : n - trim_count]
-        speeds = speeds[trim_count : n - trim_count]
-        elevations = elevations[trim_count : n - trim_count]
-        n = len(timestamps)
 
     if max_points > 0 and n > max_points:
         step = (n - 1) / (max_points - 1)
@@ -510,20 +527,16 @@ def assign_routes(export_root, workouts, trim_count, privacy_radius, max_points,
 
     for route_file in route_files:
         raw_points, raw_elevations, raw_timestamps, raw_speeds = parse_gpx(route_file)
-        public_points = downsample_points(
-            trim_points(raw_points, trim_count), max_points
-        )
+        slice_start, slice_end = privacy_trim_bounds(raw_points, privacy_radius, trim_count)
+        trimmed_points = raw_points[slice_start:slice_end]
+        public_points = downsample_points(trimmed_points, max_points)
         if len(public_points) < 2:
             continue
 
         # Trim and downsample elevations in parallel with coordinates
-        trimmed_elevations = (
-            raw_elevations[trim_count : len(raw_elevations) - trim_count]
-            if len(raw_elevations) > trim_count * 2
-            else raw_elevations
-        )
+        trimmed_elevations = raw_elevations[slice_start:slice_end]
         public_elevations = downsample_list(trimmed_elevations, max_points) if max_points > 0 else trimmed_elevations
-        route_elevation_gain = elevation_gain(raw_elevations, trim_count)
+        route_elevation_gain = elevation_gain(trimmed_elevations)
 
         route_start = parse_route_datetime(route_file)
         route_date = route_start.date() if route_start else None
@@ -559,7 +572,7 @@ def assign_routes(export_root, workouts, trim_count, privacy_radius, max_points,
 
         # Compute time series for charts (after workout is identified, for HR matching)
         time_series = compute_time_series(
-            raw_timestamps, raw_speeds, raw_elevations, trim_count, max_points,
+            raw_timestamps, raw_speeds, raw_elevations, slice_start, slice_end, max_points,
             heart_rates=hr_data.get(workout["id"])
         )
         city = infer_city(public_points)
@@ -726,13 +739,13 @@ def main():
         "--trim-points",
         type=int,
         default=8,
-        help="Number of GPS points to remove from each end.",
+        help="Fallback GPS points removed from each end when privacy radius is disabled.",
     )
     parser.add_argument(
         "--privacy-radius",
         type=int,
         default=600,
-        help="Displayed privacy radius in meters.",
+        help="Actual route distance removed from each end, in meters.",
     )
     parser.add_argument(
         "--max-route-points",

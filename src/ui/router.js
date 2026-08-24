@@ -2,6 +2,7 @@
  * Client-side URL routing via hash.
  * Supports:
  *   /#/routes              → routes tab
+ *   /#/atlas               → long-distance route atlas
  *   /#/races               → races tab
  *   /#/stats/2025          → stats tab, year 2025
  *   /#/stats/2025/3        → stats tab, year 2025, month 3
@@ -10,9 +11,13 @@
 import { store, setActiveTab, setStatsYear, setStatsMonth } from "../state.js";
 import { updateHeroRoute } from "../map.js";
 
-// Match patterns: /routes, /races, /stats/2025, /stats/2025/3, /route/apple-20230409-080438
+const SHARE_LAB_PATTERN = /^\/share-lab-7k3m9x2p\/?$/;
+
+// Match patterns: /routes, /atlas, /races, /stats/2025, /stats/2025/3, /route/apple-20230409-080438
 const ROUTE_PATTERNS = [
+  { pattern: SHARE_LAB_PATTERN, handler: () => {} },
   { pattern: /^\/routes\/?$/, handler: () => { setActiveTab("routes"); } },
+  { pattern: /^\/atlas\/?$/, handler: () => { setActiveTab("atlas"); } },
   { pattern: /^\/races\/?$/, handler: () => { setActiveTab("races"); } },
   { pattern: /^\/stats\/(\d{4})\/(\d{1,2})\/?$/, handler: (m) => {
     setActiveTab("stats");
@@ -61,6 +66,7 @@ export function navigate(path) {
 }
 
 export function syncUrlFromState() {
+  if (SHARE_LAB_PATTERN.test(parseHash())) return;
   const { activePanelTab, selectedStatsYear, selectedStatsMonth } = store;
   let path;
   if (activePanelTab === "stats") {

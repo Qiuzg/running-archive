@@ -24,11 +24,12 @@ npm run build
 
 ## 页面结构
 
-单页应用，顶部导航切换三个面板：
+单页应用，顶部导航切换四个面板：
 
 | 标签 | 内容 |
 |------|------|
 | **路线** | 路线缩略图列表，支持日常 / 长距离 / 比赛筛选、分批加载和当前筛选路线叠图 |
+| **汇总** | 将超过 10km 的每次跑步轨迹独立归一化，按日常跑 / 半马 / 全马分色排列成路线统计海报 |
 | **比赛** | 全马 / 半马分组卡片，含路线预览、成绩、配速，点击路线直接在地图展示 |
 | **统计** | 年度跑量、月度柱状图、比赛数量、月均跑量、最长距离和每月训练明细 |
 
@@ -47,6 +48,7 @@ route-index.generated.js    # 自动生成：路线预览索引
 city-boundaries.generated.js # 自动生成：比赛城市 GeoJSON 边界
 routes/*.js                 # 每条路线的完整 GPS 坐标与时间序列
 sync/apple-health-import.py # Apple Health 导出解析脚本
+ios/RunningArchiveSync/     # 个人使用的 HealthKit 增量同步 iPhone App
 assets/                     # 头像、Chart.js 等静态资源
 ```
 
@@ -78,11 +80,25 @@ npm run import:apple -- ~/Downloads/apple_health_export
 
 ## 路线隐私
 
-同步脚本会裁剪每条路线首尾若干坐标点，再生成路线预览和完整路线文件。页面会标注隐私半径，完整轨迹与时间序列只在需要时由 API 返回。
+同步脚本会按路线累计距离裁剪首尾各 600 米，再生成路线预览和完整路线文件。页面会标注隐私半径，完整轨迹与时间序列只在需要时由 API 返回。
+
+## iPhone 增量同步与隐藏分享
+
+`ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` 是个人使用的 SwiftUI App。它从 HealthKit 读取未同步跑步、路线、心率、功率与步数，并上传到：
+
+```text
+POST /api/sync/apple-workouts
+```
+
+服务端必须通过 `/etc/running-archive.env` 配置与 App 相同的 `RUNNING_SYNC_TOKEN`。详细的免费签名和真机安装步骤见 `ios/RunningArchiveSync/README.md`。
+
+网站的图片分享工具不会出现在导航中。头像在 4 秒内连续点击 7 次，或访问 `/#/share-lab-7k3m9x2p`，即可选择跑步或比赛并在浏览器本地生成 PNG。提供 1080×1680 精简版和 1080×2800 详细版；详细版包含地图底图、五项指标、三组曲线、头像与网站二维码。切换记录、样式或配色后会自动重新生成，图片配色可以跟随网站，也可以单独选择日间或夜间；HTTPS 环境支持调用手机系统分享。
 
 ## 部署
 
 部署脚本会重新构建前端、同步 `dist/`、`server/`、生成数据和 `routes/` 到服务器，然后在远端备份旧数据库并重新运行迁移。有服务器地址参数时，默认以 `BASE_PATH=/run/` 构建，匹配当前 nginx 的 `https://<host>/run/` 入口。
+
+`ios/` 中的 Xcode 源码会提交到 Git，但不属于网页运行文件，部署脚本不会将它上传到服务器。HealthKit App 安装包由本机 Xcode 直接签名并安装到 iPhone。服务器只需要接收同步数据的 FastAPI 接口，并在 `/etc/running-archive.env` 中配置 `RUNNING_SYNC_TOKEN`；未配置令牌不会影响公开网页，只会禁用手机同步接口。
 
 ```bash
 ./server/deploy.sh user@your-server
