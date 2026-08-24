@@ -60,7 +60,8 @@ def migrate_data():
     # HealthKit records arrive directly on the server and do not exist in the
     # generated JS source. Preserve them while rebuilding the portable data.
     synced_runs = []
-    synced_routes = []
+    synced_routes_by_id = {}
+    synced_races = []
     try:
         existing = SessionLocal()
         for run in existing.query(RunRecord).filter(RunRecord.source == "healthkit").all():
@@ -68,12 +69,35 @@ def migrate_data():
             if run.route_id:
                 route = existing.get(Route, run.route_id)
                 if route:
-                    synced_routes.append({column.name: getattr(route, column.name) for column in Route.__table__.columns})
+                    synced_routes_by_id[route.id] = {
+                        column.name: getattr(route, column.name) for column in Route.__table__.columns
+                    }
+        # Race workouts do not have a duplicate RunRecord. The privacy marker
+        # lets their richer HealthKit route and metrics survive future rebuilds.
+        for route in existing.query(Route).filter(Route.privacy.like("healthkit %")).all():
+            synced_routes_by_id[route.id] = {
+                column.name: getattr(route, column.name) for column in Route.__table__.columns
+            }
+        for race in existing.query(Race).all():
+            route = existing.get(Route, race.route_id) if race.route_id else None
+            if route and route.privacy.startswith("healthkit "):
+                synced_races.append({
+                    "source_run_id": race.source_run_id,
+                    "distance_km": race.distance_km,
+                    "finish_time": race.finish_time,
+                    "pace": race.pace,
+                    "route_id": race.route_id,
+                    "avg_heart_rate": race.avg_heart_rate,
+                    "max_heart_rate": race.max_heart_rate,
+                    "avg_cadence": race.avg_cadence,
+                    "avg_power": race.avg_power,
+                })
         existing.close()
     except Exception:
         # First migration or an older/incompatible database.
         synced_runs = []
-        synced_routes = []
+        synced_routes_by_id = {}
+        synced_races = []
 
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -186,17 +210,34 @@ def migrate_data():
                 for city_name, geojson in boundaries.items():
                     db.add(CityBoundary(city=city_name, geojson=geojson))
 
-            # Restore server-synced records unless the generated import now
-            # contains the same deterministic workout/route id.
+            # HealthKit uses the same deterministic IDs as the full Apple
+            # export. Its denser route/heart-rate data must replace generated
+            # rows with the same ID, rather than being discarded on deploy.
             db.flush()
-            for route_data in synced_routes:
-                if db.get(Route, route_data["id"]) is None:
+            for route_data in synced_routes_by_id.values():
+                route = db.get(Route, route_data["id"])
+                if route is None:
                     db.add(Route(**route_data))
+                else:
+                    for key, value in route_data.items():
+                        setattr(route, key, value)
             db.flush()
+            for race_data in synced_races:
+                race = db.query(Race).filter(Race.source_run_id == race_data["source_run_id"]).first()
+                if race:
+                    for key, value in race_data.items():
+                        if key != "source_run_id":
+                            setattr(race, key, value)
             for run_data in synced_runs:
                 is_migrated_race = db.query(Race).filter(Race.source_run_id == run_data["id"]).first() is not None
-                if db.get(RunRecord, run_data["id"]) is None and not is_migrated_race:
+                if is_migrated_race:
+                    continue
+                run = db.get(RunRecord, run_data["id"])
+                if run is None:
                     db.add(RunRecord(**run_data))
+                else:
+                    for key, value in run_data.items():
+                        setattr(run, key, value)
 
             db.commit()
             print("Migration completed successfully!")

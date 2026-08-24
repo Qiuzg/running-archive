@@ -8,3 +8,5 @@ server/running.db.backup.*
 sync/backups/
 share-output/
 share/
+ios/**/*.xcodeproj/project.xcworkspace/
+ios/**/*.xcodeproj/xcuserdata/

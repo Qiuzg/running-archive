@@ -68,6 +68,24 @@ function sanitizeSeries(data, type) {
   return (data || []).map(value => def.sanitize(Number(value)));
 }
 
+function seriesLabels(elapsed, fallbackElapsed, length) {
+  const exact = (elapsed || []).map(Number);
+  if (exact.length === length && exact.every(Number.isFinite)) {
+    return exact.map(formatElapsed);
+  }
+
+  const fallback = (fallbackElapsed || []).map(Number).filter(Number.isFinite);
+  if (fallback.length === length) return fallback.map(formatElapsed);
+  if (fallback.length >= 2 && length >= 2) {
+    const start = fallback[0];
+    const end = fallback.at(-1);
+    return Array.from({ length }, (_, index) => (
+      formatElapsed(start + (end - start) * index / (length - 1))
+    ));
+  }
+  return Array.from({ length }, (_, index) => formatElapsed(index));
+}
+
 function hasSeriesData(data) {
   return data?.some(value => value != null);
 }
@@ -194,8 +212,9 @@ export async function renderStatsOverlay(routeId) {
       compact: true,
     });
   }
-  if (activity.avg_power && !compact) {
-    stats.push({ label: "平均功率", value: activity.avg_power + " W", compact: false });
+  const averagePower = Number(activity.avg_power);
+  if (Number.isFinite(averagePower) && averagePower > 0 && !compact) {
+    stats.push({ label: "平均功率", value: Math.round(averagePower) + " W", compact: false });
   }
   if (activity.pace) {
     stats.push({ label: compact ? "配速" : "平均配速", value: compact ? activity.pace + "/km" : activity.pace + " /km", compact: true });
@@ -241,6 +260,7 @@ export async function renderStatsOverlay(routeId) {
     const paceData = sanitizeSeries(ts.pace, "pace");
     const elevData = sanitizeSeries(ts.elevation, "elevation");
     const hrData = sanitizeSeries(ts.heartRate, "heartRate");
+    const hrLabels = seriesLabels(ts.heartRateElapsed || ts.heart_rate_elapsed, ts.elapsed, hrData.length);
     const hasPace = hasSeriesData(paceData);
     const hasElev = hasSeriesData(elevData);
     const hasHR = hasSeriesData(hrData);
@@ -263,7 +283,7 @@ export async function renderStatsOverlay(routeId) {
     const { Chart } = await import("chart.js/auto");
     createStatsChart(Chart, "pace", labels, paceData, colors.line, colors.fill);
     createStatsChart(Chart, "elevation", labels, elevData, colors.elevation, "rgba(255,158,74,0.08)");
-    createStatsChart(Chart, "heartRate", labels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
+    createStatsChart(Chart, "heartRate", hrLabels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
 
     bindDesktopToggle();
   } catch (e) {
@@ -322,6 +342,7 @@ function bindMobileToggle(requestId, routeId) {
       const paceData = sanitizeSeries(ts?.pace, "pace");
       const elevData = sanitizeSeries(ts?.elevation, "elevation");
       const hrData = sanitizeSeries(ts?.heartRate, "heartRate");
+      const hrLabels = seriesLabels(ts?.heartRateElapsed || ts?.heart_rate_elapsed, ts?.elapsed, hrData.length);
       const hasPace = hasSeriesData(paceData);
       const hasElev = hasSeriesData(elevData);
       const hasHR = hasSeriesData(hrData);
@@ -343,7 +364,7 @@ function bindMobileToggle(requestId, routeId) {
 
       createStatsChart(Chart, "pace", labels, paceData, colors.line, colors.fill);
       createStatsChart(Chart, "elevation", labels, elevData, colors.elevation, "rgba(255,158,74,0.08)");
-      createStatsChart(Chart, "heartRate", labels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
+      createStatsChart(Chart, "heartRate", hrLabels, hrData, "#ff5e3a", "rgba(255,94,58,0.10)");
 
       toggle.textContent = "⌄";
     } catch (err) {

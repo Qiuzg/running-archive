@@ -84,13 +84,18 @@ npm run import:apple -- ~/Downloads/apple_health_export
 
 ## iPhone 增量同步与隐藏分享
 
-`ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` 是个人使用的 SwiftUI App。它从 HealthKit 读取未同步跑步、路线、心率、功率与步数，并上传到：
+`ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` 是个人使用的 SwiftUI App。它从 HealthKit 读取全部历史跑步、路线、心率、功率与步数，并上传到：
 
 ```text
 POST /api/sync/apple-workouts
 ```
 
 服务端必须通过 `/etc/running-archive.env` 配置与 App 相同的 `RUNNING_SYNC_TOKEN`。详细的免费签名和真机安装步骤见 `ios/RunningArchiveSync/README.md`。
+
+App 默认预选最近 30 条，也支持全选历史记录，并以小批次断点式上传。手机端与
+全量 Apple Health 导入使用相同的确定性记录 ID；历史重传会覆盖同一次跑步，比赛
+会更新原有 Race 记录，因此不会重复累计。HealthKit 提供的高采样率路线和心率数据
+在之后的数据库迁移与网页部署中优先保留。
 
 网站的图片分享工具不会出现在导航中。头像在 4 秒内连续点击 7 次，或访问 `/#/share-lab-7k3m9x2p`，即可选择跑步或比赛并在浏览器本地生成 PNG。提供 1080×1680 精简版和 1080×2800 详细版；详细版包含地图底图、五项指标、三组曲线、头像与网站二维码。切换记录、样式或配色后会自动重新生成，图片配色可以跟随网站，也可以单独选择日间或夜间；HTTPS 环境支持调用手机系统分享。
 

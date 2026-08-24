@@ -11,6 +11,7 @@ final class HealthSyncViewModel: ObservableObject {
 
     private let health = HealthKitService()
     private let api = SyncAPI()
+    private let uploadBatchSize = 10
 
     func authorizeAndRefresh() async {
         await work("正在请求健康数据权限…") {
@@ -18,31 +19,60 @@ final class HealthSyncViewModel: ObservableObject {
             let all = try await health.runningWorkoutPreviews()
             let synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
             previews = all.filter { !synced.contains($0.id) }
-            selectedIDs = Set(previews.map(\.id))
-            status = previews.isEmpty ? "没有发现未同步的跑步。" : "发现 \(previews.count) 条未同步跑步。"
+            selectedIDs = Set(previews.prefix(30).map(\.id))
+            status = previews.isEmpty
+                ? "没有发现未同步的跑步。"
+                : "发现 \(previews.count) 条未同步跑步，已预选最近 \(selectedIDs.count) 条。"
         }
+    }
+
+    func selectAll() {
+        selectedIDs = Set(previews.map(\.id))
+    }
+
+    func clearSelection() {
+        selectedIDs.removeAll()
     }
 
     func syncSelected() async {
         guard !serverURL.isEmpty, !token.isEmpty else { status = "请先填写服务器地址和同步令牌。"; return }
-        let ids = selectedIDs
-        guard !ids.isEmpty else { status = "请至少选择一条跑步。"; return }
+        let selected = previews.filter { selectedIDs.contains($0.id) }
+        guard !selected.isEmpty else { status = "请至少选择一条跑步。"; return }
         UserDefaults.standard.set(serverURL, forKey: "serverURL")
         KeychainStore.write(token, account: "syncToken")
         await work("正在读取路线和心率…") {
-            var payloads: [WorkoutPayload] = []
-            for (index, id) in ids.enumerated() {
-                status = "正在准备第 \(index + 1)/\(ids.count) 条跑步…"
-                if let payload = try await health.payload(forWorkoutID: id) { payloads.append(payload) }
-            }
-            status = "正在上传 \(payloads.count) 条跑步…"
-            let response = try await api.upload(payloads, baseURL: serverURL, token: token)
             var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
-            response.synced.forEach { synced.insert($0.id) }
-            UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
-            previews.removeAll { synced.contains($0.id) }
-            selectedIDs.removeAll()
-            status = "同步完成：\(response.synced.count) 条。"
+            var batch: [WorkoutPayload] = []
+            var completed = 0
+            var skipped = 0
+
+            @MainActor func uploadCurrentBatch() async throws {
+                guard !batch.isEmpty else { return }
+                status = "正在上传第 \(completed + 1)–\(completed + batch.count)/\(selected.count) 条…"
+                let response = try await api.upload(batch, baseURL: serverURL, token: token)
+                let uploadedIDs = Set(response.synced.map(\.id))
+                uploadedIDs.forEach { synced.insert($0) }
+                UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
+                previews.removeAll { uploadedIDs.contains($0.id) }
+                selectedIDs.subtract(uploadedIDs)
+                completed += response.synced.count
+                batch.removeAll(keepingCapacity: true)
+            }
+
+            for (index, workout) in selected.enumerated() {
+                status = "正在准备第 \(index + 1)/\(selected.count) 条跑步…"
+                if let payload = try await health.payload(forWorkoutID: workout.id) {
+                    batch.append(payload)
+                } else {
+                    skipped += 1
+                }
+                if batch.count >= uploadBatchSize || index == selected.count - 1 {
+                    try await uploadCurrentBatch()
+                }
+            }
+            status = skipped == 0
+                ? "同步完成：\(completed) 条。"
+                : "同步完成：\(completed) 条，跳过 \(skipped) 条无法读取的记录。"
         }
     }
 
@@ -66,9 +96,16 @@ struct ContentView: View {
                         .textInputAutocapitalization(.never).keyboardType(.URL)
                     SecureField("同步令牌", text: $model.token)
                 }
-                Section("待同步跑步") {
+                Section("待同步跑步（\(model.previews.count)）") {
                     if model.previews.isEmpty {
                         Text("暂无记录").foregroundStyle(.secondary)
+                    } else {
+                        HStack {
+                            Button("全选") { model.selectAll() }
+                            Spacer()
+                            Button("取消全选") { model.clearSelection() }
+                        }
+                        .buttonStyle(.borderless)
                     }
                     ForEach(model.previews) { workout in
                         Button {

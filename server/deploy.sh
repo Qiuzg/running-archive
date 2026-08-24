@@ -74,6 +74,13 @@ if [ -n "$ECS_HOST" ]; then
         fi
         ./venv/bin/python3 server/migrate.py
 
+        # The API runs as www-data. SQLite needs write access to both the
+        # database file and its parent directory for journal files.
+        chown root:www-data server
+        chmod 775 server
+        chown www-data:www-data server/running.db
+        chmod 660 server/running.db
+
         # Nginx config
         sudo cp server/nginx.conf /etc/nginx/sites-available/running-archive
         sudo ln -sf /etc/nginx/sites-available/running-archive /etc/nginx/sites-enabled/

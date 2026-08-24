@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Route, RunRecord
+from ..models import Race, Route, RunRecord
 from ..schemas import (
     AppleWorkoutSyncRequest,
     AppleWorkoutSyncResponse,
@@ -84,6 +84,7 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     if not run_id or len(run_id) > 128:
         raise HTTPException(status_code=422, detail="Invalid workout id")
 
+    race = db.query(Race).filter(Race.source_run_id == run_id).first()
     points = sorted(data.route_points, key=lambda point: point.timestamp)
     trimmed = trim_route(points, PRIVACY_RADIUS_METERS)
     route_id = f"route-{run_id}" if trimmed else None
@@ -106,17 +107,32 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         if route is None:
             route = Route(id=route_id)
             db.add(route)
-        route.name = data.name
-        route.city = data.city
+        route.name = race.name if race else data.name
+        route.city = data.city or (race.city if race else "")
         route.distance_km = data.distance_km
         route.elevation_gain = elevation_gain(elevations)
         route.point_count = len(coordinates)
-        route.privacy = f"start/end {PRIVACY_RADIUS_METERS}m hidden"
+        route.privacy = f"healthkit start/end {PRIVACY_RADIUS_METERS}m hidden"
         route.hidden_start_end_meters = PRIVACY_RADIUS_METERS
         route.preview_coordinates = sample_coordinates(coordinates)
         route.coordinates = coordinates
         route.elevations = elevations
         route.time_series = time_series
+
+    if race:
+        race.distance_km = data.distance_km
+        race.finish_time = duration_text(data.duration_seconds)
+        race.pace = pace_text(data.distance_km, data.duration_seconds)
+        if route_id:
+            race.route_id = route_id
+        race.avg_heart_rate = data.avg_heart_rate
+        race.max_heart_rate = data.max_heart_rate
+        race.avg_cadence = data.avg_cadence
+        race.avg_power = data.avg_power
+        duplicate_run = db.get(RunRecord, run_id)
+        if duplicate_run:
+            db.delete(duplicate_run)
+        return AppleWorkoutSyncResult(id=run_id, status="updated", route_points=len(trimmed))
 
     run = db.get(RunRecord, run_id)
     status = "updated" if run else "created"
@@ -130,7 +146,8 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     run.duration = duration_text(data.duration_seconds)
     run.finish_time = run.duration
     run.pace = pace_text(data.distance_km, data.duration_seconds)
-    run.route_id = route_id
+    if route_id:
+        run.route_id = route_id
     run.avg_heart_rate = data.avg_heart_rate
     run.max_heart_rate = data.max_heart_rate
     run.avg_cadence = data.avg_cadence

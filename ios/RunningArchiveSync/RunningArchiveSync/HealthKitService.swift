@@ -16,6 +16,7 @@ enum HealthSyncError: LocalizedError {
 
 final class HealthKitService {
     private let store = HKHealthStore()
+    private var workoutByID: [String: HKWorkout] = [:]
 
     private var heartRateType: HKQuantityType {
         get throws {
@@ -35,8 +36,12 @@ final class HealthKitService {
         try await store.requestAuthorization(toShare: [], read: readTypes)
     }
 
-    func runningWorkoutPreviews(limit: Int = 30) async throws -> [WorkoutPreview] {
+    func runningWorkoutPreviews(limit: Int = HKObjectQueryNoLimit) async throws -> [WorkoutPreview] {
         let workouts = try await runningWorkouts(limit: limit)
+        workoutByID.removeAll(keepingCapacity: true)
+        for workout in workouts {
+            workoutByID[workoutID(workout)] = workout
+        }
         return workouts.map {
             WorkoutPreview(id: workoutID($0), date: $0.startDate,
                            distanceKm: workoutDistanceKm($0), duration: $0.duration)
@@ -44,7 +49,15 @@ final class HealthKitService {
     }
 
     func payload(forWorkoutID id: String) async throws -> WorkoutPayload? {
-        guard let workout = try await runningWorkouts(limit: 100).first(where: { workoutID($0) == id }) else { return nil }
+        let workout: HKWorkout
+        if let cached = workoutByID[id] {
+            workout = cached
+        } else {
+            guard let found = try await runningWorkouts(limit: HKObjectQueryNoLimit)
+                .first(where: { workoutID($0) == id }) else { return nil }
+            workoutByID[id] = found
+            workout = found
+        }
         async let locations = routeLocations(for: workout)
         async let heartSamples = quantitySamples(type: try heartRateType, workout: workout)
         async let powerSamples = powerSamples(for: workout)
@@ -150,7 +163,9 @@ final class HealthKitService {
     private func workoutID(_ workout: HKWorkout) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
+        let workoutTimeZone = (workout.metadata?[HKMetadataKeyTimeZone] as? String)
+            .flatMap(TimeZone.init(identifier:))
+        formatter.timeZone = workoutTimeZone ?? .current
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return "apple-\(formatter.string(from: workout.startDate))"
     }
