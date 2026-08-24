@@ -84,6 +84,10 @@ if [ -n "$ECS_HOST" ]; then
         # Nginx config
         sudo cp server/nginx.conf /etc/nginx/sites-available/running-archive
         sudo ln -sf /etc/nginx/sites-available/running-archive /etc/nginx/sites-enabled/
+        # The current production entry point proxies /run/ to port 8080. Keep
+        # its inner API body limit in version control as well; otherwise the
+        # default 1 MB Nginx limit rejects a single detailed HealthKit workout.
+        sudo cp server/nginx-subpath.conf /etc/nginx/conf.d/running-archive.conf
         sudo nginx -t && sudo systemctl reload nginx
 
         # Systemd service

@@ -103,6 +103,10 @@ App 默认预选最近 30 条，也支持全选历史记录，并逐条断点式
 
 部署脚本会重新构建前端、同步 `dist/`、`server/`、生成数据和 `routes/` 到服务器，然后在远端备份旧数据库并重新运行迁移。有服务器地址参数时，默认以 `BASE_PATH=/run/` 构建，匹配当前 nginx 的 `https://<host>/run/` 入口。
 
+生产环境的 `/run/` 外层代理和 8080 内层 API 都必须允许较大的 HealthKit 请求体。
+宿主机外层 `/run/` location 需要设置 `client_max_body_size 25m`；部署脚本会同步内层
+`server/nginx-subpath.conf`，避免它回退到 Nginx 默认的 1 MB 限制。
+
 `ios/` 中的 Xcode 源码会提交到 Git，但不属于网页运行文件，部署脚本不会将它上传到服务器。HealthKit App 安装包由本机 Xcode 直接签名并安装到 iPhone。服务器只需要接收同步数据的 FastAPI 接口，并在 `/etc/running-archive.env` 中配置 `RUNNING_SYNC_TOKEN`；未配置令牌不会影响公开网页，只会禁用手机同步接口。
 
 ```bash
