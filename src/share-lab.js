@@ -244,10 +244,12 @@ function colorsFor(theme) {
     background: "#080c12", card: "#101722", ink: "#f0f3f8", dim: "#8896a8",
     line: "rgba(255,255,255,.09)", accent: "#ff6b48", route: "#55c8ff",
     routeShadow: "rgba(8,12,18,.84)", start: "#2dd4a8", finish: "#ff5e3a",
+    detailedPanel: "rgba(16,23,34,.76)", detailedFooter: "rgba(16,23,34,.78)",
   } : {
     background: "#f3f6f9", card: "#ffffff", ink: "#1a1d24", dim: "#6b7280",
     line: "rgba(20,28,40,.09)", accent: "#e04a2a", route: "#2379e8",
     routeShadow: "rgba(255,255,255,.94)", start: "#10b981", finish: "#e04a2a",
+    detailedPanel: "rgba(255,255,255,.78)", detailedFooter: "rgba(255,255,255,.82)",
   };
 }
 
@@ -395,14 +397,14 @@ function detailedMapTransform(coordinates) {
 async function drawDetailedMap(ctx, coordinates, theme) {
   const transform = detailedMapTransform(coordinates);
   ctx.fillStyle = theme === "dark" ? "#111822" : "#edf1f4";
-  ctx.fillRect(0, 0, CARD_WIDTH, 1710);
+  ctx.fillRect(0, 0, CARD_WIDTH, DETAILED_CARD_HEIGHT);
   if (!transform.points.length) return transform;
 
   const tileSize = 256;
   const worldLeft = transform.centerX - 540;
   const worldRight = transform.centerX + 540;
   const worldTop = transform.centerY - 830;
-  const worldBottom = transform.centerY + 880;
+  const worldBottom = worldTop + DETAILED_CARD_HEIGHT;
   const maxTile = 2 ** transform.zoom;
   const tileJobs = [];
   for (let tileX = Math.floor(worldLeft / tileSize); tileX <= Math.floor(worldRight / tileSize); tileX += 1) {
@@ -454,7 +456,7 @@ function drawProjectedRoute(ctx, transform, c) {
 
 function drawDetailedChart(ctx, label, values, y, color, c, reverse = false, unit = "") {
   roundedRect(ctx, 54, y, 972, 174, 0);
-  ctx.fillStyle = c.card;
+  ctx.fillStyle = c.detailedPanel;
   ctx.fill();
   ctx.fillStyle = c.ink;
   ctx.font = "800 25px -apple-system, BlinkMacSystemFont, sans-serif";
@@ -523,13 +525,15 @@ async function drawDetailedCard(canvas, run, route, title, requestedTheme) {
   ]);
   const transform = await drawDetailedMap(ctx, coordinates, actualTheme);
 
-  let fade = ctx.createLinearGradient(0, 0, 0, 1710);
+  let fade = ctx.createLinearGradient(0, 0, 0, DETAILED_CARD_HEIGHT);
   fade.addColorStop(0, actualTheme === "dark" ? "rgba(8,12,18,.91)" : "rgba(243,246,249,.92)");
-  fade.addColorStop(.18, actualTheme === "dark" ? "rgba(8,12,18,.2)" : "rgba(243,246,249,.16)");
-  fade.addColorStop(.72, "rgba(0,0,0,0)");
-  fade.addColorStop(1, c.background);
+  fade.addColorStop(.14, actualTheme === "dark" ? "rgba(8,12,18,.18)" : "rgba(243,246,249,.14)");
+  fade.addColorStop(.5, actualTheme === "dark" ? "rgba(8,12,18,.06)" : "rgba(243,246,249,.04)");
+  fade.addColorStop(.64, actualTheme === "dark" ? "rgba(8,12,18,.18)" : "rgba(243,246,249,.18)");
+  fade.addColorStop(.82, actualTheme === "dark" ? "rgba(8,12,18,.3)" : "rgba(243,246,249,.28)");
+  fade.addColorStop(1, actualTheme === "dark" ? "rgba(8,12,18,.42)" : "rgba(243,246,249,.38)");
   ctx.fillStyle = fade;
-  ctx.fillRect(0, 0, CARD_WIDTH, 1710);
+  ctx.fillRect(0, 0, CARD_WIDTH, DETAILED_CARD_HEIGHT);
   drawProjectedRoute(ctx, transform, c);
 
   const [avatar, qr] = await assets;
@@ -580,7 +584,7 @@ async function drawDetailedCard(canvas, run, route, title, requestedTheme) {
   });
 
   roundedRect(ctx, 54, 1770, 972, 574, 24);
-  ctx.fillStyle = c.card;
+  ctx.fillStyle = c.detailedPanel;
   ctx.fill();
   ctx.fillStyle = c.ink;
   ctx.font = "850 30px -apple-system, BlinkMacSystemFont, sans-serif";
@@ -596,7 +600,7 @@ async function drawDetailedCard(canvas, run, route, title, requestedTheme) {
   drawDetailedChart(ctx, "心率", ts.heartRate || ts.heart_rate, 2189, c.accent, c, false, "");
 
   roundedRect(ctx, 0, 2418, CARD_WIDTH, 382, 0);
-  ctx.fillStyle = c.card;
+  ctx.fillStyle = c.detailedFooter;
   ctx.fill();
   if (qr) {
     roundedRect(ctx, 62, 2502, 206, 206, 24);
