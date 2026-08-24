@@ -15,6 +15,11 @@ enum HealthSyncError: LocalizedError {
 }
 
 final class HealthKitService {
+    private struct QuantitySeriesPoint {
+        let quantity: HKQuantity
+        let dateInterval: DateInterval
+    }
+
     private let store = HKHealthStore()
     private var workoutByID: [String: HKWorkout] = [:]
 
@@ -59,16 +64,18 @@ final class HealthKitService {
             workout = found
         }
         async let locations = routeLocations(for: workout)
-        async let heartSamples = quantitySamples(type: try heartRateType, workout: workout)
+        let heartType = try heartRateType
+        async let heartSamples = quantitySeriesPoints(type: heartType, workout: workout)
         async let powerSamples = powerSamples(for: workout)
         async let stepCount = stepCount(for: workout)
         let (route, heart, power, steps) = try await (locations, heartSamples, powerSamples, stepCount)
         let heartUnit = HKUnit.count().unitDivided(by: .minute())
         let heartValues = heart.map { $0.quantity.doubleValue(for: heartUnit) }
-        let heartPayload = heart.map {
-            MetricSamplePayload(elapsedSeconds: max(0, $0.startDate.timeIntervalSince(workout.startDate)),
-                                value: $0.quantity.doubleValue(for: heartUnit))
-        }
+        let heartPayload = metricPayload(
+            from: heart,
+            unit: heartUnit,
+            workoutStart: workout.startDate
+        )
         let points = route.map {
             RoutePointPayload(timestamp: $0.timestamp, latitude: $0.coordinate.latitude,
                               longitude: $0.coordinate.longitude, altitude: $0.altitude,
@@ -76,10 +83,16 @@ final class HealthKitService {
         }
         let avgPower = power.isEmpty ? nil : power.reduce(0, +) / Double(power.count)
         let cadence = steps.map { $0 / max(workout.duration / 60, 1) }
+        let heartStatistics = workout.statistics(for: heartType)
+        let averageHeartRate = heartStatistics?.averageQuantity()?.doubleValue(for: heartUnit)
+            ?? average(heartValues)
+        let maximumHeartRate = heartStatistics?.maximumQuantity()?.doubleValue(for: heartUnit)
+            ?? heartValues.max()
         return WorkoutPayload(
             id: workoutID(workout), name: "户外跑步", startDate: workout.startDate,
             distanceKm: workoutDistanceKm(workout), durationSeconds: workout.duration, city: "",
-            avgHeartRate: average(heartValues).map(Int.init), maxHeartRate: heartValues.max().map(Int.init),
+            avgHeartRate: averageHeartRate.map { Int($0.rounded()) },
+            maxHeartRate: maximumHeartRate.map { Int($0.rounded()) },
             avgCadence: cadence, avgPower: avgPower, routePoints: points,
             heartRateSamples: heartPayload
         )
@@ -139,29 +152,43 @@ final class HealthKitService {
         return all.sorted { $0.timestamp < $1.timestamp }
     }
 
-    private func quantitySamples(type: HKQuantityType, workout: HKWorkout) async throws -> [HKQuantitySample] {
+    private func quantitySeriesPoints(type: HKQuantityType, workout: HKWorkout) async throws -> [QuantitySeriesPoint] {
         try await withCheckedThrowingContinuation { continuation in
-            // Older Apple Watch workouts do not always associate every quantity sample
-            // with the HKWorkout object. Querying the workout's exact time window keeps
-            // the historical heart-rate and power series complete.
-            let predicate = samplePredicate(for: workout)
-            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
-                                      sortDescriptors: [sort]) { _, samples, error in
+            var collected: [QuantitySeriesPoint] = []
+            var resumed = false
+            let query = HKQuantitySeriesSampleQuery(
+                quantityType: type,
+                predicate: samplePredicate(for: workout)
+            ) { _, quantity, interval, _, done, error in
+                if resumed { return }
                 if let error {
-                    if HealthKitService.isNoData(error) { continuation.resume(returning: []) }
-                    else { continuation.resume(throwing: error) }
+                    resumed = true
+                    if HealthKitService.isNoData(error) {
+                        continuation.resume(returning: [])
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                     return
                 }
-                continuation.resume(returning: samples as? [HKQuantitySample] ?? [])
+                if let quantity, let interval {
+                    collected.append(QuantitySeriesPoint(quantity: quantity, dateInterval: interval))
+                }
+                if done {
+                    resumed = true
+                    continuation.resume(returning: collected.sorted {
+                        $0.dateInterval.start < $1.dateInterval.start
+                    })
+                }
             }
+            query.orderByQuantitySampleStartDate = true
             store.execute(query)
         }
     }
 
     private func powerSamples(for workout: HKWorkout) async throws -> [Double] {
         guard let type = HKQuantityType.quantityType(forIdentifier: .runningPower) else { return [] }
-        return try await quantitySamples(type: type, workout: workout).map { $0.quantity.doubleValue(for: .watt()) }
+        return try await quantitySeriesPoints(type: type, workout: workout)
+            .map { $0.quantity.doubleValue(for: .watt()) }
     }
 
     private func stepCount(for workout: HKWorkout) async throws -> Double? {
@@ -186,6 +213,31 @@ final class HealthKitService {
             end: workout.endDate,
             options: [.strictStartDate, .strictEndDate]
         )
+    }
+
+    private func metricPayload(
+        from points: [QuantitySeriesPoint],
+        unit: HKUnit,
+        workoutStart: Date
+    ) -> [MetricSamplePayload] {
+        var payload: [MetricSamplePayload] = []
+        for point in points {
+            let value = point.quantity.doubleValue(for: unit)
+            payload.append(MetricSamplePayload(
+                elapsedSeconds: max(0, point.dateInterval.start.timeIntervalSince(workoutStart)),
+                value: value
+            ))
+            // Condensed HealthKit values can represent a continuous interval.
+            // Preserve both ends so the chart stays flat over that interval
+            // instead of drawing a misleading diagonal between containers.
+            if point.dateInterval.duration > 0.1 {
+                payload.append(MetricSamplePayload(
+                    elapsedSeconds: max(0, point.dateInterval.end.timeIntervalSince(workoutStart)),
+                    value: value
+                ))
+            }
+        }
+        return payload.sorted { $0.elapsedSeconds < $1.elapsedSeconds }
     }
 
     private func workoutDistanceKm(_ workout: HKWorkout) -> Double {

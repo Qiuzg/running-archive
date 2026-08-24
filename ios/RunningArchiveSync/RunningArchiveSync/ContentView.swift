@@ -11,7 +11,7 @@ final class HealthSyncViewModel: ObservableObject {
 
     private let health = HealthKitService()
     private let api = SyncAPI()
-    private let heartRateResyncMigrationKey = "heartRateTimeWindowResyncV1"
+    private let heartRateResyncMigrationKey = "heartRateCondensedSeriesResyncV2"
 
     func authorizeAndRefresh() async {
         await work("正在请求健康数据权限…") {
@@ -61,6 +61,7 @@ final class HealthSyncViewModel: ObservableObject {
             var created = 0
             var updated = 0
             var skipped = 0
+            var heartRatePoints = 0
             var failures: [String] = []
 
             for (index, workout) in selected.enumerated() {
@@ -70,7 +71,8 @@ final class HealthSyncViewModel: ObservableObject {
                         skipped += 1
                         continue
                     }
-                    status = "正在上传第 \(index + 1)/\(selected.count) 条跑步…"
+                    heartRatePoints += payload.heartRateSamples.count
+                    status = "正在上传第 \(index + 1)/\(selected.count) 条跑步（心率 \(payload.heartRateSamples.count) 点）…"
                     let response = try await api.upload([payload], baseURL: serverURL, token: token)
                     let uploadedIDs = Set(response.synced.map(\.id))
                     uploadedIDs.forEach { synced.insert($0) }
@@ -85,7 +87,7 @@ final class HealthSyncViewModel: ObservableObject {
                     failures.append("\(date)：\(error.localizedDescription)")
                 }
             }
-            let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)）"
+            let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)），读取心率 \(heartRatePoints) 点"
             if let firstFailure = failures.first {
                 status = "\(result)，失败 \(failures.count) 条；首个错误：\(firstFailure)"
             } else if skipped > 0 {
