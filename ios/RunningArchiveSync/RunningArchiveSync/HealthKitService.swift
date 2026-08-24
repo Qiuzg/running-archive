@@ -141,7 +141,10 @@ final class HealthKitService {
 
     private func quantitySamples(type: HKQuantityType, workout: HKWorkout) async throws -> [HKQuantitySample] {
         try await withCheckedThrowingContinuation { continuation in
-            let predicate = HKQuery.predicateForObjects(from: workout)
+            // Older Apple Watch workouts do not always associate every quantity sample
+            // with the HKWorkout object. Querying the workout's exact time window keeps
+            // the historical heart-rate and power series complete.
+            let predicate = samplePredicate(for: workout)
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
                                       sortDescriptors: [sort]) { _, samples, error in
@@ -164,7 +167,7 @@ final class HealthKitService {
     private func stepCount(for workout: HKWorkout) async throws -> Double? {
         guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return nil }
         return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: HKQuery.predicateForObjects(from: workout),
+            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: samplePredicate(for: workout),
                                           options: .cumulativeSum) { _, result, error in
                 if let error {
                     if HealthKitService.isNoData(error) { continuation.resume(returning: nil) }
@@ -175,6 +178,14 @@ final class HealthKitService {
             }
             store.execute(query)
         }
+    }
+
+    private func samplePredicate(for workout: HKWorkout) -> NSPredicate {
+        HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: [.strictStartDate, .strictEndDate]
+        )
     }
 
     private func workoutDistanceKm(_ workout: HKWorkout) -> Double {

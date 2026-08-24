@@ -11,17 +11,33 @@ final class HealthSyncViewModel: ObservableObject {
 
     private let health = HealthKitService()
     private let api = SyncAPI()
+    private let heartRateResyncMigrationKey = "heartRateTimeWindowResyncV1"
 
     func authorizeAndRefresh() async {
         await work("正在请求健康数据权限…") {
             try await health.requestAuthorization()
             let all = try await health.runningWorkoutPreviews()
-            let synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
+            var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
+            var retryCount = 0
+            if !UserDefaults.standard.bool(forKey: heartRateResyncMigrationKey) {
+                let cutoff = Calendar.current.date(
+                    from: DateComponents(year: 2026, month: 4, day: 26)
+                ) ?? .distantPast
+                let retryIDs = Set(all.filter { $0.date < cutoff }.map(\.id))
+                retryCount = synced.intersection(retryIDs).count
+                synced.subtract(retryIDs)
+                UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
+                UserDefaults.standard.set(true, forKey: heartRateResyncMigrationKey)
+            }
             previews = all.filter { !synced.contains($0.id) }
             selectedIDs = Set(previews.prefix(30).map(\.id))
-            status = previews.isEmpty
-                ? "没有发现未同步的跑步。"
-                : "发现 \(previews.count) 条未同步跑步，已预选最近 \(selectedIDs.count) 条。"
+            if previews.isEmpty {
+                status = "没有发现未同步的跑步。"
+            } else if retryCount > 0 {
+                status = "已将 \(retryCount) 条 2026-04-25 及以前的记录列为待重传，已预选最近 \(selectedIDs.count) 条。"
+            } else {
+                status = "发现 \(previews.count) 条未同步跑步，已预选最近 \(selectedIDs.count) 条。"
+            }
         }
     }
 
