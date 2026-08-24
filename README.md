@@ -92,7 +92,7 @@ POST /api/sync/apple-workouts
 
 服务端必须通过 `/etc/running-archive.env` 配置与 App 相同的 `RUNNING_SYNC_TOKEN`。详细的免费签名和真机安装步骤见 `ios/RunningArchiveSync/README.md`。
 
-App 默认预选最近 30 条，也支持全选历史记录，并以小批次断点式上传。手机端与
+App 默认预选最近 30 条，也支持全选历史记录，并逐条断点式上传。手机端与
 全量 Apple Health 导入使用相同的确定性记录 ID；历史重传会覆盖同一次跑步，比赛
 会更新原有 Race 记录，因此不会重复累计。HealthKit 提供的高采样率路线和心率数据
 在之后的数据库迁移与网页部署中优先保留。

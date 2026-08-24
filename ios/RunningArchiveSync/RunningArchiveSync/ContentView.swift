@@ -11,7 +11,10 @@ final class HealthSyncViewModel: ObservableObject {
 
     private let health = HealthKitService()
     private let api = SyncAPI()
-    private let uploadBatchSize = 10
+    // A single workout can contain several megabytes of GPS and heart-rate
+    // samples. Keep multi-selection in the UI, but upload one workout per
+    // request so long runs cannot make the whole selection exceed Nginx limits.
+    private let uploadBatchSize = 1
 
     func authorizeAndRefresh() async {
         await work("正在请求健康数据权限…") {
@@ -44,6 +47,8 @@ final class HealthSyncViewModel: ObservableObject {
             var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
             var batch: [WorkoutPayload] = []
             var completed = 0
+            var created = 0
+            var updated = 0
             var skipped = 0
 
             @MainActor func uploadCurrentBatch() async throws {
@@ -56,6 +61,8 @@ final class HealthSyncViewModel: ObservableObject {
                 previews.removeAll { uploadedIDs.contains($0.id) }
                 selectedIDs.subtract(uploadedIDs)
                 completed += response.synced.count
+                created += response.synced.filter { $0.status == "created" }.count
+                updated += response.synced.filter { $0.status == "updated" }.count
                 batch.removeAll(keepingCapacity: true)
             }
 
@@ -70,9 +77,10 @@ final class HealthSyncViewModel: ObservableObject {
                     try await uploadCurrentBatch()
                 }
             }
+            let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)）"
             status = skipped == 0
-                ? "同步完成：\(completed) 条。"
-                : "同步完成：\(completed) 条，跳过 \(skipped) 条无法读取的记录。"
+                ? result
+                : "\(result)，跳过 \(skipped) 条无法读取的记录。"
         }
     }
 

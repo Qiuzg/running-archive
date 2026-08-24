@@ -79,6 +79,20 @@ def pace_text(distance_km: float, duration_seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
+def workout_date(run_id: str, start_date: datetime):
+    """Use the local date embedded in the deterministic Apple workout ID.
+
+    JSON encodes Date as UTC, so using start_date.date() directly can move an
+    early-morning workout to the previous day in east-Asian time zones.
+    """
+    if run_id.startswith("apple-"):
+        try:
+            return datetime.strptime(run_id.removeprefix("apple-"), "%Y%m%d-%H%M%S").date()
+        except ValueError:
+            pass
+    return start_date.date()
+
+
 def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     run_id = data.id.strip()
     if not run_id or len(run_id) > 128:
@@ -140,7 +154,7 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         run = RunRecord(id=run_id)
         db.add(run)
     run.name = data.name
-    run.date = data.start_date.date()
+    run.date = workout_date(run_id, data.start_date)
     run.city = data.city
     run.distance_km = data.distance_km
     run.duration = duration_text(data.duration_seconds)
