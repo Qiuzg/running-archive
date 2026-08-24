@@ -101,15 +101,18 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     race = db.query(Race).filter(Race.source_run_id == run_id).first()
     points = sorted(data.route_points, key=lambda point: point.timestamp)
     trimmed = trim_route(points, PRIVACY_RADIUS_METERS)
-    route_id = f"route-{run_id}" if trimmed else None
-    if route_id:
+    heart_rate = [round(sample.value) for sample in data.heart_rate_samples]
+    heart_elapsed = [round(sample.elapsed_seconds, 1) for sample in data.heart_rate_samples]
+    candidate_route_id = race.route_id if race and race.route_id else f"route-{run_id}"
+    route = db.get(Route, candidate_route_id)
+    route_id = None
+    if trimmed:
+        route_id = candidate_route_id
         coordinates = [[point.longitude, point.latitude] for point in trimmed]
         elevations = [round(point.altitude, 1) for point in trimmed]
         start_time = data.start_date
         elapsed = [max(0, round((point.timestamp - start_time).total_seconds(), 1)) for point in trimmed]
         pace = [round(1000 / point.speed_mps / 60, 2) if point.speed_mps and point.speed_mps > 0.4 else None for point in trimmed]
-        heart_rate = [round(sample.value) for sample in data.heart_rate_samples]
-        heart_elapsed = [round(sample.elapsed_seconds, 1) for sample in data.heart_rate_samples]
         time_series = {
             "elapsed": elapsed,
             "pace": pace,
@@ -117,12 +120,14 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
             "heartRate": heart_rate,
             "heartRateElapsed": heart_elapsed,
         }
-        route = db.get(Route, route_id)
         if route is None:
             route = Route(id=route_id)
             db.add(route)
-        route.name = race.name if race else data.name
-        route.city = data.city or (race.city if race else "")
+        if race:
+            route.name = race.name
+        elif not route.name:
+            route.name = data.name
+        route.city = data.city or (race.city if race else route.city or "")
         route.distance_km = data.distance_km
         route.elevation_gain = elevation_gain(elevations)
         route.point_count = len(coordinates)
@@ -132,6 +137,17 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         route.coordinates = coordinates
         route.elevations = elevations
         route.time_series = time_series
+    elif route is not None and heart_rate:
+        # Some old HealthKit workouts retain heart-rate samples after their
+        # route series has become unavailable. Merge the denser heart data into
+        # the generated route without erasing its coordinates or pace data.
+        route_id = route.id
+        time_series = dict(route.time_series or {})
+        time_series["heartRate"] = heart_rate
+        time_series["heartRateElapsed"] = heart_elapsed
+        route.time_series = time_series
+        if not (route.privacy or "").startswith("healthkit "):
+            route.privacy = f"healthkit {(route.privacy or '').strip()}".strip()
 
     if race:
         race.distance_km = data.distance_km
@@ -139,10 +155,14 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         race.pace = pace_text(data.distance_km, data.duration_seconds)
         if route_id:
             race.route_id = route_id
-        race.avg_heart_rate = data.avg_heart_rate
-        race.max_heart_rate = data.max_heart_rate
-        race.avg_cadence = data.avg_cadence
-        race.avg_power = data.avg_power
+        for field, value in (
+            ("avg_heart_rate", data.avg_heart_rate),
+            ("max_heart_rate", data.max_heart_rate),
+            ("avg_cadence", data.avg_cadence),
+            ("avg_power", data.avg_power),
+        ):
+            if value is not None:
+                setattr(race, field, value)
         duplicate_run = db.get(RunRecord, run_id)
         if duplicate_run:
             db.delete(duplicate_run)
@@ -153,19 +173,25 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     if run is None:
         run = RunRecord(id=run_id)
         db.add(run)
-    run.name = data.name
+    if not run.name:
+        run.name = data.name
     run.date = workout_date(run_id, data.start_date)
-    run.city = data.city
+    if data.city:
+        run.city = data.city
     run.distance_km = data.distance_km
     run.duration = duration_text(data.duration_seconds)
     run.finish_time = run.duration
     run.pace = pace_text(data.distance_km, data.duration_seconds)
     if route_id:
         run.route_id = route_id
-    run.avg_heart_rate = data.avg_heart_rate
-    run.max_heart_rate = data.max_heart_rate
-    run.avg_cadence = data.avg_cadence
-    run.avg_power = data.avg_power
+    for field, value in (
+        ("avg_heart_rate", data.avg_heart_rate),
+        ("max_heart_rate", data.max_heart_rate),
+        ("avg_cadence", data.avg_cadence),
+        ("avg_power", data.avg_power),
+    ):
+        if value is not None:
+            setattr(run, field, value)
     run.source = "healthkit"
     return AppleWorkoutSyncResult(id=run_id, status=status, route_points=len(trimmed))
 

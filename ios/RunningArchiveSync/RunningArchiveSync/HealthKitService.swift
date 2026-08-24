@@ -91,7 +91,11 @@ final class HealthKitService {
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: limit,
                                       sortDescriptors: [sort]) { _, samples, error in
-                if let error { continuation.resume(throwing: error); return }
+                if let error {
+                    if HealthKitService.isNoData(error) { continuation.resume(returning: []) }
+                    else { continuation.resume(throwing: error) }
+                    return
+                }
                 continuation.resume(returning: samples as? [HKWorkout] ?? [])
             }
             store.execute(query)
@@ -103,7 +107,11 @@ final class HealthKitService {
             let predicate = HKQuery.predicateForObjects(from: workout)
             let query = HKSampleQuery(sampleType: HKSeriesType.workoutRoute(), predicate: predicate,
                                       limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
-                if let error { continuation.resume(throwing: error); return }
+                if let error {
+                    if HealthKitService.isNoData(error) { continuation.resume(returning: []) }
+                    else { continuation.resume(throwing: error) }
+                    return
+                }
                 continuation.resume(returning: samples as? [HKWorkoutRoute] ?? [])
             }
             store.execute(query)
@@ -115,7 +123,12 @@ final class HealthKitService {
                 var resumed = false
                 let query = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
                     if resumed { return }
-                    if let error { resumed = true; continuation.resume(throwing: error); return }
+                    if let error {
+                        resumed = true
+                        if HealthKitService.isNoData(error) { continuation.resume(returning: collected) }
+                        else { continuation.resume(throwing: error) }
+                        return
+                    }
                     collected.append(contentsOf: locations ?? [])
                     if done { resumed = true; continuation.resume(returning: collected) }
                 }
@@ -132,7 +145,11 @@ final class HealthKitService {
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
                                       sortDescriptors: [sort]) { _, samples, error in
-                if let error { continuation.resume(throwing: error); return }
+                if let error {
+                    if HealthKitService.isNoData(error) { continuation.resume(returning: []) }
+                    else { continuation.resume(throwing: error) }
+                    return
+                }
                 continuation.resume(returning: samples as? [HKQuantitySample] ?? [])
             }
             store.execute(query)
@@ -149,7 +166,11 @@ final class HealthKitService {
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: HKQuery.predicateForObjects(from: workout),
                                           options: .cumulativeSum) { _, result, error in
-                if let error { continuation.resume(throwing: error); return }
+                if let error {
+                    if HealthKitService.isNoData(error) { continuation.resume(returning: nil) }
+                    else { continuation.resume(throwing: error) }
+                    return
+                }
                 continuation.resume(returning: result?.sumQuantity()?.doubleValue(for: .count()))
             }
             store.execute(query)
@@ -172,5 +193,10 @@ final class HealthKitService {
 
     private func average(_ values: [Double]) -> Double? {
         values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+    }
+
+    private static func isNoData(_ error: Error) -> Bool {
+        let value = error as NSError
+        return value.domain == HKErrorDomain && value.code == HKError.Code.errorNoData.rawValue
     }
 }

@@ -11,10 +11,6 @@ final class HealthSyncViewModel: ObservableObject {
 
     private let health = HealthKitService()
     private let api = SyncAPI()
-    // A single workout can contain several megabytes of GPS and heart-rate
-    // samples. Keep multi-selection in the UI, but upload one workout per
-    // request so long runs cannot make the whole selection exceed Nginx limits.
-    private let uploadBatchSize = 1
 
     func authorizeAndRefresh() async {
         await work("正在请求健康数据权限…") {
@@ -45,42 +41,42 @@ final class HealthSyncViewModel: ObservableObject {
         KeychainStore.write(token, account: "syncToken")
         await work("正在读取路线和心率…") {
             var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
-            var batch: [WorkoutPayload] = []
             var completed = 0
             var created = 0
             var updated = 0
             var skipped = 0
-
-            @MainActor func uploadCurrentBatch() async throws {
-                guard !batch.isEmpty else { return }
-                status = "正在上传第 \(completed + 1)–\(completed + batch.count)/\(selected.count) 条…"
-                let response = try await api.upload(batch, baseURL: serverURL, token: token)
-                let uploadedIDs = Set(response.synced.map(\.id))
-                uploadedIDs.forEach { synced.insert($0) }
-                UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
-                previews.removeAll { uploadedIDs.contains($0.id) }
-                selectedIDs.subtract(uploadedIDs)
-                completed += response.synced.count
-                created += response.synced.filter { $0.status == "created" }.count
-                updated += response.synced.filter { $0.status == "updated" }.count
-                batch.removeAll(keepingCapacity: true)
-            }
+            var failures: [String] = []
 
             for (index, workout) in selected.enumerated() {
-                status = "正在准备第 \(index + 1)/\(selected.count) 条跑步…"
-                if let payload = try await health.payload(forWorkoutID: workout.id) {
-                    batch.append(payload)
-                } else {
-                    skipped += 1
-                }
-                if batch.count >= uploadBatchSize || index == selected.count - 1 {
-                    try await uploadCurrentBatch()
+                do {
+                    status = "正在准备第 \(index + 1)/\(selected.count) 条跑步…"
+                    guard let payload = try await health.payload(forWorkoutID: workout.id) else {
+                        skipped += 1
+                        continue
+                    }
+                    status = "正在上传第 \(index + 1)/\(selected.count) 条跑步…"
+                    let response = try await api.upload([payload], baseURL: serverURL, token: token)
+                    let uploadedIDs = Set(response.synced.map(\.id))
+                    uploadedIDs.forEach { synced.insert($0) }
+                    UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
+                    previews.removeAll { uploadedIDs.contains($0.id) }
+                    selectedIDs.subtract(uploadedIDs)
+                    completed += response.synced.count
+                    created += response.synced.filter { $0.status == "created" }.count
+                    updated += response.synced.filter { $0.status == "updated" }.count
+                } catch {
+                    let date = workout.date.formatted(date: .numeric, time: .omitted)
+                    failures.append("\(date)：\(error.localizedDescription)")
                 }
             }
             let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)）"
-            status = skipped == 0
-                ? result
-                : "\(result)，跳过 \(skipped) 条无法读取的记录。"
+            if let firstFailure = failures.first {
+                status = "\(result)，失败 \(failures.count) 条；首个错误：\(firstFailure)"
+            } else if skipped > 0 {
+                status = "\(result)，跳过 \(skipped) 条无法读取的记录。"
+            } else {
+                status = result
+            }
         }
     }
 
