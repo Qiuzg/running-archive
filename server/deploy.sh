@@ -32,6 +32,7 @@ if [ -n "$ECS_HOST" ]; then
         "$ECS_HOST:$DEPLOY_DIR/server/" \
         --exclude '__pycache__' \
         --exclude '*.db' \
+        --exclude '*.db.backup.*' \
         --exclude 'venv'
 
     # Upload data files (for migration)
