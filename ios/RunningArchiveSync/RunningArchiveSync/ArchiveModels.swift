@@ -12,7 +12,7 @@ struct ArchiveSummary: Decodable {
     let marathonCount: Int
 }
 
-struct ArchiveRouteSummary: Decodable, Identifiable, Hashable {
+struct ArchiveRouteSummary: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let city: String
@@ -61,6 +61,20 @@ struct ArchiveTimeSeries: Decodable {
         case elapsed, pace, elevation, heartRate, heartRateElapsed
         case heartRateSnake = "heart_rate"
         case heartRateElapsedSnake = "heart_rate_elapsed"
+    }
+
+    init(
+        elapsed: [Double],
+        pace: [Double?],
+        elevation: [Double],
+        heartRate: [Double],
+        heartRateElapsed: [Double]?
+    ) {
+        self.elapsed = elapsed
+        self.pace = pace
+        self.elevation = elevation
+        self.heartRate = heartRate
+        self.heartRateElapsed = heartRateElapsed
     }
 
     init(from decoder: Decoder) throws {
@@ -155,6 +169,52 @@ struct ArchiveActivity: Identifiable, Hashable {
         maxHeartRate = race.maxHeartRate
         avgPower = race.avgPower
         isPb = race.isPb
+    }
+
+    init(preview: WorkoutPreview, isPb: Bool = false) {
+        id = preview.id
+        let morning = Calendar.current.component(.hour, from: preview.date) < 12
+        let marathon = (41.0...44.0).contains(preview.distanceKm) && morning
+        let halfMarathon = (20.0...23.0).contains(preview.distanceKm) && morning
+        kind = (marathon || halfMarathon) ? .race : .run
+        name = marathon ? "全程马拉松" : (halfMarathon ? "半程马拉松" : "户外跑步")
+        date = preview.date
+        city = ""
+        distanceKm = preview.distanceKm
+        duration = Self.durationText(preview.duration)
+        pace = Self.paceText(distanceKm: preview.distanceKm, duration: preview.duration)
+        routeId = preview.id
+        avgHeartRate = preview.avgHeartRate
+        maxHeartRate = preview.maxHeartRate
+        avgPower = preview.avgPower
+        self.isPb = isPb
+    }
+
+    init(activity: ArchiveActivity, payload: WorkoutPayload) {
+        id = activity.id
+        kind = activity.kind
+        name = activity.name
+        date = activity.date
+        city = activity.city
+        distanceKm = activity.distanceKm
+        duration = activity.duration
+        pace = activity.pace
+        routeId = activity.routeId
+        avgHeartRate = payload.avgHeartRate ?? activity.avgHeartRate
+        maxHeartRate = payload.maxHeartRate ?? activity.maxHeartRate
+        avgPower = payload.avgPower ?? activity.avgPower
+        isPb = activity.isPb
+    }
+
+    private static func durationText(_ duration: TimeInterval) -> String {
+        let total = max(0, Int(duration.rounded()))
+        return String(format: "%02d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+    }
+
+    private static func paceText(distanceKm: Double, duration: TimeInterval) -> String {
+        guard distanceKm > 0 else { return "--" }
+        let seconds = max(0, Int((duration / distanceKm).rounded()))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
 

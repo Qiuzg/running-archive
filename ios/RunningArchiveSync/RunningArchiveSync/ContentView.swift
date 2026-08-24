@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @MainActor
 final class HealthSyncViewModel: ObservableObject {
@@ -6,7 +7,7 @@ final class HealthSyncViewModel: ObservableObject {
     @Published var selectedIDs: Set<String> = []
     @Published var status = "先授权健康数据，再检查新增跑步。"
     @Published var isWorking = false
-    @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ArchiveAPI.defaultBaseURL
+    @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? RunningArchiveConfiguration.defaultServerURL
     @Published var token = KeychainStore.read("syncToken")
 
     private let health = HealthKitService()
@@ -108,6 +109,7 @@ final class HealthSyncViewModel: ObservableObject {
 }
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var archiveStore = ArchiveStore()
 
     var body: some View {
@@ -123,6 +125,10 @@ struct ContentView: View {
         }
         .environmentObject(archiveStore)
         .tint(RunTheme.accent)
+        .task {
+            archiveStore.configureCache(modelContext)
+            await archiveStore.load()
+        }
     }
 }
 

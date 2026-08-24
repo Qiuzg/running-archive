@@ -47,4 +47,11 @@ struct WorkoutPreview: Identifiable {
     let date: Date
     let distanceKm: Double
     let duration: TimeInterval
+    let avgHeartRate: Int?
+    let maxHeartRate: Int?
+    let avgPower: Double?
+}
+
+enum RunningArchiveConfiguration {
+    static let defaultServerURL = "https://123.56.181.123/run"
 }

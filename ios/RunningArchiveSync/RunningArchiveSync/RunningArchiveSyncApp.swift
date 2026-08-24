@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct RunningArchiveSyncApp: App {
@@ -6,5 +7,6 @@ struct RunningArchiveSyncApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [CachedHealthWorkout.self, CachedHealthRoute.self])
     }
 }

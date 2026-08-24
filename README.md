@@ -86,8 +86,9 @@ npm run import:apple -- ~/Downloads/apple_health_export
 
 `ios/RunningArchiveSync/RunningArchiveSync.xcodeproj` 是个人使用的原生 SwiftUI App。
 它参考手机网页端设计，包含四个标签页：地图档案、跑步记录与详情、图片分享、HealthKit
-同步。档案和记录直接读取网站 API；分享页会自动生成 1080×1680 精简图或
-1080×2800 详细图，支持日间/夜间配色和 iOS 系统分享。
+同步。档案、记录、详情和分享都直接读取手机 Apple Health，不依赖网页数据库；路线和
+明细使用 SwiftData 渐进缓存。分享页会自动生成 1080×1680 精简图或 1080×2800
+详细图，支持日间/夜间配色和 iOS 系统分享。服务器仅用于可选的网站数据上传。
 
 同步页从 HealthKit 读取全部历史跑步、路线、心率、功率与步数，并上传到：
 

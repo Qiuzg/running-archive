@@ -21,7 +21,6 @@ struct DashboardView: View {
             .ignoresSafeArea(edges: .top)
             .background(Color(.systemGroupedBackground))
             .refreshable { await store.load(force: true) }
-            .task { await store.load() }
             .overlay {
                 if store.isLoading && store.activities.isEmpty { ProgressView().controlSize(.large) }
             }
@@ -55,7 +54,7 @@ struct DashboardView: View {
                         Text("我的跑步档案").font(.headline)
                     }
                     Spacer()
-                    Image(systemName: "cloud.fill")
+                    Image(systemName: "heart.fill")
                         .foregroundStyle(RunTheme.accent)
                         .padding(10)
                         .background(.ultraThinMaterial, in: Circle())
@@ -110,6 +109,10 @@ struct DashboardView: View {
             }
             if let error = store.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            if let status = store.routeScanStatus {
+                Label(status, systemImage: "waveform.path.ecg")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -213,16 +216,20 @@ struct ActivityDetailView: View {
     @State private var route: ArchiveRouteDetail?
     @State private var errorMessage: String?
 
+    private var displayActivity: ArchiveActivity {
+        store.activities.first { $0.id == activity.id } ?? activity
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 detailMap
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(activity.kind == .race ? "RACE RESULT" : "RUNNING ACTIVITY")
+                        Text(displayActivity.kind == .race ? "RACE RESULT" : "RUNNING ACTIVITY")
                             .font(.caption2.bold()).tracking(2).foregroundStyle(RunTheme.accent)
-                        Text(activity.name).font(.title.bold())
-                        Text(activity.date.formatted(date: .long, time: .omitted) + (activity.city.isEmpty ? "" : " · \(activity.city)"))
+                        Text(displayActivity.name).font(.title.bold())
+                        Text(displayActivity.date.formatted(date: .long, time: .omitted) + (displayActivity.city.isEmpty ? "" : " · \(displayActivity.city)"))
                             .foregroundStyle(.secondary)
                     }
                     metrics
@@ -243,7 +250,7 @@ struct ActivityDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    ShareStudioView(initialActivity: activity)
+                    ShareStudioView(initialActivity: displayActivity)
                 } label: { Image(systemName: "square.and.arrow.up") }
             }
         }
@@ -272,14 +279,14 @@ struct ActivityDetailView: View {
 
     private var metrics: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            DetailMetric(label: "距离", value: String(format: "%.2f", activity.distanceKm), unit: "km", color: RunTheme.route)
-            DetailMetric(label: "用时", value: activity.duration, unit: "hh:mm:ss", color: RunTheme.accent)
-            DetailMetric(label: "平均配速", value: activity.pace, unit: "/km", color: .blue)
+            DetailMetric(label: "距离", value: String(format: "%.2f", displayActivity.distanceKm), unit: "km", color: RunTheme.route)
+            DetailMetric(label: "用时", value: displayActivity.duration, unit: "hh:mm:ss", color: RunTheme.accent)
+            DetailMetric(label: "平均配速", value: displayActivity.pace, unit: "/km", color: .blue)
             DetailMetric(label: "累计爬升", value: String(format: "%.0f", route?.elevationGain ?? 0), unit: "m", color: .orange)
-            if let heart = activity.avgHeartRate {
+            if let heart = displayActivity.avgHeartRate {
                 DetailMetric(label: "平均心率", value: "\(heart)", unit: "bpm", color: .red)
             }
-            if let power = activity.avgPower {
+            if let power = displayActivity.avgPower {
                 DetailMetric(label: "平均功率", value: "\(Int(power.rounded()))", unit: "W", color: .purple)
             }
         }

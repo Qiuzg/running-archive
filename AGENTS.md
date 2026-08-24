@@ -28,7 +28,7 @@ route-index.generated.js    # Generated route preview index
 city-boundaries.generated.js # Generated city GeoJSON
 routes/*.js                 # Generated full route details and time series
 assets/                     # Static assets
-ios/RunningArchiveSync/     # Personal SwiftUI HealthKit sync Xcode project
+ios/RunningArchiveSync/     # Native SwiftUI archive/share/HealthKit sync app
 ```
 
 ## Data Flow
@@ -40,7 +40,12 @@ ios/RunningArchiveSync/     # Personal SwiftUI HealthKit sync Xcode project
 5. The import script validates generated JS, route references, FastAPI responses, and `npm run build`.
 6. The frontend fetches data from `/api/routes`, `/api/races`, `/api/runs`, `/api/stats/*`, and `/api/cities`.
 
-Alternatively, the personal iPhone app reads new HealthKit workouts and posts them to `/api/sync/apple-workouts` with `RUNNING_SYNC_TOKEN`. The API trims the first and last 600 route meters and upserts the route/run. `server/migrate.py` preserves these `healthkit` records across generated-data rebuilds.
+Alternatively, the personal iPhone app uses HealthKit directly as the data source for its archive,
+details, charts, and share images. It builds lightweight statistics from workout summaries, progressively
+caches routes and detailed payloads in SwiftData, and does not require the web database for local use.
+The optional sync tab posts selected HealthKit workouts to `/api/sync/apple-workouts` with
+`RUNNING_SYNC_TOKEN`. The API trims the first and last 600 route meters and upserts the route/run.
+`server/migrate.py` preserves these `healthkit` records across generated-data rebuilds.
 
 ## Common Commands
 

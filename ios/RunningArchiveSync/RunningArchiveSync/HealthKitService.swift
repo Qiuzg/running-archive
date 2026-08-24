@@ -44,25 +44,47 @@ final class HealthKitService {
     func runningWorkoutPreviews(limit: Int = HKObjectQueryNoLimit) async throws -> [WorkoutPreview] {
         let workouts = try await runningWorkouts(limit: limit)
         workoutByID.removeAll(keepingCapacity: true)
+        var uniqueWorkouts: [HKWorkout] = []
+        var seenIDs = Set<String>()
         for workout in workouts {
-            workoutByID[workoutID(workout)] = workout
+            let id = workoutID(workout)
+            guard seenIDs.insert(id).inserted else { continue }
+            workoutByID[id] = workout
+            uniqueWorkouts.append(workout)
         }
-        return workouts.map {
-            WorkoutPreview(id: workoutID($0), date: $0.startDate,
-                           distanceKm: workoutDistanceKm($0), duration: $0.duration)
+        let heartType = try heartRateType
+        let heartUnit = HKUnit.count().unitDivided(by: .minute())
+        let powerType = HKQuantityType.quantityType(forIdentifier: .runningPower)
+        return uniqueWorkouts.map { workout in
+            let heart = workout.statistics(for: heartType)
+            let power = powerType.flatMap { workout.statistics(for: $0) }
+            return WorkoutPreview(
+                id: workoutID(workout),
+                date: workout.startDate,
+                distanceKm: workoutDistanceKm(workout),
+                duration: workout.duration,
+                avgHeartRate: heart?.averageQuantity().map { Int($0.doubleValue(for: heartUnit).rounded()) },
+                maxHeartRate: heart?.maximumQuantity().map { Int($0.doubleValue(for: heartUnit).rounded()) },
+                avgPower: power?.averageQuantity()?.doubleValue(for: .watt())
+            )
+        }
+    }
+
+    func routePoints(forWorkoutID id: String) async throws -> [RoutePointPayload]? {
+        guard let workout = try await workout(forID: id) else { return nil }
+        return try await routeLocations(for: workout).map {
+            RoutePointPayload(
+                timestamp: $0.timestamp,
+                latitude: $0.coordinate.latitude,
+                longitude: $0.coordinate.longitude,
+                altitude: $0.altitude,
+                speedMps: $0.speed >= 0 ? $0.speed : nil
+            )
         }
     }
 
     func payload(forWorkoutID id: String) async throws -> WorkoutPayload? {
-        let workout: HKWorkout
-        if let cached = workoutByID[id] {
-            workout = cached
-        } else {
-            guard let found = try await runningWorkouts(limit: HKObjectQueryNoLimit)
-                .first(where: { workoutID($0) == id }) else { return nil }
-            workoutByID[id] = found
-            workout = found
-        }
+        guard let workout = try await workout(forID: id) else { return nil }
         async let locations = routeLocations(for: workout)
         let heartType = try heartRateType
         async let heartSamples = quantitySeriesPoints(type: heartType, workout: workout)
@@ -113,6 +135,14 @@ final class HealthKitService {
             }
             store.execute(query)
         }
+    }
+
+    private func workout(forID id: String) async throws -> HKWorkout? {
+        if let cached = workoutByID[id] { return cached }
+        guard let found = try await runningWorkouts(limit: HKObjectQueryNoLimit)
+            .first(where: { workoutID($0) == id }) else { return nil }
+        workoutByID[id] = found
+        return found
     }
 
     private func routeLocations(for workout: HKWorkout) async throws -> [CLLocation] {

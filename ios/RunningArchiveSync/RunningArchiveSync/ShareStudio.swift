@@ -48,6 +48,10 @@ struct ShareStudioView: View {
         .navigationTitle("分享图片")
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.load(); selectDefault(); await render() }
+        .onChange(of: store.activities.count) { _, _ in
+            guard selectedID == nil else { return }
+            selectDefault()
+        }
         .onChange(of: selectedID) { _, _ in Task { await render() } }
         .onChange(of: layout) { _, _ in Task { await render() } }
         .onChange(of: darkCard) { _, _ in Task { await render() } }
@@ -125,8 +129,9 @@ struct ShareStudioView: View {
                 size: CGSize(width: 1000, height: layout == .compact ? 660 : 920),
                 dark: darkCard
             )
+            let displayActivity = store.activities.first { $0.id == activity.id } ?? activity
             let card = ShareCardView(
-                activity: activity,
+                activity: displayActivity,
                 route: detail,
                 mapImage: mapImage,
                 layout: layout,
@@ -135,7 +140,7 @@ struct ShareStudioView: View {
             let renderer = ImageRenderer(content: card)
             renderer.proposedSize = ProposedViewSize(layout.size)
             renderer.scale = 1
-            guard let image = renderer.uiImage else { throw ArchiveAPIError.server(0) }
+            guard let image = renderer.uiImage else { throw LocalArchiveError.imageRenderFailed }
             renderedImage = image
         } catch {
             errorMessage = error.localizedDescription
@@ -234,7 +239,7 @@ private struct ShareCardView: View {
                 Text("每一步，都值得被记录").font(.system(size: 25, weight: .medium)).foregroundStyle(.secondary)
             }
             Spacer()
-            if let qr = ShareImageGenerator.qrCode(from: ArchiveAPI.defaultBaseURL) {
+            if let qr = ShareImageGenerator.qrCode(from: RunningArchiveConfiguration.defaultServerURL) {
                 Image(uiImage: qr).interpolation(.none).resizable().frame(width: 142, height: 142)
                     .padding(12).background(.white, in: RoundedRectangle(cornerRadius: 20))
             }
@@ -291,8 +296,15 @@ private struct ShareSparkline: View {
 
 enum ShareImageGenerator {
     static func routeSnapshot(coordinates: [CLLocationCoordinate2D], size: CGSize, dark: Bool) async throws -> UIImage {
-        guard coordinates.count > 1 else { return UIImage() }
-        let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+        let shareCoordinates = privacyTrimmed(coordinates, meters: 600)
+        guard shareCoordinates.count > 1 else {
+            return UIGraphicsImageRenderer(size: size).image { renderer in
+                (dark ? UIColor(red: 0.08, green: 0.09, blue: 0.12, alpha: 1) : UIColor.systemGroupedBackground)
+                    .setFill()
+                renderer.fill(CGRect(origin: .zero, size: size))
+            }
+        }
+        let polyline = MKPolyline(coordinates: shareCoordinates, count: shareCoordinates.count)
         let options = MKMapSnapshotter.Options()
         options.size = size
         options.scale = 1
@@ -310,12 +322,30 @@ enum ShareImageGenerator {
             context.setLineWidth(8)
             context.setLineCap(.round)
             context.setLineJoin(.round)
-            for (index, coordinate) in coordinates.enumerated() {
+            for (index, coordinate) in shareCoordinates.enumerated() {
                 let point = snapshot.point(for: coordinate)
                 if index == 0 { context.move(to: point) } else { context.addLine(to: point) }
             }
             context.strokePath()
         }
+    }
+
+    private static func privacyTrimmed(
+        _ coordinates: [CLLocationCoordinate2D],
+        meters: CLLocationDistance
+    ) -> [CLLocationCoordinate2D] {
+        guard coordinates.count > 2, meters > 0 else { return coordinates }
+        var cumulative = [CLLocationDistance](repeating: 0, count: coordinates.count)
+        for index in 1..<coordinates.count {
+            let previous = CLLocation(latitude: coordinates[index - 1].latitude, longitude: coordinates[index - 1].longitude)
+            let current = CLLocation(latitude: coordinates[index].latitude, longitude: coordinates[index].longitude)
+            cumulative[index] = cumulative[index - 1] + current.distance(from: previous)
+        }
+        guard let total = cumulative.last, total > meters * 2 else { return [] }
+        guard let start = cumulative.firstIndex(where: { $0 >= meters }),
+              let end = cumulative.firstIndex(where: { total - $0 <= meters }),
+              start < end else { return [] }
+        return Array(coordinates[start..<end])
     }
 
     static func qrCode(from value: String) -> UIImage? {
