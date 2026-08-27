@@ -116,6 +116,8 @@ struct ContentView: View {
         TabView {
             DashboardView()
                 .tabItem { Label("档案", systemImage: "map.fill") }
+            SummaryCollectionView()
+                .tabItem { Label("汇总", systemImage: "square.grid.2x2.fill") }
             NavigationStack { ActivityListView() }
                 .tabItem { Label("记录", systemImage: "figure.run") }
             NavigationStack { ShareStudioView() }

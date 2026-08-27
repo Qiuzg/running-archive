@@ -1,5 +1,6 @@
 import CoreImage.CIFilterBuiltins
 import MapKit
+import Photos
 import SwiftUI
 import UIKit
 
@@ -7,7 +8,16 @@ enum ShareLayout: String, CaseIterable, Identifiable {
     case compact = "精简"
     case detailed = "详细"
     var id: Self { self }
-    var size: CGSize { self == .compact ? CGSize(width: 1080, height: 1680) : CGSize(width: 1080, height: 2800) }
+    var size: CGSize { self == .compact ? CGSize(width: 1080, height: 1400) : CGSize(width: 1080, height: 2800) }
+    // 1.5x keeps the exported PNG sharper than the web canvas while avoiding
+    // the very large intermediate bitmaps that can lock up an iPhone.
+    var renderScale: CGFloat { 1.5 }
+}
+
+enum ShareMapProvider: String, CaseIterable, Identifiable {
+    case leaflet = "Leaflet"
+    case amap = "高德"
+    var id: Self { self }
 }
 
 struct ShareStudioView: View {
@@ -16,16 +26,21 @@ struct ShareStudioView: View {
     let initialActivity: ArchiveActivity?
 
     @State private var selectedID: String?
+    @State private var shareTitle: String
     @State private var layout: ShareLayout = .compact
+    @State private var mapProvider: ShareMapProvider = .leaflet
     @State private var darkCard = false
     @State private var renderedImage: UIImage?
     @State private var isRendering = false
     @State private var showingShareSheet = false
     @State private var errorMessage: String?
+    @State private var renderRequested = false
+    @State private var renderToken = 0
 
     init(initialActivity: ArchiveActivity? = nil) {
         self.initialActivity = initialActivity
         _selectedID = State(initialValue: initialActivity?.id)
+        _shareTitle = State(initialValue: "户外跑步")
     }
 
     private var selected: ArchiveActivity? {
@@ -35,81 +50,229 @@ struct ShareStudioView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
+                pageHeader
                 preview
                 controls
-                if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+                actions
             }
             .padding(16)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("分享图片")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await store.load(); selectDefault(); await render() }
+        .task { await store.load(); selectDefault() }
+        .task(id: renderToken) {
+            guard renderRequested, selected != nil else { return }
+            await render()
+        }
         .onChange(of: store.activities.count) { _, _ in
             guard selectedID == nil else { return }
             selectDefault()
         }
-        .onChange(of: selectedID) { _, _ in Task { await render() } }
-        .onChange(of: layout) { _, _ in Task { await render() } }
-        .onChange(of: darkCard) { _, _ in Task { await render() } }
+        .onChange(of: selectedID) { _, _ in invalidateRenderedImage() }
+        .onChange(of: shareTitle) { _, _ in invalidateRenderedImage() }
+        .onChange(of: layout) { _, _ in invalidateRenderedImage() }
+        .onChange(of: mapProvider) { _, _ in invalidateRenderedImage() }
+        .onChange(of: darkCard) { _, _ in invalidateRenderedImage() }
         .sheet(isPresented: $showingShareSheet) {
             if let renderedImage { ShareSheet(items: [renderedImage]) }
         }
     }
 
-    @ViewBuilder private var preview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24).fill(Color(.secondarySystemGroupedBackground))
-            if let renderedImage {
-                Image(uiImage: renderedImage)
-                    .resizable().scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .padding(12)
-            } else if isRendering {
-                ProgressView("正在生成分享图片…")
-            } else {
-                ContentUnavailableView("选择一条跑步", systemImage: "photo")
-            }
+    private var pageHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SHARE STUDIO")
+                .font(.system(size: 13, weight: .black))
+                .tracking(2.2)
+                .foregroundStyle(RunTheme.accent)
+            Text("生成跑步分享图")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+            Text("调整标题、地图和配色，生成一张完整的跑步记录。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        .frame(minHeight: layout == .compact ? 500 : 620)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder private var preview: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("图片预览")
+                    .font(.headline.weight(.bold))
+                Spacer()
+                Text(layout.rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(RunTheme.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(RunTheme.accent.opacity(0.1), in: Capsule())
+            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.tertiarySystemGroupedBackground))
+                if let renderedImage {
+                    Image(uiImage: renderedImage)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(10)
+                } else if isRendering {
+                    VStack(spacing: 10) {
+                        ProgressView()
+                        Text("正在生成分享图片…")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(RunTheme.accent)
+                        Text("调整设置后点击生成")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(height: layout == .compact ? 450 : 560)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.07), radius: 16, y: 7)
     }
 
     private var controls: some View {
-        VStack(spacing: 14) {
-            Menu {
-                ForEach(store.activities.filter { $0.routeId != nil }.prefix(300)) { activity in
-                    Button {
-                        selectedID = activity.id
+        VStack(alignment: .leading, spacing: 12) {
+            Text("生成设置")
+                .font(.headline.weight(.bold))
+                .padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                settingRow(icon: "figure.run", title: "跑步记录") {
+                    Menu {
+                        ForEach(store.activities.filter { $0.routeId != nil }.prefix(300)) { activity in
+                            Button {
+                                selectedID = activity.id
+                            } label: {
+                                Text("\(activity.date.formatted(date: .numeric, time: .omitted)) · \(activity.name)")
+                            }
+                        }
                     } label: {
-                        Text("\(activity.date.formatted(date: .numeric, time: .omitted)) · \(activity.name)")
+                        HStack(spacing: 6) {
+                            Text(selected.map { $0.date.formatted(date: .numeric, time: .omitted) } ?? "选择记录")
+                                .lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.bold))
+                        }
+                        .foregroundStyle(.secondary)
                     }
                 }
-            } label: {
-                HStack {
-                    Image(systemName: "figure.run")
-                    Text(selected.map { "\($0.date.formatted(date: .numeric, time: .omitted)) · \($0.name)" } ?? "选择跑步")
+                Divider().padding(.leading, 48)
+                settingRow(icon: "textformat", title: "图片标题") {
+                    TextField("户外跑步", text: $shareTitle)
+                        .multilineTextAlignment(.trailing)
                         .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
                 }
-                .padding(14).background(.background, in: RoundedRectangle(cornerRadius: 14))
+                Divider().padding(.leading, 48)
+                settingPickerRow(title: "版式", options: ShareLayout.allCases, selection: $layout)
+                Divider().padding(.leading, 48)
+                settingPickerRow(title: "地图", options: ShareMapProvider.allCases, selection: $mapProvider)
+                Divider().padding(.leading, 48)
+                HStack {
+                    Label("夜间配色", systemImage: "moon.fill")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Toggle("", isOn: $darkCard)
+                        .labelsHidden()
+                        .tint(RunTheme.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
-            Picker("版式", selection: $layout) {
-                ForEach(ShareLayout.allCases) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.segmented)
-            Toggle("夜间分享图", isOn: $darkCard)
-                .padding(.horizontal, 4)
+            .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+    }
+
+    private func settingRow<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(RunTheme.accent)
+                .frame(width: 24)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 10)
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    private func settingPickerRow<Option: RawRepresentable & CaseIterable & Identifiable>(title: String, options: Option.AllCases, selection: Binding<Option>) -> some View where Option.RawValue == String {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            HStack(spacing: 8) {
+                ForEach(Array(options)) { option in
+                    Button {
+                        selection.wrappedValue = option
+                    } label: {
+                        Text(option.rawValue)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(
+                                selection.wrappedValue.id == option.id ? RunTheme.accent.opacity(0.14) : Color(.tertiarySystemGroupedBackground),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                            .foregroundStyle(selection.wrappedValue.id == option.id ? RunTheme.accent : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    private var actions: some View {
+        VStack(spacing: 10) {
             Button {
-                showingShareSheet = true
+                renderRequested = true
+                renderToken &+= 1
             } label: {
-                Label("分享或保存图片", systemImage: "square.and.arrow.up")
+                Label("生成分享图片", systemImage: "wand.and.stars")
                     .frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent).tint(RunTheme.accent)
-            .disabled(renderedImage == nil || isRendering)
+            .disabled(selected?.routeId == nil || isRendering)
+            if isRendering {
+                Button("取消生成", role: .cancel) {
+                    invalidateRenderedImage()
+                }
+                .buttonStyle(.bordered)
+            }
+            HStack(spacing: 10) {
+                Button { saveToPhotos() } label: {
+                    Label("保存相册", systemImage: "photo.on.rectangle")
+                        .frame(maxWidth: .infinity).padding(.vertical, 7)
+                }
+                .buttonStyle(.bordered)
+                .disabled(renderedImage == nil || isRendering)
+                Button { showingShareSheet = true } label: {
+                    Label("分享图片", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity).padding(.vertical, 7)
+                }
+                .buttonStyle(.bordered)
+                .disabled(renderedImage == nil || isRendering)
+            }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 
@@ -118,89 +281,302 @@ struct ShareStudioView: View {
         if initialActivity == nil { darkCard = colorScheme == .dark }
     }
 
+    private func invalidateRenderedImage() {
+        renderRequested = false
+        renderToken &+= 1
+        renderedImage = nil
+        errorMessage = nil
+    }
+
+    private func saveToPhotos() {
+        guard let renderedImage else { return }
+        Task { @MainActor in
+            let authorization = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard authorization == .authorized || authorization == .limited else {
+                errorMessage = "没有相册写入权限，请在系统设置中允许访问照片"
+                return
+            }
+            do {
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: renderedImage)
+                }
+                errorMessage = "图片已保存到系统相册"
+            } catch {
+                errorMessage = "保存到相册失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
     @MainActor private func render() async {
-        guard let activity = selected, let routeID = activity.routeId else { return }
+        guard renderRequested, let activity = selected, let routeID = activity.routeId else { return }
+        let requestedActivityID = activity.id
         isRendering = true
         errorMessage = nil
+        defer { isRendering = false }
         do {
             let detail = try await store.routeDetail(id: routeID)
+            guard !Task.isCancelled, renderRequested, selectedID == requestedActivityID else { return }
             let mapImage = try await ShareImageGenerator.routeSnapshot(
                 coordinates: detail.mapCoordinates,
-                size: CGSize(width: 1000, height: layout == .compact ? 660 : 920),
-                dark: darkCard
+                size: layout.size,
+                dark: darkCard,
+                provider: mapProvider,
+                scale: layout.renderScale
             )
+            guard !Task.isCancelled, renderRequested, selectedID == requestedActivityID else { return }
             let displayActivity = store.activities.first { $0.id == activity.id } ?? activity
             let card = ShareCardView(
                 activity: displayActivity,
                 route: detail,
                 mapImage: mapImage,
                 layout: layout,
+                title: shareTitle,
                 dark: darkCard
             )
             let renderer = ImageRenderer(content: card)
             renderer.proposedSize = ProposedViewSize(layout.size)
-            renderer.scale = 1
+            renderer.scale = layout.renderScale
             guard let image = renderer.uiImage else { throw LocalArchiveError.imageRenderFailed }
             renderedImage = image
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
             renderedImage = nil
         }
-        isRendering = false
     }
 }
 
 private struct ShareCardView: View {
     let activity: ArchiveActivity
     let route: ArchiveRouteDetail
-    let mapImage: UIImage
+    let mapImage: UIImage?
     let layout: ShareLayout
+    let title: String
     let dark: Bool
 
     private var background: Color { dark ? Color(red: 0.055, green: 0.07, blue: 0.10) : Color(red: 0.96, green: 0.97, blue: 0.985) }
     private var foreground: Color { dark ? .white : Color(red: 0.08, green: 0.09, blue: 0.12) }
     private var card: Color { dark ? Color.white.opacity(0.08) : .white }
+    private var detailedPanel: Color { dark ? Color(red: 0.063, green: 0.09, blue: 0.13).opacity(0.94) : Color.white.opacity(0.94) }
+    private var displayTitle: String {
+        let value = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "户外跑步" : value
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Image(uiImage: mapImage).resizable().scaledToFill()
-                .frame(width: 1000, height: layout == .compact ? 660 : 920)
-                .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
-                .overlay(alignment: .bottomLeading) {
-                    Text(activity.city.isEmpty ? "RUNNING ROUTE" : activity.city.uppercased())
-                        .font(.system(size: 28, weight: .bold)).tracking(4)
-                        .foregroundStyle(.white).padding(34)
-                }
-            metrics
-            if layout == .detailed { charts }
-            footer
+        ZStack(alignment: .topLeading) {
+            if layout == .compact {
+                compactCard
+            } else {
+                detailedCard
+            }
         }
-        .padding(.horizontal, 40)
-        .frame(width: layout.size.width, height: layout.size.height)
+        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
         .background(background)
         .foregroundStyle(foreground)
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 14) {
+    private var compactCard: some View {
+        ZStack(alignment: .topLeading) {
+            background
+                .frame(width: 1080, height: 600)
+                .offset(y: 800)
+            if let mapImage {
+                Image(uiImage: mapImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 1080, height: 800, alignment: .top)
+                    .clipped()
+            } else {
+                background
+                    .frame(width: 1080, height: 800)
+            }
+
+            LinearGradient(
+                colors: [
+                    background.opacity(0.92),
+                    background.opacity(0.12),
+                    background.opacity(0.06),
+                    background.opacity(0.42)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: 1080, height: 800)
+
+            RadialGradient(
+                colors: [Color.blue.opacity(dark ? 0.18 : 0.12), .clear],
+                center: .topTrailing,
+                startRadius: 20,
+                endRadius: 620
+            )
+            .frame(width: 1080, height: 650)
+
+            Text("TODAY RUN")
+                .font(.system(size: 28, weight: .bold))
+                .tracking(2)
+                .foregroundStyle(RunTheme.accent)
+                .offset(x: 72, y: 62)
+            Text(displayTitle)
+                .font(.system(size: 66, weight: .black, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .offset(x: 72, y: 108)
+            VStack(alignment: .trailing, spacing: 3) {
                 Text(activity.date.formatted(.dateTime.year().month().day()))
-                    .font(.system(size: 30, weight: .bold)).tracking(4).foregroundStyle(RunTheme.accent)
-                Text(activity.name).font(.system(size: 58, weight: .black)).lineLimit(2)
+                Text(activity.city.isEmpty ? "" : activity.city)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(String(format: "%.2f", activity.distanceKm))
-                    .font(.system(size: 86, weight: .black)).monospacedDigit()
-                Text("KILOMETERS").font(.system(size: 22, weight: .bold)).tracking(4).foregroundStyle(.secondary)
-            }
+            .font(.system(size: 27, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .offset(x: 690, y: 62)
+
+            compactMetrics
+            compactFooter
         }
-        .frame(height: layout == .compact ? 260 : 300)
-        .padding(.horizontal, 18)
     }
 
-    private var metrics: some View {
+    private var compactFooter: some View {
+        ZStack(alignment: .topLeading) {
+            detailedPanel
+                .frame(width: 1080, height: 320)
+            if let qr = ShareImageGenerator.qrCode(from: RunningArchiveConfiguration.defaultServerURL) {
+                Image(uiImage: qr)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 160, height: 160)
+                    .padding(10)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .offset(x: 62, y: 54)
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                Text("扫码查看我的跑步档案")
+                    .font(.system(size: 31, weight: .black))
+                Text("\(String(format: "%.2f", activity.distanceKm)) km · \(activity.date.formatted(.dateTime.year().month().day()))")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .offset(x: 294, y: 115)
+            Text("RUN LOG")
+                .font(.system(size: 22, weight: .black))
+                .tracking(2)
+                .foregroundStyle(RunTheme.accent)
+                .offset(x: 910, y: 250)
+        }
+        .frame(width: 1080, height: 320, alignment: .topLeading)
+        .offset(x: 0, y: 1080)
+    }
+
+    private var compactMetrics: some View {
+        HStack(spacing: 0) {
+            ShareMetric(label: "距离", value: String(format: "%.2f", activity.distanceKm), unit: "km")
+            ShareMetric(label: "平均配速", value: activity.pace, unit: "/km")
+            ShareMetric(label: "用时", value: activity.duration, unit: "")
+            ShareMetric(label: "平均心率", value: activity.avgHeartRate.map(String.init) ?? "--", unit: "bpm")
+            ShareMetric(label: "累计爬升", value: "\(Int(route.elevationGain.rounded()))", unit: "m", divider: false)
+        }
+        .frame(width: 972, height: 166)
+        .background(card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .offset(x: 54, y: 840)
+    }
+
+    private var compactTrend: some View {
+        ZStack(alignment: .topLeading) {
+            Text("运动趋势")
+                .font(.system(size: 28, weight: .black))
+                .offset(x: 28, y: 45)
+            Text("配速 · 海拔 · 心率")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .offset(x: 28, y: 78)
+            if let series = route.timeSeries {
+                ShareMiniSparkline(values: series.pace.compactMap { $0 }, color: .blue, dark: dark)
+                    .frame(width: 640, height: 55)
+                    .offset(x: 276, y: 40)
+                ShareMiniSparkline(values: series.elevation, color: .orange, dark: dark)
+                    .frame(width: 640, height: 55)
+                    .offset(x: 276, y: 130)
+                ShareMiniSparkline(values: series.heartRate, color: RunTheme.accent, dark: dark)
+                    .frame(width: 640, height: 55)
+                    .offset(x: 276, y: 220)
+            }
+        }
+        .frame(width: 972, height: 300, alignment: .topLeading)
+        .background(card, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .offset(x: 54, y: 1230)
+    }
+
+    private var detailedCard: some View {
+        ZStack(alignment: .topLeading) {
+            if let mapImage {
+                Image(uiImage: mapImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 1080, height: 2800)
+                    .clipped()
+            } else {
+                background
+                    .frame(width: 1080, height: 2800)
+            }
+
+            LinearGradient(
+                colors: [
+                    background.opacity(0.94),
+                    background.opacity(0.14),
+                    background.opacity(0.10),
+                    background.opacity(0.42)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: 1080, height: 2800)
+
+            profileBadge
+                .offset(x: 54, y: 48)
+            Text("TODAY RUN")
+                .font(.system(size: 24, weight: .black))
+                .tracking(1)
+                .foregroundStyle(RunTheme.accent)
+                .offset(x: 160, y: 54)
+            Text(displayTitle)
+                .font(.system(size: 58, weight: .black, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .offset(x: 160, y: 90)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(activity.date.formatted(.dateTime.year().month().day()))
+                Text(activity.city.isEmpty ? (route.city.isEmpty ? "" : route.city) : activity.city)
+            }
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .offset(x: 690, y: 52)
+
+            detailedMetrics
+            detailedCharts
+            detailedFooter
+        }
+    }
+
+    private var profileBadge: some View {
+        Group {
+            if let image = UIImage(named: "profile") {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 82, height: 82, alignment: .trailing)
+                    .clipped()
+            } else {
+                Image(systemName: "figure.run")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 82, height: 82)
+                    .background(.black.opacity(0.8))
+            }
+        }
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 3))
+    }
+
+    private var detailedMetrics: some View {
         HStack(spacing: 0) {
             ShareMetric(label: "平均心率", value: activity.avgHeartRate.map(String.init) ?? "--", unit: "bpm")
             ShareMetric(label: "平均功率", value: activity.avgPower.map { "\(Int($0.rounded()))" } ?? "--", unit: "W")
@@ -208,44 +584,63 @@ private struct ShareCardView: View {
             ShareMetric(label: "用时", value: activity.duration, unit: "hh:mm:ss")
             ShareMetric(label: "累计爬升", value: "\(Int(route.elevationGain.rounded()))", unit: "m", divider: false)
         }
-        .padding(.vertical, 30)
-        .background(card, in: RoundedRectangle(cornerRadius: 42, style: .continuous))
-        .padding(.top, 28)
+        .frame(width: 972, height: 166)
+        .background(detailedPanel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .offset(x: 54, y: 1570)
     }
 
-    private var charts: some View {
-        VStack(alignment: .leading, spacing: 30) {
-            HStack {
-                Text("详细折线图").font(.system(size: 38, weight: .black))
-                Spacer()
-                Text("配速 · 海拔 · 心率").font(.system(size: 23, weight: .semibold)).foregroundStyle(.secondary)
-            }
+    private var detailedCharts: some View {
+        ZStack(alignment: .topLeading) {
+            Text("详细折线图")
+                .font(.system(size: 30, weight: .black))
+                .offset(x: 28, y: 38)
+            Text("配速 · 爬升 · 心率")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .offset(x: 610, y: 40)
             if let series = route.timeSeries {
-                ShareSparkline(values: series.pace.compactMap { $0 }, color: .blue, label: "配速")
-                ShareSparkline(values: series.elevation, color: .orange, label: "海拔")
-                ShareSparkline(values: series.heartRate, color: RunTheme.accent, label: "心率")
+                ShareDetailedChart(values: series.pace.compactMap { $0 }, label: "配速", color: .blue, dark: dark, unit: "′", reverse: true)
+                    .offset(x: 0, y: 77)
+                ShareDetailedChart(values: series.elevation, label: "海拔", color: .orange, dark: dark, unit: "m", reverse: false)
+                    .offset(x: 0, y: 248)
+                ShareDetailedChart(values: series.heartRate, label: "心率", color: RunTheme.accent, dark: dark, unit: "", reverse: false)
+                    .offset(x: 0, y: 419)
             }
         }
-        .padding(38)
-        .frame(height: 940)
-        .background(card, in: RoundedRectangle(cornerRadius: 42, style: .continuous))
-        .padding(.top, 28)
+        .frame(width: 972, height: 574, alignment: .topLeading)
+        .background(detailedPanel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .offset(x: 54, y: 1825)
     }
 
-    private var footer: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("RUNNING ARCHIVE").font(.system(size: 28, weight: .black)).tracking(4)
-                Text("每一步，都值得被记录").font(.system(size: 25, weight: .medium)).foregroundStyle(.secondary)
-            }
-            Spacer()
+    private var detailedFooter: some View {
+        ZStack(alignment: .topLeading) {
+            detailedPanel
+                .frame(width: 1080, height: 320)
             if let qr = ShareImageGenerator.qrCode(from: RunningArchiveConfiguration.defaultServerURL) {
-                Image(uiImage: qr).interpolation(.none).resizable().frame(width: 142, height: 142)
-                    .padding(12).background(.white, in: RoundedRectangle(cornerRadius: 20))
+                Image(uiImage: qr)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 160, height: 160)
+                    .padding(10)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .offset(x: 62, y: 54)
             }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("扫码查看我的跑步档案")
+                    .font(.system(size: 31, weight: .black))
+                Text("\(String(format: "%.2f", activity.distanceKm)) km · \(activity.date.formatted(.dateTime.year().month().day()))")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .offset(x: 294, y: 115)
+            Text("RUN LOG")
+                .font(.system(size: 22, weight: .black))
+                .tracking(2)
+                .foregroundStyle(RunTheme.accent)
+                .offset(x: 910, y: 250)
         }
-        .frame(maxHeight: .infinity)
-        .padding(.horizontal, 20)
+        .frame(width: 1080, height: 320, alignment: .topLeading)
+        .offset(x: 0, y: 2480)
     }
 }
 
@@ -269,15 +664,163 @@ private struct ShareMetric: View {
     }
 }
 
+private struct ShareRoutePreview: View {
+    let coordinates: [CLLocationCoordinate2D]
+    let color: Color
+    let dark: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            guard coordinates.count > 1 else { return }
+            let points = normalizedPoints(coordinates, size: size, inset: 76)
+            guard points.count > 1 else { return }
+
+            var path = Path()
+            path.move(to: points[0])
+            for point in points.dropFirst() { path.addLine(to: point) }
+            context.stroke(
+                path,
+                with: .color(dark ? Color.black.opacity(0.42) : Color.white.opacity(0.95)),
+                style: StrokeStyle(lineWidth: 20, lineCap: .round, lineJoin: .round)
+            )
+            context.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round)
+            )
+
+            for (point, markerColor) in [(points[0], Color(red: 0.06, green: 0.72, blue: 0.55)), (points[points.count - 1], RunTheme.accent)] {
+                var marker = Path()
+                marker.addEllipse(in: CGRect(x: point.x - 13, y: point.y - 13, width: 26, height: 26))
+                context.fill(marker, with: .color(markerColor))
+                context.stroke(
+                    marker,
+                    with: .color(dark ? Color.black.opacity(0.7) : .white),
+                    style: StrokeStyle(lineWidth: 5)
+                )
+            }
+        }
+    }
+}
+
+private struct ShareMiniSparkline: View {
+    let values: [Double]
+    let color: Color
+    let dark: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let clean = values.filter(\.isFinite)
+            guard clean.count > 1, let minimum = clean.min(), let maximum = clean.max() else { return }
+            let range = max(maximum - minimum, 1)
+            var path = Path()
+            for (index, value) in clean.enumerated() {
+                let x = size.width * CGFloat(index) / CGFloat(clean.count - 1)
+                let y = size.height - size.height * CGFloat((value - minimum) / range)
+                if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                else { path.addLine(to: CGPoint(x: x, y: y)) }
+            }
+            context.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+            )
+            var baseline = Path()
+            baseline.move(to: CGPoint(x: 0, y: size.height))
+            baseline.addLine(to: CGPoint(x: size.width, y: size.height))
+            context.stroke(baseline, with: .color((dark ? Color.white : Color.black).opacity(0.08)), lineWidth: 1)
+        }
+    }
+}
+
+private struct ShareDetailedChart: View {
+    let values: [Double]
+    let label: String
+    let color: Color
+    let dark: Bool
+    let unit: String
+    let reverse: Bool
+
+    private var cleanValues: [Double] { values.filter(\.isFinite) }
+
+    var body: some View {
+        HStack(spacing: 20) {
+            Text(label)
+                .font(.system(size: 25, weight: .black))
+                .frame(width: 150, alignment: .leading)
+            ZStack(alignment: .topTrailing) {
+                Canvas { context, size in
+                    let chartWidth = max(size.width - 56, 1)
+                    let chartHeight = size.height
+                    let gridColor = (dark ? Color.white : Color.black).opacity(0.12)
+                    for ratio in [0.0, 0.5, 1.0] {
+                        var grid = Path()
+                        let y = chartHeight * ratio
+                        grid.move(to: CGPoint(x: 0, y: y))
+                        grid.addLine(to: CGPoint(x: chartWidth, y: y))
+                        context.stroke(grid, with: .color(gridColor), lineWidth: 1.5)
+                    }
+
+                    guard cleanValues.count > 1, let minimum = cleanValues.min(), let maximum = cleanValues.max() else { return }
+                    let range = max(maximum - minimum, 1)
+                    var path = Path()
+                    for (index, value) in cleanValues.enumerated() {
+                        let x = chartWidth * CGFloat(index) / CGFloat(cleanValues.count - 1)
+                        let ratio = (value - minimum) / range
+                        let y = chartHeight * CGFloat(reverse ? ratio : 1 - ratio)
+                        if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                }
+                if let minimum = cleanValues.min(), let maximum = cleanValues.max() {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(axisLabel(maximum))
+                        Spacer()
+                        Text(axisLabel(minimum))
+                    }
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, height: 112, alignment: .topTrailing)
+                }
+            }
+            .frame(width: 720, height: 112)
+        }
+        .padding(.horizontal, 30)
+        .frame(width: 972, height: 174, alignment: .leading)
+    }
+
+    private func axisLabel(_ value: Double) -> String {
+        if unit == "′" { return String(format: "%.1f%@", value, unit) }
+        return "\(Int(value.rounded()))\(unit)"
+    }
+}
+
 private struct ShareSparkline: View {
     let values: [Double]
     let color: Color
     let label: String
+    let dark: Bool
 
     var body: some View {
         HStack(spacing: 25) {
             Text(label).font(.system(size: 26, weight: .bold)).frame(width: 70, alignment: .leading)
             Canvas { context, size in
+                let gridColor = (dark ? Color.white : Color.black).opacity(0.18)
+                let gridStyle = StrokeStyle(lineWidth: 1.5, dash: [6, 6])
+                for index in 0...4 {
+                    let fraction = CGFloat(index) / 4
+                    var vertical = Path()
+                    vertical.move(to: CGPoint(x: size.width * fraction, y: 0))
+                    vertical.addLine(to: CGPoint(x: size.width * fraction, y: size.height))
+                    context.stroke(vertical, with: .color(gridColor), style: gridStyle)
+
+                    var horizontal = Path()
+                    horizontal.move(to: CGPoint(x: 0, y: size.height * fraction))
+                    horizontal.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+                    context.stroke(horizontal, with: .color(gridColor), style: gridStyle)
+                }
+
                 guard values.count > 1, let minValue = values.min(), let maxValue = values.max() else { return }
                 let range = max(maxValue - minValue, 1)
                 var path = Path()
@@ -290,43 +833,243 @@ private struct ShareSparkline: View {
                 context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
             .frame(height: 190)
+            .clipped()
         }
     }
 }
 
 enum ShareImageGenerator {
-    static func routeSnapshot(coordinates: [CLLocationCoordinate2D], size: CGSize, dark: Bool) async throws -> UIImage {
-        let shareCoordinates = privacyTrimmed(coordinates, meters: 600)
-        guard shareCoordinates.count > 1 else {
-            return UIGraphicsImageRenderer(size: size).image { renderer in
-                (dark ? UIColor(red: 0.08, green: 0.09, blue: 0.12, alpha: 1) : UIColor.systemGroupedBackground)
-                    .setFill()
-                renderer.fill(CGRect(origin: .zero, size: size))
-            }
+    private struct TilePayload: Sendable {
+        let key: String
+        let x: Int
+        let y: Int
+        let data: Data
+    }
+
+    private struct Tile {
+        let key: String
+        let x: Int
+        let y: Int
+        let image: UIImage
+    }
+
+    private struct MapLayout {
+        let coordinates: [CLLocationCoordinate2D]
+        let zoom: Int
+        let centerX: Double
+        let centerY: Double
+        let targetCenterY: Double
+        let worldScale: Double
+    }
+
+    private static let tileCache = NSCache<NSString, UIImage>()
+
+    static func routeSnapshot(
+        coordinates: [CLLocationCoordinate2D],
+        size: CGSize,
+        dark: Bool,
+        provider: ShareMapProvider,
+        scale: CGFloat = 2
+    ) async throws -> UIImage {
+        let trimmedCoordinates = privacyTrimmed(coordinates, meters: 600)
+        // Leaflet/CARTO uses WGS-84. AMap tiles use GCJ-02 inside mainland
+        // China. Applying the conversion only for AMap removes the route
+        // offset that appeared on the Leaflet image.
+        let shareCoordinates = provider == .amap ? mapDisplayCoordinates(trimmedCoordinates) : trimmedCoordinates
+        guard shareCoordinates.count > 1 else { return solidImage(size: size, dark: dark, scale: scale) }
+
+        // Use the same Carto tiles and Web Mercator projection as the web
+        // share lab. This keeps the iOS map style and route placement aligned
+        // with the Leaflet-based web version.
+        let mapLayout = makeMapLayout(coordinates: shareCoordinates, size: size)
+        let tileJobs = tileJobs(for: mapLayout, size: size, dark: dark, provider: provider)
+        guard !tileJobs.isEmpty else { throw LocalArchiveError.mapRenderFailed }
+        var tiles = tileJobs.compactMap { job -> Tile? in
+            guard let image = tileCache.object(forKey: job.key as NSString) else { return nil }
+            return Tile(key: job.key, x: job.x, y: job.y, image: image)
         }
-        let polyline = MKPolyline(coordinates: shareCoordinates, count: shareCoordinates.count)
-        let options = MKMapSnapshotter.Options()
-        options.size = size
-        options.scale = 1
-        options.mapType = .mutedStandard
-        options.traitCollection = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
-        let rect = polyline.boundingMapRect
-        let paddingX = rect.size.width * 0.16
-        let paddingY = rect.size.height * 0.16
-        options.mapRect = rect.insetBy(dx: -paddingX, dy: -paddingY)
-        let snapshot = try await MKMapSnapshotter(options: options).start()
-        return UIGraphicsImageRenderer(size: size).image { renderer in
-            snapshot.image.draw(at: .zero)
+        let missingJobs = tileJobs.filter { tileCache.object(forKey: $0.key as NSString) == nil }
+        let payloads = await loadTiles(missingJobs)
+        guard payloads.count == missingJobs.count else { throw LocalArchiveError.mapRenderFailed }
+        var decodedTileCount = 0
+        for payload in payloads {
+            guard let image = UIImage(data: payload.data) else { continue }
+            tileCache.setObject(image, forKey: payload.key as NSString)
+            tiles.append(Tile(key: payload.key, x: payload.x, y: payload.y, image: image))
+            decodedTileCount += 1
+        }
+        guard decodedTileCount == missingJobs.count else { throw LocalArchiveError.mapRenderFailed }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
             let context = renderer.cgContext
-            context.setStrokeColor(UIColor(red: 1, green: 0.34, blue: 0.22, alpha: 1).cgColor)
-            context.setLineWidth(8)
+            (dark ? UIColor(red: 0.055, green: 0.07, blue: 0.10, alpha: 1) : UIColor(red: 0.93, green: 0.95, blue: 0.96, alpha: 1)).setFill()
+            renderer.fill(CGRect(origin: .zero, size: size))
+
+            let tileSize: CGFloat = 256
+            let worldLeft = mapLayout.centerX - Double(size.width) / (2 * mapLayout.worldScale)
+            let worldTop = mapLayout.centerY - mapLayout.targetCenterY / mapLayout.worldScale
+            for tile in tiles {
+                let x = CGFloat((Double(tile.x * 256) - mapLayout.centerX) * mapLayout.worldScale + Double(size.width) / 2)
+                let y = CGFloat((Double(tile.y * 256) - mapLayout.centerY) * mapLayout.worldScale + mapLayout.targetCenterY)
+                tile.image.draw(in: CGRect(x: x, y: y, width: tileSize * mapLayout.worldScale, height: tileSize * mapLayout.worldScale))
+            }
+
+            let projected = mapLayout.coordinates.map {
+                projectedPoint($0, zoom: mapLayout.zoom, centerX: mapLayout.centerX, centerY: mapLayout.centerY, targetCenterY: mapLayout.targetCenterY, worldScale: mapLayout.worldScale, size: size)
+            }
+            guard projected.count > 1 else { return }
+            var path = CGMutablePath()
+            path.move(to: projected[0])
+            for point in projected.dropFirst() { path.addLine(to: point) }
+
             context.setLineCap(.round)
             context.setLineJoin(.round)
-            for (index, coordinate) in shareCoordinates.enumerated() {
-                let point = snapshot.point(for: coordinate)
-                if index == 0 { context.move(to: point) } else { context.addLine(to: point) }
-            }
+            context.addPath(path)
+            context.setStrokeColor((dark ? UIColor(red: 0.03, green: 0.05, blue: 0.08, alpha: 0.86) : UIColor.white.withAlphaComponent(0.94)).cgColor)
+            context.setLineWidth(18)
             context.strokePath()
+            context.addPath(path)
+            context.setStrokeColor((dark ? UIColor(red: 1, green: 0.42, blue: 0.28, alpha: 1) : UIColor(red: 0.88, green: 0.29, blue: 0.16, alpha: 1)).cgColor)
+            context.setLineWidth(9)
+            context.strokePath()
+
+            let markers: [(CGPoint, UIColor)] = [
+                (projected[0], UIColor(red: 0.06, green: 0.72, blue: 0.55, alpha: 1)),
+                (projected[projected.count - 1], UIColor(red: 0.88, green: 0.29, blue: 0.16, alpha: 1))
+            ]
+            for (point, color) in markers {
+                context.setFillColor(color.cgColor)
+                context.fillEllipse(in: CGRect(x: point.x - 13, y: point.y - 13, width: 26, height: 26))
+                context.setStrokeColor((dark ? UIColor(red: 0.03, green: 0.05, blue: 0.08, alpha: 0.9) : UIColor.white).cgColor)
+                context.setLineWidth(6)
+                context.strokeEllipse(in: CGRect(x: point.x - 13, y: point.y - 13, width: 26, height: 26))
+            }
+        }
+    }
+
+    private static func solidImage(size: CGSize, dark: Bool, scale: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
+            (dark ? UIColor(red: 0.055, green: 0.07, blue: 0.10, alpha: 1) : UIColor(red: 0.93, green: 0.95, blue: 0.96, alpha: 1)).setFill()
+            renderer.fill(CGRect(origin: .zero, size: size))
+        }
+    }
+
+    private static func makeMapLayout(coordinates: [CLLocationCoordinate2D], size: CGSize) -> MapLayout {
+        let detailed = size.height > size.width * 1.5
+        let fitWidth = Double(size.width) * (detailed ? 0.759 : 0.78)
+        let fitHeight = Double(size.height) * (detailed ? 0.375 : 0.39)
+        let targetCenterY = Double(size.height) * (detailed ? (830.0 / 2800.0) : 0.36)
+        var zoom = 3
+        var worldPoints: [(x: Double, y: Double)] = []
+
+        for candidate in stride(from: 17, through: 3, by: -1) {
+            let projected = coordinates.map { mercatorPoint($0, zoom: candidate) }
+            let xs = projected.map { $0.x }
+            let ys = projected.map { $0.y }
+            guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { continue }
+            if maxX - minX <= fitWidth && maxY - minY <= fitHeight {
+                zoom = candidate
+                worldPoints = projected
+                break
+            }
+        }
+
+        if worldPoints.isEmpty { worldPoints = coordinates.map { mercatorPoint($0, zoom: zoom) } }
+        let xs = worldPoints.map { $0.x }
+        let ys = worldPoints.map { $0.y }
+        let spanX = max(xs.max()! - xs.min()!, 1)
+        let spanY = max(ys.max()! - ys.min()!, 1)
+        let worldScale = min(1.6, min(fitWidth / spanX, fitHeight / spanY))
+        return MapLayout(
+            coordinates: coordinates,
+            zoom: zoom,
+            centerX: (xs.min()! + xs.max()!) / 2,
+            centerY: (ys.min()! + ys.max()!) / 2,
+            targetCenterY: targetCenterY,
+            worldScale: max(worldScale, 0.5)
+        )
+    }
+
+    private static func mercatorPoint(_ coordinate: CLLocationCoordinate2D, zoom: Int) -> (x: Double, y: Double) {
+        let worldSize = 256 * pow(2.0, Double(zoom))
+        let safeLatitude = max(-85.0511, min(85.0511, coordinate.latitude))
+        let sine = sin(safeLatitude * .pi / 180)
+        return (
+            x: (coordinate.longitude + 180) / 360 * worldSize,
+            y: (0.5 - log((1 + sine) / (1 - sine)) / (4 * .pi)) * worldSize
+        )
+    }
+
+    private static func projectedPoint(
+        _ coordinate: CLLocationCoordinate2D,
+        zoom: Int,
+        centerX: Double,
+        centerY: Double,
+        targetCenterY: Double,
+        worldScale: Double,
+        size: CGSize
+    ) -> CGPoint {
+        let world = mercatorPoint(coordinate, zoom: zoom)
+        return CGPoint(
+            x: CGFloat((world.x - centerX) * worldScale + Double(size.width) / 2),
+            y: CGFloat((world.y - centerY) * worldScale + targetCenterY)
+        )
+    }
+
+    private static func tileJobs(for layout: MapLayout, size: CGSize, dark: Bool, provider: ShareMapProvider) -> [(key: String, x: Int, y: Int, url: URL)] {
+        let tileSize: Double = 256
+        let worldLeft = layout.centerX - Double(size.width) / (2 * layout.worldScale)
+        let worldRight = layout.centerX + Double(size.width) / (2 * layout.worldScale)
+        let worldTop = layout.centerY - layout.targetCenterY / layout.worldScale
+        let worldBottom = worldTop + Double(size.height) / layout.worldScale
+        let maxTile = 1 << layout.zoom
+        let style = dark ? "dark_all" : "light_all"
+        let amapStyle = dark ? 8 : 7
+        var jobs: [(key: String, x: Int, y: Int, url: URL)] = []
+
+        for tileX in Int(floor(worldLeft / tileSize))...Int(floor(worldRight / tileSize)) {
+            for tileY in Int(floor(worldTop / tileSize))...Int(floor(worldBottom / tileSize)) {
+                guard tileY >= 0, tileY < maxTile else { continue }
+                let wrappedX = ((tileX % maxTile) + maxTile) % maxTile
+                let key: String
+                let urlString: String
+                switch provider {
+                case .leaflet:
+                    let subdomain = ["a", "b", "c", "d"][(wrappedX + tileY) % 4]
+                    key = "leaflet-\(style)-\(layout.zoom)-\(wrappedX)-\(tileY)"
+                    urlString = "https://\(subdomain).basemaps.cartocdn.com/\(style)/\(layout.zoom)/\(wrappedX)/\(tileY)@2x.png"
+                case .amap:
+                    let subdomain = ["1", "2", "3", "4"][(wrappedX + tileY) % 4]
+                    key = "amap-\(amapStyle)-\(layout.zoom)-\(wrappedX)-\(tileY)"
+                    urlString = "https://webrd0\(subdomain).is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=\(amapStyle)&x=\(wrappedX)&y=\(tileY)&z=\(layout.zoom)"
+                }
+                guard let url = URL(string: urlString) else { continue }
+                jobs.append((key: key, x: tileX, y: tileY, url: url))
+            }
+        }
+        return jobs
+    }
+
+    private static func loadTiles(_ jobs: [(key: String, x: Int, y: Int, url: URL)]) async -> [TilePayload] {
+        await withTaskGroup(of: TilePayload?.self) { group in
+            for job in jobs {
+                group.addTask {
+                    var request = URLRequest(url: job.url)
+                    request.timeoutInterval = 4
+                    guard let (data, response) = try? await URLSession.shared.data(for: request),
+                          (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+                    return TilePayload(key: job.key, x: job.x, y: job.y, data: data)
+                }
+            }
+            var payloads: [TilePayload] = []
+            for await payload in group {
+                if let payload { payloads.append(payload) }
+            }
+            return payloads
         }
     }
 

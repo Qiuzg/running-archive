@@ -17,6 +17,7 @@
 		A10000000000000000000008 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* CoreLocation.framework */; };
 		A10000000000000000000009 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* Security.framework */; };
 		A1000000000000000000000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* Assets.xcassets */; };
+		A1000000000000000000000B /* profile.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* profile.png */; };
 		B10000000000000000000001 /* ArchiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* ArchiveModels.swift */; };
 		B10000000000000000000003 /* ArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* ArchiveStore.swift */; };
 		B10000000000000000000004 /* ArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ArchiveViews.swift */; };
@@ -38,6 +39,7 @@
 		A2000000000000000000000B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		A2000000000000000000000C /* RunningArchiveSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RunningArchiveSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2000000000000000000000E /* profile.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ../../../assets/profile.png; sourceTree = "<group>"; };
 		B20000000000000000000001 /* ArchiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveModels.swift; sourceTree = "<group>"; };
 		B20000000000000000000003 /* ArchiveStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveStore.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* ArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveViews.swift; sourceTree = "<group>"; };
@@ -85,6 +87,7 @@
 				A20000000000000000000007 /* Info.plist */,
 				A20000000000000000000008 /* RunningArchiveSync.entitlements */,
 				A2000000000000000000000D /* Assets.xcassets */,
+				A2000000000000000000000E /* profile.png */,
 			);
 			path = RunningArchiveSync;
 			sourceTree = "<group>";
@@ -167,6 +170,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000000000000000000000A /* Assets.xcassets in Resources */,
+				A1000000000000000000000B /* profile.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -5,11 +5,13 @@ import SwiftData
 enum LocalArchiveError: LocalizedError {
     case workoutUnavailable
     case imageRenderFailed
+    case mapRenderFailed
 
     var errorDescription: String? {
         switch self {
         case .workoutUnavailable: return "无法从 Apple Health 读取这条跑步"
         case .imageRenderFailed: return "分享图片生成失败"
+        case .mapRenderFailed: return "地图未完整加载，请检查网络或切换地图源后重试"
         }
     }
 }
@@ -26,7 +28,11 @@ final class ArchiveStore: ObservableObject {
     private let health = HealthKitService()
     private var cache: HealthArchiveCache?
     private var detailCache: [String: ArchiveRouteDetail] = [:]
+    private var routeLookup: [String: ArchiveRouteSummary] = [:]
     private var routeScanTask: Task<Void, Never>?
+
+    private let chartPointLimit = 480
+    private let detailMapPointLimit = 900
 
     func configureCache(_ context: ModelContext) {
         if cache == nil { cache = HealthArchiveCache(context: context) }
@@ -48,8 +54,7 @@ final class ArchiveStore: ObservableObject {
 
             if let cache {
                 let activeIDs = Set(previews.map(\.id))
-                routes = try cache.allRouteSummaries().filter { activeIDs.contains($0.id) }
-                sortRoutes()
+                setRoutes(orderedRoutes(try cache.allRouteSummaries().filter { activeIDs.contains($0.id) }))
             }
             isLoading = false
             startRouteScan(for: activities)
@@ -96,7 +101,7 @@ final class ArchiveStore: ObservableObject {
 
     func routeSummary(id: String?) -> ArchiveRouteSummary? {
         guard let id else { return nil }
-        return routes.first { $0.id == id }
+        return routeLookup[id]
     }
 
     private func startRouteScan(for activities: [ArchiveActivity]) {
@@ -109,21 +114,24 @@ final class ArchiveStore: ObservableObject {
     private func warmRoutePreviews(_ candidates: [ArchiveActivity]) async {
         guard let cache else { return }
         var remaining = 0
-        for activity in candidates {
+        for (index, activity) in candidates.enumerated() {
             if (try? cache.routeState(id: activity.id).scanned) != true { remaining += 1 }
+            if index % 20 == 19 { await Task.yield() }
         }
         guard remaining > 0 else { routeScanStatus = nil; return }
 
         var completed = 0
+        var discovered = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
         for activity in candidates {
             if Task.isCancelled { return }
             do {
                 let state = try cache.routeState(id: activity.id)
                 if state.scanned {
-                    if let summary = state.summary { upsertRoute(summary) }
+                    if let summary = state.summary { discovered[summary.id] = summary }
+                    completed += 1
+                    if completed % 20 == 0 { await Task.yield() }
                     continue
                 }
-                routeScanStatus = "正在整理 Apple Health 路线 \(completed + 1)/\(remaining)"
                 let points = try await health.routePoints(forWorkoutID: activity.id) ?? []
                 let summary = makeRouteSummary(
                     id: activity.id,
@@ -136,13 +144,22 @@ final class ArchiveStore: ObservableObject {
                 if summary != nil || !isRecent {
                     try cache.saveRoute(id: activity.id, summary: summary)
                 }
-                if let summary { upsertRoute(summary) }
+                if let summary { discovered[summary.id] = summary }
                 completed += 1
+
+                // Do not publish and rebuild the map for every HealthKit route.
+                // A small batch keeps the UI responsive while still showing progress.
+                if completed == 1 || completed % 8 == 0 {
+                    setRoutes(orderedRoutes(Array(discovered.values)))
+                    routeScanStatus = "正在整理 Apple Health 路线 \(completed)/\(remaining)"
+                    await Task.yield()
+                }
             } catch {
                 // Keep this workout unmarked so a later launch can retry it.
                 completed += 1
             }
         }
+        setRoutes(orderedRoutes(Array(discovered.values)))
         routeScanStatus = nil
     }
 
@@ -206,11 +223,12 @@ final class ArchiveStore: ObservableObject {
 
     private func makeDetail(payload: WorkoutPayload, name: String) -> ArchiveRouteDetail {
         let points = payload.routePoints.sorted { $0.timestamp < $1.timestamp }
-        let elapsed = points.map { max(0, $0.timestamp.timeIntervalSince(payload.startDate)) }
-        let pace = points.enumerated().map { index, point -> Double? in
+        let chartPoints = sample(points: points, limit: chartPointLimit)
+        let elapsed = chartPoints.map { max(0, $0.timestamp.timeIntervalSince(payload.startDate)) }
+        let pace = chartPoints.enumerated().map { index, point -> Double? in
             var speed = point.speedMps
             if (speed ?? 0) <= 0.4, index > 0 {
-                let previous = points[index - 1]
+                let previous = chartPoints[index - 1]
                 let seconds = point.timestamp.timeIntervalSince(previous.timestamp)
                 if seconds > 0 {
                     let start = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
@@ -222,11 +240,14 @@ final class ArchiveStore: ObservableObject {
             let value = 1000 / speed / 60
             return (2...30).contains(value) ? value : nil
         }
-        let heart = payload.heartRateSamples.sorted { $0.elapsedSeconds < $1.elapsedSeconds }
+        let heart = sample(
+            items: payload.heartRateSamples.sorted { $0.elapsedSeconds < $1.elapsedSeconds },
+            limit: chartPointLimit
+        )
         let series = ArchiveTimeSeries(
             elapsed: elapsed,
             pace: pace,
-            elevation: points.map(\.altitude),
+            elevation: chartPoints.map(\.altitude),
             heartRate: heart.map(\.value),
             heartRateElapsed: heart.map(\.elapsedSeconds)
         )
@@ -237,7 +258,7 @@ final class ArchiveStore: ObservableObject {
             distanceKm: payload.distanceKm,
             elevationGain: elevationGain(points.map(\.altitude)),
             previewCoordinates: sample(points: points, limit: 300).map { [$0.longitude, $0.latitude] },
-            coordinates: points.map { [$0.longitude, $0.latitude] },
+            coordinates: sample(points: points, limit: detailMapPointLimit).map { [$0.longitude, $0.latitude] },
             elevations: points.map(\.altitude),
             timeSeries: series
         )
@@ -249,6 +270,12 @@ final class ArchiveStore: ObservableObject {
         return (0..<limit).map { points[Int((Double($0) * step).rounded())] }
     }
 
+    private func sample<T>(items: [T], limit: Int) -> [T] {
+        guard items.count > limit, limit > 1 else { return items }
+        let step = Double(items.count - 1) / Double(limit - 1)
+        return (0..<limit).map { items[Int((Double($0) * step).rounded())] }
+    }
+
     private func elevationGain(_ values: [Double]) -> Double {
         guard values.count > 1 else { return 0 }
         return values.dropFirst().enumerated().reduce(0) { result, pair in
@@ -258,13 +285,18 @@ final class ArchiveStore: ObservableObject {
     }
 
     private func upsertRoute(_ route: ArchiveRouteSummary) {
-        routes.removeAll { $0.id == route.id }
-        routes.append(route)
-        sortRoutes()
+        var updated = routes.filter { $0.id != route.id }
+        updated.append(route)
+        setRoutes(orderedRoutes(updated))
     }
 
-    private func sortRoutes() {
+    private func setRoutes(_ newRoutes: [ArchiveRouteSummary]) {
+        routes = newRoutes
+        routeLookup = Dictionary(uniqueKeysWithValues: newRoutes.map { ($0.id, $0) })
+    }
+
+    private func orderedRoutes(_ candidates: [ArchiveRouteSummary]) -> [ArchiveRouteSummary] {
         let order = Dictionary(uniqueKeysWithValues: activities.enumerated().map { ($1.id, $0) })
-        routes.sort { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
+        return candidates.sorted { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
     }
 }
