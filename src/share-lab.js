@@ -11,6 +11,7 @@ const COMPACT_CARD_HEIGHT = 1680;
 const DETAILED_CARD_HEIGHT = 2800;
 const PROFILE_URL = new URL("../assets/profile.png", import.meta.url).href;
 const SITE_URL = new URL(import.meta.env.BASE_URL || "/", window.location.origin).href;
+const API_BASE = import.meta.env.VITE_BASE || "";
 
 let tapTimes = [];
 let overlay = null;
@@ -19,6 +20,21 @@ let renderedBlob = null;
 let generationSerial = 0;
 let autoGenerateTimer = null;
 const routeCache = new Map();
+let cartoConfigCache = null;
+
+async function fetchCartoKey() {
+  if (cartoConfigCache !== null) return cartoConfigCache;
+  try {
+    const response = await fetch(`${API_BASE}/api/config/carto`);
+    if (response.ok) {
+      const config = await response.json();
+      cartoConfigCache = String(config.key || "").trim();
+      return cartoConfigCache;
+    }
+  } catch (_) {}
+  cartoConfigCache = "";
+  return cartoConfigCache;
+}
 
 function isSharePath() {
   return window.location.hash.replace(/^#/, "").replace(/\/$/, "") === SHARE_LAB_PATH;
@@ -94,8 +110,8 @@ function makeOverlay() {
         </label>
         <label>图片样式
           <select id="shareLayout">
-            <option value="compact">精简 · 1080 × 1680</option>
             <option value="detailed">详细 · 1080 × 2800</option>
+            <option value="compact">精简 · 1080 × 1680</option>
           </select>
         </label>
         <label>图片配色
@@ -394,7 +410,7 @@ function detailedMapTransform(coordinates) {
   };
 }
 
-async function drawDetailedMap(ctx, coordinates, theme) {
+async function drawDetailedMap(ctx, coordinates, theme, cartoKey = "") {
   const transform = detailedMapTransform(coordinates);
   ctx.fillStyle = theme === "dark" ? "#111822" : "#edf1f4";
   ctx.fillRect(0, 0, CARD_WIDTH, DETAILED_CARD_HEIGHT);
@@ -413,7 +429,9 @@ async function drawDetailedMap(ctx, coordinates, theme) {
       const wrappedX = ((tileX % maxTile) + maxTile) % maxTile;
       const subdomain = ["a", "b", "c", "d"][(wrappedX + tileY) % 4];
       const style = theme === "dark" ? "dark_all" : "light_all";
-      const url = `https://${subdomain}.basemaps.cartocdn.com/${style}/${transform.zoom}/${wrappedX}/${tileY}@2x.png`;
+      const url = cartoKey
+        ? `https://${subdomain}.basemaps.cartocdn.com/${style}/${transform.zoom}/${wrappedX}/${tileY}@2x.png?key=${encodeURIComponent(cartoKey)}`
+        : `https://tile.openstreetmap.org/${transform.zoom}/${wrappedX}/${tileY}.png`;
       tileJobs.push(loadImage(url, true).then((image) => ({
         image,
         x: tileX * tileSize - worldLeft,
@@ -423,6 +441,12 @@ async function drawDetailedMap(ctx, coordinates, theme) {
   }
   const tiles = await Promise.all(tileJobs);
   tiles.filter(Boolean).forEach(({ image, x, y }) => ctx.drawImage(image, x, y, tileSize, tileSize));
+  if (!cartoKey) {
+    // OSM is more colorful and information-dense than the former CARTO style;
+    // soften it only for the no-key fallback.
+    ctx.fillStyle = theme === "dark" ? "rgba(8, 12, 18, .56)" : "rgba(250, 248, 242, .52)";
+    ctx.fillRect(0, 0, CARD_WIDTH, DETAILED_CARD_HEIGHT);
+  }
   return transform;
 }
 
@@ -508,7 +532,7 @@ function drawCircularImage(ctx, image, x, y, size) {
   ctx.restore();
 }
 
-async function drawDetailedCard(canvas, run, route, title, requestedTheme) {
+async function drawDetailedCard(canvas, run, route, title, requestedTheme, cartoKey = "") {
   const actualTheme = resolveTheme(requestedTheme);
   const c = colorsFor(actualTheme);
   canvas.width = CARD_WIDTH;
@@ -523,7 +547,7 @@ async function drawDetailedCard(canvas, run, route, title, requestedTheme) {
     QRCode.toDataURL(SITE_URL, { width: 220, margin: 1, errorCorrectionLevel: "M" })
       .then((url) => loadImage(url)).catch(() => null),
   ]);
-  const transform = await drawDetailedMap(ctx, coordinates, actualTheme);
+  const transform = await drawDetailedMap(ctx, coordinates, actualTheme, cartoKey);
 
   let fade = ctx.createLinearGradient(0, 0, 0, DETAILED_CARD_HEIGHT);
   fade.addColorStop(0, actualTheme === "dark" ? "rgba(8,12,18,.91)" : "rgba(243,246,249,.92)");
@@ -647,8 +671,9 @@ async function generateSelectedCard() {
     if (!route) throw new Error("没有找到这条路线");
     const canvas = overlay.querySelector("#shareCanvas");
     const layout = overlay.querySelector("#shareLayout").value;
+    const cartoKey = await fetchCartoKey();
     const args = [canvas, targetRun, route, overlay.querySelector("#shareTitle").value.trim(), overlay.querySelector("#shareTheme").value];
-    if (layout === "detailed") await drawDetailedCard(...args);
+    if (layout === "detailed") await drawDetailedCard(...args, cartoKey);
     else drawCompactCard(...args);
     if (requestSerial !== generationSerial || !overlay) return;
     selectedRun = targetRun;
