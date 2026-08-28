@@ -18,6 +18,7 @@ export let defaultMapZoom = null;
 let leafletPromise = null;
 let amapPromise = null;
 let amapConfigCache = null;
+let cartoConfigCache = null;
 let routeOverlayKey = "";
 
 const BASE = (import.meta.env.VITE_BASE || "");
@@ -64,6 +65,19 @@ async function fetchAmapConfig() {
     securityJsCode: "18e22c62bd9cee938b85f1ee6f37b794",
     styles: { light: "amap://styles/whitesmoke", dark: "amap://styles/dark" },
   };
+}
+
+async function fetchCartoConfig() {
+  if (cartoConfigCache) return cartoConfigCache;
+  try {
+    const res = await fetch(`${BASE}/api/config/carto`);
+    if (res.ok) {
+      cartoConfigCache = await res.json();
+      return cartoConfigCache;
+    }
+  } catch (_) {}
+  cartoConfigCache = { key: "" };
+  return cartoConfigCache;
 }
 
 // ---- CDN sources ----
@@ -137,17 +151,19 @@ function getCityCenter(coords) {
 }
 
 // ---- Tile (Leaflet) ----
-function getTileProviders() {
+function getTileProviders(cartoKey = "") {
   const theme = document.documentElement.dataset.theme || "dark";
   const s = theme === "light" ? "light_all" : "dark_all";
+  const cartoUrl = `https://{s}.basemaps.cartocdn.com/${s}/{z}/{x}/{y}{r}.png`
+    + (cartoKey ? `?key=${encodeURIComponent(cartoKey)}` : "");
   return [
-    { url: `https://{s}.basemaps.cartocdn.com/${s}/{z}/{x}/{y}{r}.png`, subs: "abcd" },
+    { url: cartoUrl, subs: "abcd" },
     { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", subs: "abc" },
   ];
 }
 
-function addResilientTileLayer(map) {
-  const provs = getTileProviders();
+function addResilientTileLayer(map, cartoKey = "") {
+  const provs = getTileProviders(cartoKey);
   let idx = 0, layer = null, started = 0, done = 0, failed = 0, timer = null;
   function clear() { if (timer) { clearTimeout(timer); timer = null; } }
   function schedule() {
@@ -289,7 +305,8 @@ async function initLeaflet(el, cityAreas) {
     scrollWheelZoom: !isMobileViewport(), doubleClickZoom: true, tap: true, touchZoom: true,
   });
   if (isMobileViewport()) initMobileDblTap(heroMap, el);
-  heroTileLayer = addResilientTileLayer(heroMap);
+  const carto = await fetchCartoConfig();
+  heroTileLayer = addResilientTileLayer(heroMap, carto.key || "");
 
   heroCityLayer = window.L.featureGroup().addTo(heroMap);
   let cityBounds = null;
@@ -582,5 +599,6 @@ export async function switchMapTiles() {
   }
   if (!window.L) return;
   heroMap.eachLayer(layer => { if (layer instanceof window.L.TileLayer) heroMap.removeLayer(layer); });
-  heroTileLayer = addResilientTileLayer(heroMap);
+  const carto = await fetchCartoConfig();
+  heroTileLayer = addResilientTileLayer(heroMap, carto.key || "");
 }
