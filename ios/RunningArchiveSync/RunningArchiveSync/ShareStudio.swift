@@ -47,19 +47,24 @@ struct ShareStudioView: View {
         store.activities.first { $0.id == selectedID } ?? initialActivity ?? store.activities.first
     }
 
+    private var selectedRoute: ArchiveRouteSummary? {
+        store.routeSummary(id: selected?.routeId)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                pageHeader
                 preview
                 controls
                 actions
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 140)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("分享图片")
+        .background(RunTheme.page)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(RunTheme.page, for: .navigationBar)
         .task { await store.load(); selectDefault() }
         .task(id: renderToken) {
             guard renderRequested, selected != nil else { return }
@@ -79,27 +84,11 @@ struct ShareStudioView: View {
         }
     }
 
-    private var pageHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("SHARE STUDIO")
-                .font(.system(size: 13, weight: .black))
-                .tracking(2.2)
-                .foregroundStyle(RunTheme.accent)
-            Text("生成跑步分享图")
-                .font(.system(size: 30, weight: .black, design: .rounded))
-            Text("调整标题、地图和配色，生成一张完整的跑步记录。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
-    }
-
     @ViewBuilder private var preview: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("图片预览")
-                    .font(.headline.weight(.bold))
+                Text("分享预览")
+                    .font(.subheadline.weight(.bold))
                 Spacer()
                 Text(layout.rawValue)
                     .font(.caption.weight(.bold))
@@ -109,8 +98,6 @@ struct ShareStudioView: View {
                     .background(RunTheme.accent.opacity(0.1), in: Capsule())
             }
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.tertiarySystemGroupedBackground))
                 if let renderedImage {
                     Image(uiImage: renderedImage)
                         .resizable()
@@ -125,21 +112,59 @@ struct ShareStudioView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(RunTheme.accent)
-                        Text("调整设置后点击生成")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    conceptPreviewCard
                 }
             }
-            .frame(height: layout == .compact ? 450 : 560)
+            .frame(height: layout == .compact ? 330 : 440)
         }
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.07), radius: 16, y: 7)
+        .padding(.top, 2)
+    }
+
+    private var conceptPreviewCard: some View {
+        let surface = darkCard ? Color(red: 0.063, green: 0.137, blue: 0.153) : Color(red: 0.90, green: 0.94, blue: 0.92)
+        let lowerSurface = darkCard ? surface : Color.white.opacity(0.94)
+        let primaryText = darkCard ? Color.white : RunTheme.ink
+        let secondaryText = darkCard ? Color.white.opacity(0.62) : RunTheme.ink.opacity(0.58)
+        return VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                surface
+                MiniRouteView(coordinates: selectedRoute?.coordinates ?? [], color: darkCard ? RunTheme.mint : RunTheme.route)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 20)
+                    .scaleEffect(1.18)
+                LinearGradient(
+                    colors: darkCard ? [.clear, Color.black.opacity(0.44)] : [.clear, Color.white.opacity(0.25)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                Text("路线示意 · 生成后使用真实地图")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(darkCard ? RunTheme.mint : RunTheme.route)
+                    .padding(14)
+            }
+            .frame(height: 192)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("TODAY RUN")
+                    .font(.caption2.weight(.black))
+                    .tracking(1.6)
+                    .foregroundStyle(darkCard ? RunTheme.mint : RunTheme.route)
+                Text(selected?.name ?? "户外跑步")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(primaryText)
+                    .lineLimit(1)
+                Text(selected.map { "\(String(format: "%.1f", $0.distanceKm)) km · \($0.pace)/km · \($0.duration)" } ?? "选择一条有路线的记录")
+                    .font(.caption)
+                    .foregroundStyle(secondaryText)
+            }
+            .padding(15)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(lowerSurface)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(surface)
+        .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+        .shadow(color: .black.opacity(0.16), radius: 18, y: 9)
     }
 
     private var controls: some View {
@@ -147,49 +172,66 @@ struct ShareStudioView: View {
             Text("生成设置")
                 .font(.headline.weight(.bold))
                 .padding(.horizontal, 4)
-            VStack(spacing: 0) {
-                settingRow(icon: "figure.run", title: "跑步记录") {
-                    Menu {
-                        ForEach(store.activities.filter { $0.routeId != nil }.prefix(300)) { activity in
-                            Button {
-                                selectedID = activity.id
-                            } label: {
-                                Text("\(activity.date.formatted(date: .numeric, time: .omitted)) · \(activity.name)")
+            settingGroup(title: "内容") {
+                VStack(spacing: 0) {
+                    settingRow(icon: "figure.run", title: "跑步记录") {
+                        Menu {
+                            ForEach(store.activities.filter { $0.routeId != nil }.prefix(300)) { activity in
+                                Button {
+                                    selectedID = activity.id
+                                } label: {
+                                    Text("\(activity.date.formatted(date: .numeric, time: .omitted)) · \(activity.name)")
+                                }
                             }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(selected.map { $0.date.formatted(date: .numeric, time: .omitted) } ?? "选择记录")
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption.weight(.bold))
+                            }
+                            .foregroundStyle(.secondary)
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selected.map { $0.date.formatted(date: .numeric, time: .omitted) } ?? "选择记录")
-                                .lineLimit(1)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption.weight(.bold))
-                        }
-                        .foregroundStyle(.secondary)
+                    }
+                    Divider().padding(.leading, 52)
+                    settingRow(icon: "textformat", title: "图片标题") {
+                        TextField("户外跑步", text: $shareTitle)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(1)
+                            .foregroundStyle(RunTheme.ink)
                     }
                 }
-                Divider().padding(.leading, 48)
-                settingRow(icon: "textformat", title: "图片标题") {
-                    TextField("户外跑步", text: $shareTitle)
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(1)
-                }
-                Divider().padding(.leading, 48)
-                settingPickerRow(title: "版式", options: ShareLayout.allCases, selection: $layout)
-                Divider().padding(.leading, 48)
-                settingPickerRow(title: "地图", options: ShareMapProvider.allCases, selection: $mapProvider)
-                Divider().padding(.leading, 48)
-                HStack {
-                    Label("夜间配色", systemImage: "moon.fill")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Toggle("", isOn: $darkCard)
-                        .labelsHidden()
-                        .tint(RunTheme.accent)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
             }
-            .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            settingGroup(title: "样式") {
+                VStack(spacing: 0) {
+                    settingPickerRow(title: "版式", options: ShareLayout.allCases, selection: $layout)
+                    Divider().padding(.horizontal, 16)
+                    settingPickerRow(title: "地图", options: ShareMapProvider.allCases, selection: $mapProvider)
+                    Divider().padding(.horizontal, 16)
+                    HStack {
+                        Label("夜间配色", systemImage: darkCard ? "moon.fill" : "sun.max.fill")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Toggle("", isOn: $darkCard)
+                            .labelsHidden()
+                            .tint(RunTheme.accent)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+        }
+    }
+
+    private func settingGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            content()
+                .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.primary.opacity(0.06), lineWidth: 1))
         }
     }
 
@@ -222,7 +264,7 @@ struct ShareStudioView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                             .background(
-                                selection.wrappedValue.id == option.id ? RunTheme.accent.opacity(0.14) : Color(.tertiarySystemGroupedBackground),
+                                selection.wrappedValue.id == option.id ? RunTheme.accent.opacity(0.14) : RunTheme.page,
                                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                             )
                             .foregroundStyle(selection.wrappedValue.id == option.id ? RunTheme.accent : .secondary)
@@ -278,7 +320,7 @@ struct ShareStudioView: View {
 
     private func selectDefault() {
         if selectedID == nil { selectedID = store.activities.first(where: { $0.routeId != nil })?.id }
-        if initialActivity == nil { darkCard = colorScheme == .dark }
+        darkCard = colorScheme == .dark
     }
 
     private func invalidateRenderedImage() {
@@ -517,18 +559,6 @@ private struct ShareCardView: View {
                 background
                     .frame(width: 1080, height: 2800)
             }
-
-            LinearGradient(
-                colors: [
-                    background.opacity(0.94),
-                    background.opacity(0.14),
-                    background.opacity(0.10),
-                    background.opacity(0.42)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: 1080, height: 2800)
 
             profileBadge
                 .offset(x: 54, y: 48)
@@ -872,17 +902,18 @@ enum ShareImageGenerator {
         scale: CGFloat = 2
     ) async throws -> UIImage {
         let trimmedCoordinates = privacyTrimmed(coordinates, meters: 600)
-        // Leaflet/CARTO uses WGS-84. AMap tiles use GCJ-02 inside mainland
-        // China. Applying the conversion only for AMap removes the route
-        // offset that appeared on the Leaflet image.
+        // Match the web map providers: CARTO Leaflet data stays WGS-84;
+        // only AMap tiles need the GCJ-02 conversion in mainland China.
         let shareCoordinates = provider == .amap ? mapDisplayCoordinates(trimmedCoordinates) : trimmedCoordinates
         guard shareCoordinates.count > 1 else { return solidImage(size: size, dark: dark, scale: scale) }
 
-        // Use the same Carto tiles and Web Mercator projection as the web
-        // share lab. This keeps the iOS map style and route placement aligned
-        // with the Leaflet-based web version.
+        // Keep Leaflet exports aligned with the web Leaflet layer.
         let mapLayout = makeMapLayout(coordinates: shareCoordinates, size: size)
-        let tileJobs = tileJobs(for: mapLayout, size: size, dark: dark, provider: provider)
+        let cartoKey = provider == .leaflet ? mobileCartoKey() : nil
+        if provider == .leaflet && cartoKey == nil {
+            throw LocalArchiveError.cartoConfigurationMissing
+        }
+        let tileJobs = tileJobs(for: mapLayout, size: size, dark: dark, provider: provider, cartoKey: cartoKey)
         guard !tileJobs.isEmpty else { throw LocalArchiveError.mapRenderFailed }
         var tiles = tileJobs.compactMap { job -> Tile? in
             guard let image = tileCache.object(forKey: job.key as NSString) else { return nil }
@@ -904,16 +935,37 @@ enum ShareImageGenerator {
         format.scale = scale
         return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
             let context = renderer.cgContext
-            (dark ? UIColor(red: 0.055, green: 0.07, blue: 0.10, alpha: 1) : UIColor(red: 0.93, green: 0.95, blue: 0.96, alpha: 1)).setFill()
+            (dark ? UIColor(red: 0.055, green: 0.07, blue: 0.10, alpha: 1) : UIColor(red: 0.929, green: 0.945, blue: 0.957, alpha: 1)).setFill()
             renderer.fill(CGRect(origin: .zero, size: size))
 
             let tileSize: CGFloat = 256
-            let worldLeft = mapLayout.centerX - Double(size.width) / (2 * mapLayout.worldScale)
             let worldTop = mapLayout.centerY - mapLayout.targetCenterY / mapLayout.worldScale
             for tile in tiles {
                 let x = CGFloat((Double(tile.x * 256) - mapLayout.centerX) * mapLayout.worldScale + Double(size.width) / 2)
                 let y = CGFloat((Double(tile.y * 256) - mapLayout.centerY) * mapLayout.worldScale + mapLayout.targetCenterY)
                 tile.image.draw(in: CGRect(x: x, y: y, width: tileSize * mapLayout.worldScale, height: tileSize * mapLayout.worldScale))
+            }
+            // Web detailed sharing fades the map before drawing the route.
+            // This keeps the background quiet without washing out the line.
+            if size.height > size.width * 1.5 {
+                let base = dark
+                    ? UIColor(red: 0.031, green: 0.047, blue: 0.071, alpha: 1)
+                    : UIColor(red: 0.953, green: 0.965, blue: 0.976, alpha: 1)
+                let alphaStops: [CGFloat] = [0.92, 0.14, 0.04, 0.18, 0.30, 0.42]
+                let locations: [CGFloat] = [0, 0.14, 0.50, 0.64, 0.82, 1]
+                let colors = alphaStops.map { base.withAlphaComponent($0).cgColor } as [Any]
+                if let gradient = CGGradient(
+                    colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                    colors: colors as CFArray,
+                    locations: locations
+                ) {
+                    context.drawLinearGradient(
+                        gradient,
+                        start: CGPoint(x: 0, y: 0),
+                        end: CGPoint(x: 0, y: size.height),
+                        options: []
+                    )
+                }
             }
 
             let projected = mapLayout.coordinates.map {
@@ -1020,7 +1072,7 @@ enum ShareImageGenerator {
         )
     }
 
-    private static func tileJobs(for layout: MapLayout, size: CGSize, dark: Bool, provider: ShareMapProvider) -> [(key: String, x: Int, y: Int, url: URL)] {
+    private static func tileJobs(for layout: MapLayout, size: CGSize, dark: Bool, provider: ShareMapProvider, cartoKey: String?) -> [(key: String, x: Int, y: Int, url: URL)] {
         let tileSize: Double = 256
         let worldLeft = layout.centerX - Double(size.width) / (2 * layout.worldScale)
         let worldRight = layout.centerX + Double(size.width) / (2 * layout.worldScale)
@@ -1040,8 +1092,10 @@ enum ShareImageGenerator {
                 switch provider {
                 case .leaflet:
                     let subdomain = ["a", "b", "c", "d"][(wrappedX + tileY) % 4]
-                    key = "leaflet-\(style)-\(layout.zoom)-\(wrappedX)-\(tileY)"
-                    urlString = "https://\(subdomain).basemaps.cartocdn.com/\(style)/\(layout.zoom)/\(wrappedX)/\(tileY)@2x.png"
+                    guard let cartoKey,
+                          let encodedKey = cartoKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { continue }
+                    key = "leaflet-carto-\(style)-\(layout.zoom)-\(wrappedX)-\(tileY)"
+                    urlString = "https://\(subdomain).basemaps.cartocdn.com/\(style)/\(layout.zoom)/\(wrappedX)/\(tileY)@2x.png?key=\(encodedKey)"
                 case .amap:
                     let subdomain = ["1", "2", "3", "4"][(wrappedX + tileY) % 4]
                     key = "amap-\(amapStyle)-\(layout.zoom)-\(wrappedX)-\(tileY)"
@@ -1054,12 +1108,19 @@ enum ShareImageGenerator {
         return jobs
     }
 
+    private static func mobileCartoKey() -> String? {
+        let key = (Bundle.main.object(forInfoDictionaryKey: "CARTOAPIKey") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return key.isEmpty ? nil : key
+    }
+
     private static func loadTiles(_ jobs: [(key: String, x: Int, y: Int, url: URL)]) async -> [TilePayload] {
         await withTaskGroup(of: TilePayload?.self) { group in
             for job in jobs {
                 group.addTask {
                     var request = URLRequest(url: job.url)
                     request.timeoutInterval = 4
+                    request.setValue("RunningArchiveSync/1.0 (personal running archive)", forHTTPHeaderField: "User-Agent")
                     guard let (data, response) = try? await URLSession.shared.data(for: request),
                           (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
                     return TilePayload(key: job.key, x: job.x, y: job.y, data: data)

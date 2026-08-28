@@ -6,12 +6,14 @@ enum LocalArchiveError: LocalizedError {
     case workoutUnavailable
     case imageRenderFailed
     case mapRenderFailed
+    case cartoConfigurationMissing
 
     var errorDescription: String? {
         switch self {
         case .workoutUnavailable: return "无法从 Apple Health 读取这条跑步"
         case .imageRenderFailed: return "分享图片生成失败"
         case .mapRenderFailed: return "地图未完整加载，请检查网络或切换地图源后重试"
+        case .cartoConfigurationMissing: return "Leaflet 的 CARTO API Key 未配置，无法生成正确的地图风格"
         }
     }
 }

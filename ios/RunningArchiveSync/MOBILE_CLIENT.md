@@ -10,7 +10,7 @@
 
 - **档案**：地图、累计里程、全马 PB、半马 PB 和年度统计。
 - **汇总**：年度、月份和训练数据统计。
-- **记录**：跑步记录列表、筛选、搜索和详情。
+- **记录**：跑步记录列表、训练/比赛筛选和详情。
 - **分享**：生成精简或详细跑步分享图。
 - **同步**：选择 HealthKit 跑步并上传到网站。
 
@@ -31,8 +31,10 @@
 
 地图源说明：
 
-- **Leaflet** 使用与网页端相同的 Carto 瓦片和 Web Mercator 投影，使用原始 WGS-84 坐标；
+- **Leaflet** 固定使用与网页详细分享图相同的 CARTO `light_all` / `dark_all` 瓦片、Web Mercator 投影和原始 WGS-84 坐标；
 - **高德** 使用高德瓦片，并且只在高德模式下将坐标转换为 GCJ-02，避免 Leaflet 路线偏移；
+- CARTO Key 从 App 自己的 `Info.plist` 中读取，不依赖同步服务器；Leaflet 不再回退到 OSM 或高德，避免生成风格错误的图片；
+- 详细图按照网页端顺序先绘制地图与淡化渐变，再绘制轨迹，确保地图保持浅色背景且轨迹不被蒙层压暗；
 - 所有地图瓦片加载完成后才会输出图片；网络不完整时会提示切换地图源或重试，不生成残缺地图；
 - 地图瓦片带有内存缓存和单瓦片超时，减少重复生成的等待时间。
 
@@ -67,7 +69,9 @@ Leaflet 模式必须使用原始 WGS-84 坐标；只有高德模式才使用 GCJ
 
 ### 地图未完整加载
 
-检查网络后重试，或切换到另一种地图源。客户端会在瓦片缺失时直接报错，不会把半张地图保存为最终图片。
+检查网络后重试，或切换到另一种地图源。Leaflet 还需要确认 `Info.plist` 中存在有效的
+`CARTOAPIKey`。客户端会在 Key 缺失或瓦片不完整时直接报错，不会回退到风格不同的
+OSM/高德底图，也不会把半张地图保存为最终图片。
 
 ### 保存到相册没有反应
 
@@ -83,5 +87,4 @@ Leaflet 模式必须使用原始 WGS-84 坐标；只有高德模式才使用 GCJ
 - `RunningArchiveSync/ArchiveStore.swift`：HealthKit 数据、SwiftData 缓存和派生统计；
 - `RunningArchiveSync/ArchiveViews.swift`：档案、汇总、记录、地图和详情页面；
 - `RunningArchiveSync/ShareStudio.swift`：分享页、地图瓦片、分享图片渲染和保存相册；
-- `RunningArchiveSync/Info.plist`：HealthKit 与相册写入权限说明。
-
+- `RunningArchiveSync/Info.plist`：HealthKit、相册写入权限和移动端 CARTO Key 配置。

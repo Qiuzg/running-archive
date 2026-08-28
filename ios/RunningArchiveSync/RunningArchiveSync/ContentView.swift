@@ -111,82 +111,280 @@ final class HealthSyncViewModel: ObservableObject {
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var archiveStore = ArchiveStore()
+    @StateObject private var appearance = AppearanceStore()
+    @StateObject private var navigation = ArchiveNavigationStore()
 
     var body: some View {
-        TabView {
-            DashboardView()
-                .tabItem { Label("档案", systemImage: "map.fill") }
-            SummaryCollectionView()
-                .tabItem { Label("汇总", systemImage: "square.grid.2x2.fill") }
-            NavigationStack { ActivityListView() }
-                .tabItem { Label("记录", systemImage: "figure.run") }
-            NavigationStack { ShareStudioView() }
-                .tabItem { Label("分享", systemImage: "photo.on.rectangle.angled") }
-            NavigationStack { HealthSyncView() }
-                .tabItem { Label("同步", systemImage: "arrow.triangle.2.circlepath") }
+        currentScreen
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ArchiveTabBar(selection: $navigation.selectedTab)
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
         }
         .environmentObject(archiveStore)
+        .environmentObject(appearance)
+        .environmentObject(navigation)
+        .preferredColorScheme(appearance.preferredColorScheme)
         .tint(RunTheme.accent)
         .task {
             archiveStore.configureCache(modelContext)
             await archiveStore.load()
         }
     }
+
+    @ViewBuilder
+    private var currentScreen: some View {
+        switch navigation.selectedTab {
+        case .archive:
+            DashboardView()
+        case .summary:
+            SummaryCollectionView()
+        case .log:
+            NavigationStack { ActivityListView() }
+        case .share:
+            NavigationStack { ShareStudioView(initialActivity: navigation.shareActivity) }
+        case .sync:
+            NavigationStack { HealthSyncView() }
+        }
+    }
+}
+
+@MainActor
+final class ArchiveNavigationStore: ObservableObject {
+    @Published var selectedTab: ArchiveTab = .archive
+    @Published var shareActivity: ArchiveActivity?
+
+    func openShare(for activity: ArchiveActivity) {
+        shareActivity = activity
+        selectedTab = .share
+    }
+}
+
+enum AppearanceMode: String {
+    case system, light, dark
+}
+
+@MainActor
+final class AppearanceStore: ObservableObject {
+    @Published private(set) var mode: AppearanceMode
+
+    init() {
+        mode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "system") ?? .system
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch mode {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    func toggle() {
+        mode = mode == .dark ? .light : .dark
+        UserDefaults.standard.set(mode.rawValue, forKey: "appearanceMode")
+    }
+}
+
+struct ThemeToggleButton: View {
+    @EnvironmentObject private var appearance: AppearanceStore
+
+    var body: some View {
+        Button { appearance.toggle() } label: {
+            Image(systemName: appearance.mode == .dark ? "sun.max.fill" : "moon.fill")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(RunTheme.accent)
+                .frame(width: 32, height: 32)
+                .background(RunTheme.accent.opacity(0.11), in: Circle())
+        }
+        .accessibilityLabel(appearance.mode == .dark ? "切换到日间模式" : "切换到夜间模式")
+    }
+}
+
+enum ArchiveTab: Int, CaseIterable, Identifiable {
+    case archive, summary, log, share, sync
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .archive: "档案"
+        case .summary: "汇总"
+        case .log: "记录"
+        case .share: "分享"
+        case .sync: "同步"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .archive: "map"
+        case .summary: "chart.bar"
+        case .log: "figure.run"
+        case .share: "square.and.arrow.up"
+        case .sync: "arrow.triangle.2.circlepath"
+        }
+    }
+}
+
+private struct ArchiveTabBar: View {
+    @Binding var selection: ArchiveTab
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(ArchiveTab.allCases) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selection = tab }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 16, weight: selection == tab ? .bold : .medium))
+                        Text(tab.title)
+                            .font(.caption2.weight(selection == tab ? .bold : .medium))
+                    }
+                    .foregroundStyle(selection == tab ? RunTheme.accent : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(
+                        selection == tab ? RunTheme.accent.opacity(0.11) : .clear,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(5)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.primary.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+    }
 }
 
 struct HealthSyncView: View {
     @StateObject private var model = HealthSyncViewModel()
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Apple Health 同步", systemImage: "heart.fill")
-                        .font(.title3.bold()).foregroundStyle(RunTheme.accent)
-                    Text("从这台 iPhone 读取 Apple Watch 跑步，并安全上传到你的个人档案。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }.padding(.vertical, 6)
-            }
-            Section("服务器") {
-                TextField("https://你的域名", text: $model.serverURL)
-                    .textInputAutocapitalization(.never).keyboardType(.URL)
-                SecureField("同步令牌", text: $model.token)
-            }
-            Section("待同步跑步（\(model.previews.count)）") {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 17) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.green)
+                        .frame(width: 30, height: 30)
+                        .background(Color.green.opacity(0.20), in: Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("HealthKit 已准备")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(RunTheme.ink)
+                        Text(model.status)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(13)
+                .background(Color.green.opacity(colorScheme == .dark ? 0.12 : 0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                HStack {
+                    Text("待同步记录")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(RunTheme.ink)
+                    Spacer()
+                    Text("已选 \(model.selectedIDs.count)")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(RunTheme.route)
+                }
+
                 if model.previews.isEmpty {
-                    Text("暂无记录").foregroundStyle(.secondary)
+                    Text("暂无记录，点击下方按钮检查 Apple Health。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(17)
+                        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
                 } else {
+                    VStack(spacing: 8) {
+                        ForEach(model.previews) { workout in
+                            Button {
+                                if model.selectedIDs.contains(workout.id) { model.selectedIDs.remove(workout.id) }
+                                else { model.selectedIDs.insert(workout.id) }
+                            } label: {
+                                HStack(spacing: 11) {
+                                    Image(systemName: model.selectedIDs.contains(workout.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3)
+                                        .foregroundStyle(model.selectedIDs.contains(workout.id) ? RunTheme.route : .secondary)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(workout.date.formatted(date: .abbreviated, time: .omitted))
+                                            .font(.subheadline.weight(.bold))
+                                            .foregroundStyle(RunTheme.ink)
+                                        Text(String(format: "%.2f km · %@", workout.distanceKm, duration(workout.duration)))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(model.selectedIDs.contains(workout.id) ? "路线已读" : "待同步")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(RunTheme.route)
+                                }
+                                .padding(12)
+                                .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                     HStack {
                         Button("全选") { model.selectAll() }
                         Spacer()
                         Button("取消全选") { model.clearSelection() }
                     }
-                    .buttonStyle(.borderless)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(RunTheme.route)
                 }
-                ForEach(model.previews) { workout in
-                    Button {
-                        if model.selectedIDs.contains(workout.id) { model.selectedIDs.remove(workout.id) }
-                        else { model.selectedIDs.insert(workout.id) }
-                    } label: {
-                        HStack {
-                            Image(systemName: model.selectedIDs.contains(workout.id) ? "checkmark.circle.fill" : "circle")
-                            VStack(alignment: .leading) {
-                                Text(workout.date.formatted(date: .abbreviated, time: .shortened))
-                                Text(String(format: "%.2f km · %@", workout.distanceKm, duration(workout.duration)))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }.buttonStyle(.plain)
+
+                DisclosureGroup {
+                    VStack(spacing: 10) {
+                        TextField("https://你的域名", text: $model.serverURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .padding(11)
+                            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        SecureField("同步令牌", text: $model.token)
+                            .padding(11)
+                            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .padding(.top, 10)
+                } label: {
+                    Label("服务器设置", systemImage: "server.rack")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(RunTheme.ink)
                 }
-            }
-            Section {
+
+                Button { Task { await model.syncSelected() } } label: {
+                    Text("同步选中的 \(model.selectedIDs.count) 条记录")
+                        .font(.subheadline.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .background(RunTheme.accent, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .disabled(model.selectedIDs.isEmpty)
+                .opacity(model.selectedIDs.isEmpty ? 0.45 : 1)
+
                 Button("授权并检查新增跑步") { Task { await model.authorizeAndRefresh() } }
-                Button("同步所选记录（\(model.selectedIDs.count)）") { Task { await model.syncSelected() } }
-                    .disabled(model.selectedIDs.isEmpty)
+                    .font(.caption.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(RunTheme.route)
             }
-            Section("状态") { Text(model.status).foregroundStyle(.secondary) }
+            .padding(.horizontal, 17)
+            .padding(.top, 24)
+            .padding(.bottom, 140)
         }
-        .navigationTitle("数据同步")
+        .background(RunTheme.page)
+        .scrollIndicators(.hidden)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(RunTheme.page, for: .navigationBar)
         .disabled(model.isWorking)
         .overlay { if model.isWorking { ProgressView().controlSize(.large) } }
     }
