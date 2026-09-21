@@ -27,7 +27,9 @@ if [ -n "$ECS_HOST" ]; then
         "$ECS_HOST:$DEPLOY_DIR/dist/"
 
     # Upload server code
-    rsync -avz --delete \
+    # Do not copy the local macOS owner, group or root-directory mode onto the
+    # production server: SQLite must keep a group-writable parent directory.
+    rsync -avz --delete --no-owner --no-group --no-perms \
         "$PROJECT_DIR/server/" \
         "$ECS_HOST:$DEPLOY_DIR/server/" \
         --exclude '__pycache__' \
@@ -53,6 +55,12 @@ if [ -n "$ECS_HOST" ]; then
         cd /opt/running-archive
         rm -f route-apple-*.js
 
+        # SQLite creates journal/WAL files next to running.db. Restore the
+        # service group's directory access before and after migration so an
+        # interrupted or manual deployment cannot leave the API read-only.
+        chown root:www-data server
+        chmod 2775 server
+
         # Python venv. Fresh Debian/Ubuntu images may not include ensurepip.
         if ! python3 -m venv venv; then
             if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
@@ -77,9 +85,12 @@ if [ -n "$ECS_HOST" ]; then
         # The API runs as www-data. SQLite needs write access to both the
         # database file and its parent directory for journal files.
         chown root:www-data server
-        chmod 775 server
+        chmod 2775 server
         chown www-data:www-data server/running.db
         chmod 660 server/running.db
+        sudo -u www-data test -w server
+        sudo -u www-data ./venv/bin/python3 -c \
+            "import sqlite3; connection = sqlite3.connect('server/running.db'); connection.execute('BEGIN IMMEDIATE'); connection.rollback(); connection.close()"
 
         # Nginx config
         sudo cp server/nginx.conf /etc/nginx/sites-available/running-archive

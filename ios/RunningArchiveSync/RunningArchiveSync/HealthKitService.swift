@@ -37,6 +37,7 @@ final class HealthKitService {
         var readTypes: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
         readTypes.insert(try heartRateType)
         if let power = HKQuantityType.quantityType(forIdentifier: .runningPower) { readTypes.insert(power) }
+        if let speed = HKQuantityType.quantityType(forIdentifier: .runningSpeed) { readTypes.insert(speed) }
         if let steps = HKQuantityType.quantityType(forIdentifier: .stepCount) { readTypes.insert(steps) }
         try await store.requestAuthorization(toShare: [], read: readTypes)
     }
@@ -89,8 +90,9 @@ final class HealthKitService {
         let heartType = try heartRateType
         async let heartSamples = quantitySeriesPoints(type: heartType, workout: workout)
         async let powerSamples = powerSamples(for: workout)
+        async let speedSamples = runningSpeedSamples(for: workout)
         async let stepCount = stepCount(for: workout)
-        let (route, heart, power, steps) = try await (locations, heartSamples, powerSamples, stepCount)
+        let (route, heart, power, speed, steps) = try await (locations, heartSamples, powerSamples, speedSamples, stepCount)
         let heartUnit = HKUnit.count().unitDivided(by: .minute())
         let heartValues = heart.map { $0.quantity.doubleValue(for: heartUnit) }
         let heartPayload = metricPayload(
@@ -105,6 +107,7 @@ final class HealthKitService {
         }
         let avgPower = power.isEmpty ? nil : power.reduce(0, +) / Double(power.count)
         let cadence = steps.map { $0 / max(workout.duration / 60, 1) }
+        let intervals = workoutIntervals(for: workout)
         let heartStatistics = workout.statistics(for: heartType)
         let averageHeartRate = heartStatistics?.averageQuantity()?.doubleValue(for: heartUnit)
             ?? average(heartValues)
@@ -116,8 +119,91 @@ final class HealthKitService {
             avgHeartRate: averageHeartRate.map { Int($0.rounded()) },
             maxHeartRate: maximumHeartRate.map { Int($0.rounded()) },
             avgCadence: cadence, avgPower: avgPower, routePoints: points,
-            heartRateSamples: heartPayload
+            heartRateSamples: heartPayload,
+            runningSpeedSamples: speed,
+            intervals: intervals
         )
+    }
+
+    private func workoutIntervals(for workout: HKWorkout) -> [WorkoutIntervalPayload] {
+        let activities = workout.workoutActivities
+        if activities.count > 1 {
+            let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+            let heartType = try? heartRateType
+            let powerType = HKQuantityType.quantityType(forIdentifier: .runningPower)
+            let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)
+            let heartUnit = HKUnit.count().unitDivided(by: .minute())
+
+            return activities.enumerated().map { offset, activity in
+                let start = max(0, activity.startDate.timeIntervalSince(workout.startDate))
+                let endDate = activity.endDate ?? activity.startDate.addingTimeInterval(activity.duration)
+                let end = max(start, endDate.timeIntervalSince(workout.startDate))
+                let duration = max(0, activity.duration)
+                let distanceKm = distanceType
+                    .flatMap { activity.statistics(for: $0)?.sumQuantity() }
+                    .map { $0.doubleValue(for: .meter()) / 1000 }
+                let pace = distanceKm.flatMap { distance in
+                    distance > 0 ? duration / distance : nil
+                }
+                let heartStatistics = heartType.flatMap { activity.statistics(for: $0) }
+                let averageHeartRate = heartStatistics?.averageQuantity()
+                    .map { Int($0.doubleValue(for: heartUnit).rounded()) }
+                let maximumHeartRate = heartStatistics?.maximumQuantity()
+                    .map { Int($0.doubleValue(for: heartUnit).rounded()) }
+                let averagePower = powerType
+                    .flatMap { activity.statistics(for: $0)?.averageQuantity() }
+                    .map { $0.doubleValue(for: .watt()) }
+                let steps = stepType
+                    .flatMap { activity.statistics(for: $0)?.sumQuantity() }
+                    .map { $0.doubleValue(for: .count()) }
+                let cadence = steps.map { $0 / max(duration / 60, 1) }
+
+                return WorkoutIntervalPayload(
+                    index: offset + 1,
+                    kind: "activity",
+                    activityType: Int(activity.workoutConfiguration.activityType.rawValue),
+                    startElapsedSeconds: start,
+                    endElapsedSeconds: end,
+                    durationSeconds: duration,
+                    distanceKm: distanceKm,
+                    paceSecondsPerKm: pace,
+                    avgHeartRate: averageHeartRate,
+                    maxHeartRate: maximumHeartRate,
+                    avgCadence: cadence,
+                    avgPower: averagePower,
+                    eventType: nil,
+                    label: nil
+                )
+            }
+        }
+
+        // Some apps record laps/segments as workout events without creating
+        // multiple HKWorkoutActivity objects. Preserve their timing as a
+        // fallback; activity-level metrics are not available for these rows.
+        return (workout.workoutEvents ?? [])
+            .filter { $0.type == .lap || $0.type == .segment }
+            .enumerated()
+            .map { offset, event in
+                let start = max(0, event.dateInterval.start.timeIntervalSince(workout.startDate))
+                let end = max(start, event.dateInterval.end.timeIntervalSince(workout.startDate))
+                let eventType = event.type == .lap ? "lap" : "segment"
+                return WorkoutIntervalPayload(
+                    index: offset + 1,
+                    kind: "event",
+                    activityType: nil,
+                    startElapsedSeconds: start,
+                    endElapsedSeconds: end,
+                    durationSeconds: max(0, event.dateInterval.duration),
+                    distanceKm: nil,
+                    paceSecondsPerKm: nil,
+                    avgHeartRate: nil,
+                    maxHeartRate: nil,
+                    avgCadence: nil,
+                    avgPower: nil,
+                    eventType: eventType,
+                    label: nil
+                )
+            }
     }
 
     private func runningWorkouts(limit: Int) async throws -> [HKWorkout] {
@@ -219,6 +305,13 @@ final class HealthKitService {
         guard let type = HKQuantityType.quantityType(forIdentifier: .runningPower) else { return [] }
         return try await quantitySeriesPoints(type: type, workout: workout)
             .map { $0.quantity.doubleValue(for: .watt()) }
+    }
+
+    private func runningSpeedSamples(for workout: HKWorkout) async throws -> [MetricSamplePayload] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .runningSpeed) else { return [] }
+        let unit = HKUnit.meter().unitDivided(by: .second())
+        let points = try await quantitySeriesPoints(type: type, workout: workout)
+        return metricPayload(from: points, unit: unit, workoutStart: workout.startDate)
     }
 
     private func stepCount(for workout: HKWorkout) async throws -> Double? {

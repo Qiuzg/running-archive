@@ -26,12 +26,10 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                hero
-            }
+            hero
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: .top)
             .background(RunTheme.page)
-            .refreshable { await store.load(force: true) }
             .overlay {
                 if store.isLoading && store.activities.isEmpty { ProgressView().controlSize(.large) }
             }
@@ -64,12 +62,16 @@ struct DashboardView: View {
             .allowsHitTesting(false)
             HStack(spacing: 12) {
                 profileAvatar
-                AtlasHeroMetric(label: "年度跑量", value: store.summary.map { "\(Int($0.yearlyDistanceKm)) km" } ?? "--")
-                AtlasHeroMetric(label: "全马 PB", value: store.summary?.marathonPb ?? "--")
-                AtlasHeroMetric(label: "半马 PB", value: store.summary?.halfMarathonPb ?? "--")
+                AtlasHeroMetric(
+                    label: "年度跑量",
+                    value: store.summary.map { "\(Int($0.yearlyDistanceKm)) km" } ?? "--",
+                    accent: Color(red: 0.16, green: 0.43, blue: 0.94)
+                )
+                AtlasHeroMetric(label: "全马 PB", value: store.summary?.marathonPb ?? "--", accent: RunTheme.mint)
+                AtlasHeroMetric(label: "半马 PB", value: store.summary?.halfMarathonPb ?? "--", accent: RunTheme.accent)
             }
             .padding(.horizontal, 18)
-            .padding(.bottom, 140)
+            .padding(.bottom, 174)
         }
     }
 
@@ -116,9 +118,13 @@ private struct AtlasHeroMetric: View {
     @Environment(\.colorScheme) private var colorScheme
     let label: String
     let value: String
+    let accent: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 5) {
+            Capsule()
+                .fill(accent)
+                .frame(width: 22, height: 3)
             Text(label)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle((colorScheme == .dark ? Color.white : RunTheme.ink).opacity(0.72))
@@ -1319,12 +1325,13 @@ private struct MetricLineChart: View {
     }
 
     private var yDomain: ClosedRange<Double> {
-        let values = points.map(\.value).filter(\.isFinite)
+        let values = points.map { plottedValue($0.value) }.filter(\.isFinite)
         guard let minimum = values.min(), let maximum = values.max() else { return 0...1 }
         if abs(maximum - minimum) < 0.001 {
-            return (minimum - 1)...(maximum + 1)
+            let padding = kind == .pace ? max(minimum * 0.05, 0.005) : 1
+            return max(0, minimum - padding)...(maximum + padding)
         }
-        let padding = max((maximum - minimum) * 0.08, kind == .pace ? 0.25 : 1)
+        let padding = max((maximum - minimum) * 0.08, kind == .pace ? 0.005 : 1)
         return max(0, minimum - padding)...(maximum + padding)
     }
 
@@ -1339,10 +1346,10 @@ private struct MetricLineChart: View {
                 AreaMark(
                     x: .value("时间", point.seconds / 60),
                     yStart: .value("基线", yDomain.lowerBound),
-                    yEnd: .value(unit, point.value)
+                    yEnd: .value(unit, plottedValue(point.value))
                 )
                     .foregroundStyle(color.opacity(0.10))
-                LineMark(x: .value("时间", point.seconds / 60), y: .value(unit, point.value))
+                LineMark(x: .value("时间", point.seconds / 60), y: .value(unit, plottedValue(point.value)))
                     .foregroundStyle(color).lineStyle(StrokeStyle(lineWidth: 2))
             }
             .chartXScale(domain: xDomain)
@@ -1366,7 +1373,8 @@ private struct MetricLineChart: View {
                         .foregroundStyle(.secondary.opacity(0.28))
                     AxisValueLabel {
                         if let metric = value.as(Double.self) {
-                            Text(kind == .pace ? paceAxisLabel(metric) : String(format: "%.0f", metric))
+                            if kind == .pace, metric > 0 { Text(paceAxisLabel(1 / metric)) }
+                            else { Text(String(format: "%.0f", metric)) }
                         }
                     }
                 }
@@ -1383,6 +1391,10 @@ private struct MetricLineChart: View {
     private func paceAxisLabel(_ minutes: Double) -> String {
         let totalSeconds = max(0, Int((minutes * 60).rounded()))
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+
+    private func plottedValue(_ value: Double) -> Double {
+        kind == .pace && value > 0 ? 1 / value : value
     }
 }
 
@@ -1427,7 +1439,7 @@ struct RouteMapView: UIViewRepresentable {
     let routes: [ArchiveRouteSummary]
     let colorScheme: ColorScheme
 
-    func makeCoordinator() -> MapCoordinator { MapCoordinator(lineWidth: 1.6) }
+    func makeCoordinator() -> OverviewMapCoordinator { OverviewMapCoordinator() }
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
@@ -1441,48 +1453,152 @@ struct RouteMapView: UIViewRepresentable {
         map.isZoomEnabled = true
         map.isRotateEnabled = false
         map.isPitchEnabled = false
-        map.gestureRecognizers?.forEach { $0.cancelsTouchesInView = false }
         return map
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
         map.overrideUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         let appearance = colorScheme == .dark ? "dark" : "light"
-        if context.coordinator.appearanceSignature != appearance {
-            map.removeOverlays(map.overlays)
-            context.coordinator.appearanceSignature = appearance
-            context.coordinator.hasSetInitialRegion = false
-            context.coordinator.signature = ""
-        }
-        let signature = "\(appearance)|" + routes.map { "\($0.id):\($0.previewCoordinates.count)" }.joined(separator: "|")
-        guard context.coordinator.signature != signature else { return }
-        context.coordinator.signature = signature
+        context.coordinator.update(routes: routes, appearance: appearance, on: map)
+    }
+}
 
-        let desiredIDs = Set(routes.map(\.id))
-        let staleOverlays = map.overlays.filter { overlay in
-            guard let line = overlay as? MKPolyline, let id = line.title else { return false }
-            return !desiredIDs.contains(id)
-        }
-        if !staleOverlays.isEmpty { map.removeOverlays(staleOverlays) }
+final class OverviewMapCoordinator: NSObject, MKMapViewDelegate {
+    private var signature = ""
+    private var appearanceSignature = ""
+    private var hasSetInitialRegion = false
+    private var isChangingRegion = false
+    private var pendingRoutes: [ArchiveRouteSummary]?
+    private var pendingAppearance: String?
 
-        let existingIDs = Set(map.overlays.compactMap { ($0 as? MKPolyline)?.title })
-        let lines = routes.compactMap { route -> MKPolyline? in
-            guard !existingIDs.contains(route.id) else { return nil }
-            let coordinates = decimatedMapCoordinates(route.coordinates, limit: 60).map(mapDisplayCoordinate)
+    func update(routes: [ArchiveRouteSummary], appearance: String, on map: MKMapView) {
+        guard !isChangingRegion else {
+            pendingRoutes = routes
+            pendingAppearance = appearance
+            return
+        }
+
+        if appearanceSignature != appearance {
+            appearanceSignature = appearance
+            signature = ""
+            hasSetInitialRegion = false
+        }
+
+        let nextSignature = "\(appearance)|" + routes.map {
+            "\($0.id):\($0.previewCoordinates.count)"
+        }.joined(separator: "|")
+        guard signature != nextSignature else { return }
+        signature = nextSignature
+
+        let visibleRoutes = distinctRoutes(from: routes)
+        let lines = visibleRoutes.compactMap { route -> MKPolyline? in
+            let coordinates = decimatedMapCoordinates(route.coordinates, limit: 90).map(mapDisplayCoordinate)
             guard coordinates.count > 1 else { return nil }
-            let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
-            line.title = route.id
-            return line
+            return MKPolyline(coordinates: coordinates, count: coordinates.count)
         }
 
-        if !lines.isEmpty { map.addOverlays(lines) }
-        if !context.coordinator.hasSetInitialRegion,
-           let rect = map.overlays.compactMap({ $0 as? MKPolyline }).map(\.boundingMapRect).reduce(nil, { current, rect in
-            current.map { $0.union(rect) } ?? rect
-        }) {
-            map.setVisibleMapRect(rect, edgePadding: UIEdgeInsets(top: 70, left: 32, bottom: 80, right: 32), animated: false)
-            context.coordinator.hasSetInitialRegion = true
+        map.removeOverlays(map.overlays)
+        guard !lines.isEmpty else { return }
+
+        let routesOverlay = MKMultiPolyline(lines)
+        map.addOverlay(routesOverlay)
+        if !hasSetInitialRegion {
+            map.setVisibleMapRect(
+                routesOverlay.boundingMapRect,
+                edgePadding: UIEdgeInsets(top: 70, left: 32, bottom: 80, right: 32),
+                animated: false
+            )
+            hasSetInitialRegion = true
         }
+    }
+
+    func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+        isChangingRegion = true
+    }
+
+    func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        isChangingRegion = false
+        guard let pendingRoutes else { return }
+        let appearance = pendingAppearance ?? appearanceSignature
+        self.pendingRoutes = nil
+        pendingAppearance = nil
+        update(routes: pendingRoutes, appearance: appearance, on: mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        guard let routesOverlay = overlay as? MKMultiPolyline else {
+            return MKOverlayRenderer(overlay: overlay)
+        }
+        let renderer = MKMultiPolylineRenderer(multiPolyline: routesOverlay)
+        renderer.strokeColor = mapView.overrideUserInterfaceStyle == .dark
+            ? UIColor(red: 0.40, green: 0.82, blue: 0.73, alpha: 0.96)
+            : UIColor(red: 0.18, green: 0.68, blue: 0.65, alpha: 0.9)
+        renderer.lineWidth = 1.6
+        renderer.lineCap = .round
+        renderer.lineJoin = .round
+        return renderer
+    }
+
+    private struct RouteCell: Hashable {
+        let x: Int
+        let y: Int
+    }
+
+    private func distinctRoutes(from routes: [ArchiveRouteSummary]) -> [ArchiveRouteSummary] {
+        var selected: [(route: ArchiveRouteSummary, cells: Set<RouteCell>)] = []
+        for route in routes {
+            let cells = occupiedCells(for: route.coordinates)
+            guard cells.count > 1 else { continue }
+            if let index = selected.firstIndex(where: { routesAreSimilar(cells, $0.cells) }) {
+                if cells.count > selected[index].cells.count { selected[index] = (route, cells) }
+            } else {
+                selected.append((route, cells))
+            }
+        }
+        return selected.map(\.route)
+    }
+
+    private func occupiedCells(for coordinates: [CLLocationCoordinate2D]) -> Set<RouteCell> {
+        guard coordinates.count > 1 else { return [] }
+        // Around Nanjing this is roughly a 25-metre cell. Neighbour matching below
+        // absorbs normal GPS drift without merging routes that only share one road.
+        let cellSize = 192.0
+        let points = coordinates.map(MKMapPoint.init)
+        var cells = Set<RouteCell>()
+        for index in 1..<points.count {
+            let start = points[index - 1]
+            let end = points[index]
+            let maximumDelta = max(abs(end.x - start.x), abs(end.y - start.y))
+            let steps = min(max(Int(ceil(maximumDelta / cellSize)), 1), 24)
+            for step in 0...steps {
+                let fraction = Double(step) / Double(steps)
+                let x = start.x + (end.x - start.x) * fraction
+                let y = start.y + (end.y - start.y) * fraction
+                cells.insert(RouteCell(x: Int(floor(x / cellSize)), y: Int(floor(y / cellSize))))
+            }
+        }
+        return cells
+    }
+
+    private func routesAreSimilar(_ first: Set<RouteCell>, _ second: Set<RouteCell>) -> Bool {
+        let smaller = first.count <= second.count ? first : second
+        let larger = first.count <= second.count ? second : first
+        guard Double(smaller.count) / Double(larger.count) >= 0.68 else { return false }
+
+        var matched = 0
+        for cell in smaller {
+            var found = false
+            for xOffset in -1...1 where !found {
+                for yOffset in -1...1 {
+                    if larger.contains(RouteCell(x: cell.x + xOffset, y: cell.y + yOffset)) {
+                        found = true
+                        break
+                    }
+                }
+            }
+            if found { matched += 1 }
+        }
+        return Double(matched) / Double(smaller.count) >= 0.80
     }
 }
 

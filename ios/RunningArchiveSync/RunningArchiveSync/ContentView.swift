@@ -6,6 +6,7 @@ final class HealthSyncViewModel: ObservableObject {
     @Published var previews: [WorkoutPreview] = []
     @Published var selectedIDs: Set<String> = []
     @Published var status = "先授权健康数据，再检查新增跑步。"
+    @Published var errorDetails: String?
     @Published var isWorking = false
     @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? RunningArchiveConfiguration.defaultServerURL
     @Published var token = KeychainStore.read("syncToken")
@@ -51,6 +52,7 @@ final class HealthSyncViewModel: ObservableObject {
     }
 
     func syncSelected() async {
+        errorDetails = nil
         guard !serverURL.isEmpty, !token.isEmpty else { status = "请先填写服务器地址和同步令牌。"; return }
         let selected = previews.filter { selectedIDs.contains($0.id) }
         guard !selected.isEmpty else { status = "请至少选择一条跑步。"; return }
@@ -91,6 +93,7 @@ final class HealthSyncViewModel: ObservableObject {
             let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)），读取心率 \(heartRatePoints) 点"
             if let firstFailure = failures.first {
                 status = "\(result)，失败 \(failures.count) 条；首个错误：\(firstFailure)"
+                errorDetails = failures.joined(separator: "\n\n")
             } else if skipped > 0 {
                 status = "\(result)，跳过 \(skipped) 条无法读取的记录。"
             } else {
@@ -102,8 +105,15 @@ final class HealthSyncViewModel: ObservableObject {
     private func work(_ initialStatus: String, operation: () async throws -> Void) async {
         guard !isWorking else { return }
         isWorking = true
+        errorDetails = nil
         status = initialStatus
-        do { try await operation() } catch { status = "失败：\(error.localizedDescription)" }
+        do {
+            try await operation()
+        } catch {
+            let message = error.localizedDescription
+            status = "失败：\(message)"
+            errorDetails = message
+        }
         isWorking = false
     }
 }
@@ -266,25 +276,49 @@ struct HealthSyncView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 17) {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark")
-                        .font(.headline.weight(.black))
-                        .foregroundStyle(.green)
-                        .frame(width: 30, height: 30)
-                        .background(Color.green.opacity(0.20), in: Circle())
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("HealthKit 已准备")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(RunTheme.ink)
-                        Text(model.status)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: model.errorDetails == nil ? "checkmark" : "exclamationmark")
+                            .font(.headline.weight(.black))
+                            .foregroundStyle(model.errorDetails == nil ? Color.green : RunTheme.accent)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                (model.errorDetails == nil ? Color.green : RunTheme.accent).opacity(0.20),
+                                in: Circle()
+                            )
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.errorDetails == nil ? "HealthKit 已准备" : "同步出现错误")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(RunTheme.ink)
+                            Text(model.status)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    if let errorDetails = model.errorDetails {
+                        Divider()
+                        DisclosureGroup {
+                            Text(errorDetails)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 8)
+                        } label: {
+                            Label("查看完整错误详情", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(RunTheme.accent)
+                        }
+                    }
                 }
                 .padding(13)
-                .background(Color.green.opacity(colorScheme == .dark ? 0.12 : 0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(
+                    (model.errorDetails == nil ? Color.green : RunTheme.accent)
+                        .opacity(colorScheme == .dark ? 0.12 : 0.10),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
 
                 HStack {
                     Text("待同步记录")

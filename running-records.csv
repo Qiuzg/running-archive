@@ -1,0 +1,2 @@
+record_type,id,date,name,city,distance_km,duration,finish_time,pace_min_per_km,average_heart_rate_bpm,max_heart_rate_bpm,average_cadence_spm,average_power_w,elevation_gain_m,route_id,route_point_count,pace_sample_count,elevation_sample_count,heart_rate_sample_count,interval_count,source,race_type,is_personal_best,country,notes
+run,apple-20260916-184905,2026-09-16,户外跑步,,8.805,00:49:44,00:49:44,05:39,160,180,157.6,242.8,38.2,route-apple-20260916-184905,2407,2407,2407,596,0,healthkit,,,,

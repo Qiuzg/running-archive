@@ -37,11 +37,33 @@ struct SyncAPI {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw SyncAPIError.server(0, "无响应") }
         guard 200..<300 ~= http.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "未知错误"
+            let message = serverErrorMessage(from: data)
             throw SyncAPIError.server(http.statusCode, message)
         }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(SyncResponse.self, from: data)
+    }
+
+    private func serverErrorMessage(from data: Data) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: data),
+           let dictionary = object as? [String: Any],
+           let detail = dictionary["detail"] {
+            if let message = detail as? String {
+                return message
+            }
+            if JSONSerialization.isValidJSONObject(detail),
+               let detailData = try? JSONSerialization.data(withJSONObject: detail),
+               let message = String(data: detailData, encoding: .utf8) {
+                return message
+            }
+        }
+
+        let message = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let message, !message.isEmpty {
+            return message
+        }
+        return "未知错误"
     }
 }

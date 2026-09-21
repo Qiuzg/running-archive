@@ -105,6 +105,25 @@ App 默认预选最近 30 条，也支持全选历史记录，并逐条断点式
 会更新原有 Race 记录，因此不会重复累计。HealthKit 提供的高采样率路线和心率数据
 在之后的数据库迁移与网页部署中优先保留。App 会用 quantity-series 查询展开 HealthKit
 对旧 Workout 做过压缩的心率与功率数据，避免只把少数外层容器当作真实采样点上传。
+包含多个 HealthKit 活动段、lap 或 segment 事件的间歇训练，也会随同步保存到路线的
+`intervals` 字段，供分段导出使用。已经同步过的旧记录不会自动产生分段数据；安装新版
+App 后重新同步对应跑步即可。
+
+### 按日期导出跑步与间歇分段
+
+`scripts/export-running-records.py` 会生成一份整次运动汇总 CSV；如需间歇明细，再传入
+`--segments-output`（`--intervals-output` 也可），生成一段一行的 CSV：
+
+```bash
+python3 scripts/export-running-records.py \
+  --start 2026-09-16 --end 2026-09-16 \
+  --ssh-host root@your-server \
+  --output running-records-2026-09-16.csv \
+  --segments-output running-intervals-2026-09-16.csv
+```
+
+分段文件包含活动/事件类型、起止秒数、持续时间、距离、配速、平均/最大心率、步频和功率。
+旧数据库没有 `intervals` 列时，脚本仍能正常导出汇总，并生成只有表头的分段文件。
 
 网页端的图片分享工具仍然保持隐藏。头像在 4 秒内连续点击 7 次，或访问 `/#/share-lab-7k3m9x2p`，即可选择跑步或比赛并在浏览器本地生成 PNG。App 内分享页则直接显示在底部导航中；选择记录、版式、地图源和配色后手动生成，并可保存到相册或调用 iOS 系统分享。
 

@@ -13,6 +13,23 @@ struct MetricSamplePayload: Codable {
     let value: Double
 }
 
+struct WorkoutIntervalPayload: Codable {
+    let index: Int
+    let kind: String
+    let activityType: Int?
+    let startElapsedSeconds: Double
+    let endElapsedSeconds: Double
+    let durationSeconds: Double
+    let distanceKm: Double?
+    let paceSecondsPerKm: Double?
+    let avgHeartRate: Int?
+    let maxHeartRate: Int?
+    let avgCadence: Double?
+    let avgPower: Double?
+    let eventType: String?
+    let label: String?
+}
+
 struct WorkoutPayload: Codable, Identifiable {
     let id: String
     let name: String
@@ -26,6 +43,9 @@ struct WorkoutPayload: Codable, Identifiable {
     let avgPower: Double?
     let routePoints: [RoutePointPayload]
     let heartRateSamples: [MetricSamplePayload]
+    let runningSpeedSamples: [MetricSamplePayload]?
+    // Optional keeps payloads cached by older app versions decodable.
+    let intervals: [WorkoutIntervalPayload]?
 }
 
 struct SyncRequest: Codable {

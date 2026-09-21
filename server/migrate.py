@@ -7,6 +7,7 @@ Run from the project root:
 import json
 import os
 import re
+import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
@@ -72,6 +73,27 @@ def make_session_factory(db_path: Path):
 def remove_sqlite_sidecars(db_path: Path):
     for suffix in ("-journal", "-wal", "-shm"):
         db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
+
+
+def ensure_compatible_schema(db_path: Path):
+    """Add new nullable columns before reading records from an older DB.
+
+    ``create_all`` does not alter existing SQLite tables. Adding the column
+    first lets ``read_synced_records`` use the current ORM model without
+    dropping HealthKit records during the rebuild migration.
+    """
+    if not db_path.exists():
+        return
+    connection = sqlite3.connect(db_path)
+    try:
+        route_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(routes)")
+        }
+        if route_columns and "intervals" not in route_columns:
+            connection.execute("ALTER TABLE routes ADD COLUMN intervals JSON")
+            connection.commit()
+    finally:
+        connection.close()
 
 
 def read_synced_records(session_factory):
@@ -156,6 +178,7 @@ def migrate_data(db_path: Path = DB_PATH):
         raise FileNotFoundError(PROJECT_ROOT / "data.generated.js")
 
     if db_path.exists():
+        ensure_compatible_schema(db_path)
         existing_engine, ExistingSession = make_session_factory(db_path)
         synced_runs, synced_routes_by_id, synced_races = read_synced_records(ExistingSession)
         existing_engine.dispose()
@@ -215,6 +238,7 @@ def migrate_data(db_path: Path = DB_PATH):
                 coordinates=merged.get("coordinates", []),
                 elevations=merged.get("elevations", []),
                 time_series=merged.get("timeSeries", None),
+                intervals=merged.get("intervals", []),
             )
             db.add(route)
 

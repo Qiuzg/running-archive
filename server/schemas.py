@@ -172,6 +172,23 @@ class HealthMetricSample(BaseModel):
     value: float
 
 
+class HealthWorkoutInterval(BaseModel):
+    index: int
+    kind: str = "activity"
+    activity_type: Optional[int] = None
+    start_elapsed_seconds: float
+    end_elapsed_seconds: float
+    duration_seconds: float
+    distance_km: Optional[float] = None
+    pace_seconds_per_km: Optional[float] = None
+    avg_heart_rate: Optional[int] = None
+    max_heart_rate: Optional[int] = None
+    avg_cadence: Optional[float] = None
+    avg_power: Optional[float] = None
+    event_type: Optional[str] = None
+    label: Optional[str] = None
+
+
 class AppleWorkoutSync(BaseModel):
     id: str
     name: str = "户外跑步"
@@ -185,6 +202,7 @@ class AppleWorkoutSync(BaseModel):
     avg_power: Optional[float] = None
     route_points: list[HealthRoutePoint] = []
     heart_rate_samples: list[HealthMetricSample] = []
+    intervals: list[HealthWorkoutInterval] = []
 
 
 class AppleWorkoutSyncRequest(BaseModel):

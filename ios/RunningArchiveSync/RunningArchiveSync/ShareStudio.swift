@@ -531,7 +531,14 @@ private struct ShareCardView: View {
                 .foregroundStyle(.secondary)
                 .offset(x: 28, y: 78)
             if let series = route.timeSeries {
-                ShareMiniSparkline(values: series.pace.compactMap { $0 }, color: .blue, dark: dark)
+                ShareMiniSparkline(
+                    values: series.pace.compactMap { value in
+                        guard let value, value > 0 else { return nil }
+                        return 1 / value
+                    },
+                    color: .blue,
+                    dark: dark
+                )
                     .frame(width: 640, height: 55)
                     .offset(x: 276, y: 40)
                 ShareMiniSparkline(values: series.elevation, color: .orange, dark: dark)
@@ -805,9 +812,9 @@ private struct ShareDetailedChart: View {
                 }
                 if let minimum = cleanValues.min(), let maximum = cleanValues.max() {
                     VStack(alignment: .trailing, spacing: 0) {
-                        Text(axisLabel(maximum))
+                        Text(axisLabel(reverse ? minimum : maximum))
                         Spacer()
-                        Text(axisLabel(minimum))
+                        Text(axisLabel(reverse ? maximum : minimum))
                     }
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -821,7 +828,10 @@ private struct ShareDetailedChart: View {
     }
 
     private func axisLabel(_ value: Double) -> String {
-        if unit == "′" { return String(format: "%.1f%@", value, unit) }
+        if unit == "′" {
+            let totalSeconds = max(0, Int((value * 60).rounded()))
+            return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+        }
         return "\(Int(value.rounded()))\(unit)"
     }
 }
@@ -939,7 +949,6 @@ enum ShareImageGenerator {
             renderer.fill(CGRect(origin: .zero, size: size))
 
             let tileSize: CGFloat = 256
-            let worldTop = mapLayout.centerY - mapLayout.targetCenterY / mapLayout.worldScale
             for tile in tiles {
                 let x = CGFloat((Double(tile.x * 256) - mapLayout.centerX) * mapLayout.worldScale + Double(size.width) / 2)
                 let y = CGFloat((Double(tile.y * 256) - mapLayout.centerY) * mapLayout.worldScale + mapLayout.targetCenterY)
@@ -972,7 +981,7 @@ enum ShareImageGenerator {
                 projectedPoint($0, zoom: mapLayout.zoom, centerX: mapLayout.centerX, centerY: mapLayout.centerY, targetCenterY: mapLayout.targetCenterY, worldScale: mapLayout.worldScale, size: size)
             }
             guard projected.count > 1 else { return }
-            var path = CGMutablePath()
+            let path = CGMutablePath()
             path.move(to: projected[0])
             for point in projected.dropFirst() { path.addLine(to: point) }
 

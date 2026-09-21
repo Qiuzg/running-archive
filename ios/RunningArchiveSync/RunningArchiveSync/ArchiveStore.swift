@@ -75,7 +75,8 @@ final class ArchiveStore: ObservableObject {
             ? Date.now.addingTimeInterval(-6 * 60 * 60)
             : nil
         let payload: WorkoutPayload
-        if let cached = try cache?.workoutPayload(id: id, newerThan: cacheCutoff) {
+        if let cached = try cache?.workoutPayload(id: id, newerThan: cacheCutoff),
+           cached.runningSpeedSamples != nil {
             payload = cached
         } else {
             guard let loaded = try await health.payload(forWorkoutID: id) else {
@@ -149,9 +150,9 @@ final class ArchiveStore: ObservableObject {
                 if let summary { discovered[summary.id] = summary }
                 completed += 1
 
-                // Do not publish and rebuild the map for every HealthKit route.
-                // A small batch keeps the UI responsive while still showing progress.
-                if completed == 1 || completed % 8 == 0 {
+                // Do not publish and rebuild the overview map for every HealthKit route.
+                // Larger batches reduce main-thread overlay churn while preserving progress.
+                if completed == 1 || completed % 16 == 0 {
                     setRoutes(orderedRoutes(Array(discovered.values)))
                     routeScanStatus = "正在整理 Apple Health 路线 \(completed)/\(remaining)"
                     await Task.yield()
@@ -227,21 +228,7 @@ final class ArchiveStore: ObservableObject {
         let points = payload.routePoints.sorted { $0.timestamp < $1.timestamp }
         let chartPoints = sample(points: points, limit: chartPointLimit)
         let elapsed = chartPoints.map { max(0, $0.timestamp.timeIntervalSince(payload.startDate)) }
-        let pace = chartPoints.enumerated().map { index, point -> Double? in
-            var speed = point.speedMps
-            if (speed ?? 0) <= 0.4, index > 0 {
-                let previous = chartPoints[index - 1]
-                let seconds = point.timestamp.timeIntervalSince(previous.timestamp)
-                if seconds > 0 {
-                    let start = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
-                    let end = CLLocation(latitude: point.latitude, longitude: point.longitude)
-                    speed = end.distance(from: start) / seconds
-                }
-            }
-            guard let speed, speed > 0.4 else { return nil }
-            let value = 1000 / speed / 60
-            return (2...30).contains(value) ? value : nil
-        }
+        let pace = paceValues(payload: payload, points: points, targetElapsed: elapsed)
         let heart = sample(
             items: payload.heartRateSamples.sorted { $0.elapsedSeconds < $1.elapsedSeconds },
             limit: chartPointLimit
@@ -264,6 +251,120 @@ final class ArchiveStore: ObservableObject {
             elevations: points.map(\.altitude),
             timeSeries: series
         )
+    }
+
+    private func paceValues(
+        payload: WorkoutPayload,
+        points: [RoutePointPayload],
+        targetElapsed: [Double]
+    ) -> [Double?] {
+        let routeSpeeds = rollingRouteSpeeds(
+            points: points,
+            workoutStart: payload.startDate,
+            targetElapsed: targetElapsed
+        )
+        let healthSpeeds = nearestHealthSpeeds(
+            samples: payload.runningSpeedSamples ?? [],
+            targetElapsed: targetElapsed
+        )
+        let merged = zip(healthSpeeds, routeSpeeds).map { health, route in
+            validRunningSpeed(health) ? health : route
+        }
+        return medianSmoothed(merged, radius: 2).map { speed in
+            guard let speed, validRunningSpeed(speed) else { return nil }
+            let minutesPerKm = 1000 / speed / 60
+            return (2...30).contains(minutesPerKm) ? minutesPerKm : nil
+        }
+    }
+
+    private func nearestHealthSpeeds(
+        samples: [MetricSamplePayload],
+        targetElapsed: [Double]
+    ) -> [Double?] {
+        let ordered = samples
+            .filter { $0.elapsedSeconds.isFinite && validRunningSpeed($0.value) }
+            .sorted { $0.elapsedSeconds < $1.elapsedSeconds }
+        guard !ordered.isEmpty else { return Array(repeating: nil, count: targetElapsed.count) }
+
+        var index = 0
+        return targetElapsed.map { elapsed -> Double? in
+            while index + 1 < ordered.count,
+                  abs(ordered[index + 1].elapsedSeconds - elapsed) <= abs(ordered[index].elapsedSeconds - elapsed) {
+                index += 1
+            }
+            let sample = ordered[index]
+            return abs(sample.elapsedSeconds - elapsed) <= 30 ? sample.value : nil
+        }
+    }
+
+    private func rollingRouteSpeeds(
+        points: [RoutePointPayload],
+        workoutStart: Date,
+        targetElapsed: [Double]
+    ) -> [Double?] {
+        guard points.count > 1 else { return Array(repeating: nil, count: targetElapsed.count) }
+        let elapsed = points.map { max(0, $0.timestamp.timeIntervalSince(workoutStart)) }
+        var cumulative = Array(repeating: 0.0, count: points.count)
+        for index in 1..<points.count {
+            let seconds = elapsed[index] - elapsed[index - 1]
+            let distance = routeDistanceMeters(points[index - 1], points[index])
+            let plausible = seconds > 0 && seconds <= 120 && distance / seconds <= 12
+            cumulative[index] = cumulative[index - 1] + (plausible ? distance : 0)
+        }
+
+        return targetElapsed.map { target -> Double? in
+            let duration = elapsed.last ?? target
+            var start = max(0, target - 15)
+            var end = min(duration, target + 15)
+            if end - start < 24 {
+                if start <= 0 { end = min(duration, 30) }
+                else if end >= duration { start = max(0, duration - 30) }
+            }
+            let lower = lowerBound(elapsed, value: start)
+            let upper = min(lowerBound(elapsed, value: end), elapsed.count - 1)
+            guard upper > lower else { return nil }
+            let seconds = elapsed[upper] - elapsed[lower]
+            guard seconds > 0 else { return nil }
+            let speed = (cumulative[upper] - cumulative[lower]) / seconds
+            return validRunningSpeed(speed) ? speed : nil
+        }
+    }
+
+    private func lowerBound(_ values: [Double], value: Double) -> Int {
+        var lower = 0
+        var upper = values.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if values[middle] < value { lower = middle + 1 }
+            else { upper = middle }
+        }
+        return min(lower, max(values.count - 1, 0))
+    }
+
+    private func medianSmoothed(_ values: [Double?], radius: Int) -> [Double?] {
+        values.indices.map { index in
+            guard values[index] != nil else { return nil }
+            let lower = max(values.startIndex, index - radius)
+            let upper = min(values.index(before: values.endIndex), index + radius)
+            let window = values[lower...upper].compactMap { $0 }.sorted()
+            guard !window.isEmpty else { return nil }
+            return window[window.count / 2]
+        }
+    }
+
+    private func validRunningSpeed(_ speed: Double?) -> Bool {
+        guard let speed else { return false }
+        return speed.isFinite && (0.4...10).contains(speed)
+    }
+
+    private func routeDistanceMeters(_ first: RoutePointPayload, _ second: RoutePointPayload) -> Double {
+        let latitude1 = first.latitude * .pi / 180
+        let latitude2 = second.latitude * .pi / 180
+        let deltaLatitude = (second.latitude - first.latitude) * .pi / 180
+        let deltaLongitude = (second.longitude - first.longitude) * .pi / 180
+        let value = sin(deltaLatitude / 2) * sin(deltaLatitude / 2)
+            + cos(latitude1) * cos(latitude2) * sin(deltaLongitude / 2) * sin(deltaLongitude / 2)
+        return 6_371_000 * 2 * atan2(sqrt(value), sqrt(max(0, 1 - value)))
     }
 
     private func sample(points: [RoutePointPayload], limit: Int) -> [RoutePointPayload] {

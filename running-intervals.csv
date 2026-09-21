@@ -1,0 +1,1 @@
+record_type,record_id,date,name,interval_index,kind,activity_type,start_elapsed_seconds,end_elapsed_seconds,duration_seconds,distance_km,pace_seconds_per_km,pace_min_per_km,average_heart_rate_bpm,max_heart_rate_bpm,average_cadence_spm,average_power_w,event_type,label

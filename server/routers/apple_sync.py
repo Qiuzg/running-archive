@@ -1,9 +1,11 @@
 import hmac
+import logging
 import math
 import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -16,6 +18,7 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
+logger = logging.getLogger(__name__)
 PRIVACY_RADIUS_METERS = 600
 
 
@@ -79,6 +82,10 @@ def pace_text(distance_km: float, duration_seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
+def interval_payloads(data) -> list[dict]:
+    return [interval.model_dump() for interval in data.intervals]
+
+
 def workout_date(run_id: str, start_date: datetime):
     """Use the local date embedded in the deterministic Apple workout ID.
 
@@ -103,6 +110,7 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
     trimmed = trim_route(points, PRIVACY_RADIUS_METERS)
     heart_rate = [round(sample.value) for sample in data.heart_rate_samples]
     heart_elapsed = [round(sample.elapsed_seconds, 1) for sample in data.heart_rate_samples]
+    intervals = interval_payloads(data)
     candidate_route_id = race.route_id if race and race.route_id else f"route-{run_id}"
     route = db.get(Route, candidate_route_id)
     route_id = None
@@ -137,6 +145,7 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         route.coordinates = coordinates
         route.elevations = elevations
         route.time_series = time_series
+        route.intervals = intervals
     elif route is not None and heart_rate:
         # Some old HealthKit workouts retain heart-rate samples after their
         # route series has become unavailable. Merge the denser heart data into
@@ -146,8 +155,13 @@ def upsert_workout(data, db: Session) -> AppleWorkoutSyncResult:
         time_series["heartRate"] = heart_rate
         time_series["heartRateElapsed"] = heart_elapsed
         route.time_series = time_series
+        route.intervals = intervals
         if not (route.privacy or "").startswith("healthkit "):
             route.privacy = f"healthkit {(route.privacy or '').strip()}".strip()
+    elif route is not None:
+        # A re-sync can legitimately contain no route points, but still carry
+        # interval activities/events. Preserve the new segment payload.
+        route.intervals = intervals
 
     if race:
         race.distance_km = data.distance_km
@@ -209,7 +223,22 @@ def sync_apple_workouts(
         for workout in request.workouts:
             results.append(upsert_workout(workout, db))
         db.commit()
+    except OperationalError as error:
+        db.rollback()
+        logger.exception("Apple Health sync database operation failed")
+        message = str(error).lower()
+        if "readonly database" in message:
+            detail = "同步数据库不可写，请检查服务器数据库目录权限"
+        elif "database is locked" in message:
+            detail = "同步数据库正忙，请稍后重试"
+        else:
+            detail = "同步数据库暂时不可用，请稍后重试"
+        raise HTTPException(status_code=503, detail=detail) from error
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
+        logger.exception("Apple Health sync failed")
         raise
     return AppleWorkoutSyncResponse(synced=results)

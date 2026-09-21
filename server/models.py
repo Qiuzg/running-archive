@@ -21,6 +21,8 @@ class Route(Base):
     elevations = Column(JSON, default=list)
     # time-series data: { elapsed: [], pace: [], elevation: [], heartRate: [] }
     time_series = Column(JSON, default=None)
+    # HealthKit interval activities/lap events, one JSON object per segment.
+    intervals = Column(JSON, default=list)
 
     # relationships
     race = relationship("Race", back_populates="route", uselist=False)
