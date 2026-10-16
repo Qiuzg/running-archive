@@ -6,6 +6,7 @@ enum LocalArchiveError: LocalizedError {
     case workoutUnavailable
     case imageRenderFailed
     case mapRenderFailed
+    case routeUnavailable
     case cartoConfigurationMissing
 
     var errorDescription: String? {
@@ -13,6 +14,7 @@ enum LocalArchiveError: LocalizedError {
         case .workoutUnavailable: return "无法从 Apple Health 读取这条跑步"
         case .imageRenderFailed: return "分享图片生成失败"
         case .mapRenderFailed: return "地图未完整加载，请检查网络或切换地图源后重试"
+        case .routeUnavailable: return "这条跑步没有可用的路线，无法生成路线分享图"
         case .cartoConfigurationMissing: return "Leaflet 的 CARTO API Key 未配置，无法生成正确的地图风格"
         }
     }
@@ -105,6 +107,34 @@ final class ArchiveStore: ObservableObject {
     func routeSummary(id: String?) -> ArchiveRouteSummary? {
         guard let id else { return nil }
         return routeLookup[id]
+    }
+
+    /// Raw WGS-84 samples for GPX and distance efforts; never use reduced display points.
+    func fullRoutePoints(id: String) async throws -> [RoutePointPayload] {
+        let activity = activities.first { $0.id == id }
+        let recent = (activity?.date ?? .distantPast) > Date.now.addingTimeInterval(-7 * 86400)
+        let cutoff = recent ? Date.now.addingTimeInterval(-6 * 3600) : nil
+        if let payload = try cache?.workoutPayload(id: id, newerThan: cutoff), !payload.routePoints.isEmpty {
+            return payload.routePoints
+        }
+        guard let points = try await health.routePoints(forWorkoutID: id), points.count > 1 else {
+            throw JournalError.noRoute
+        }
+        return points
+    }
+
+    func prepareAnalysisExport() async throws {
+        try await health.requestAuthorization(includeExportMetrics: true)
+        // Refresh HKWorkout statistics after any newly granted read permissions.
+        _ = try await health.runningWorkoutPreviews()
+    }
+
+    func exportWorkout(id: String) async throws -> ExportWorkout {
+        try await health.exportWorkout(id: id)
+    }
+
+    func exportReferences(start: Date, end: Date) async throws -> ExportReferenceData {
+        try await health.exportReferences(start: start, end: end)
     }
 
     private func startRouteScan(for activities: [ArchiveActivity]) {

@@ -17,12 +17,20 @@
 		A10000000000000000000008 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* CoreLocation.framework */; };
 		A10000000000000000000009 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* Security.framework */; };
 		A1000000000000000000000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* Assets.xcassets */; };
-		A1000000000000000000000B /* profile.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* profile.png */; };
+		A1000000000000000000000B /* ../../../assets/profile.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* ../../../assets/profile.png */; };
 		B10000000000000000000001 /* ArchiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* ArchiveModels.swift */; };
 		B10000000000000000000003 /* ArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* ArchiveStore.swift */; };
 		B10000000000000000000004 /* ArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ArchiveViews.swift */; };
 		B10000000000000000000005 /* ShareStudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* ShareStudio.swift */; };
 		B10000000000000000000006 /* HealthArchiveCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* HealthArchiveCache.swift */; };
+		B10000000000000000000007 /* MonthlyReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* MonthlyReview.swift */; };
+		B10000000000000000000008 /* MonthlyReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* MonthlyReport.swift */; };
+		B10000000000000000000009 /* TrainingJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000009 /* TrainingJournal.swift */; };
+		B1000000000000000000000A /* TrainingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000A /* TrainingViews.swift */; };
+		B1000000000000000000000B /* ExportFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000B /* ExportFileWriter.swift */; };
+		B1000000000000000000000C /* AnalysisExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000C /* AnalysisExport.swift */; };
+		B1000000000000000000000D /* AnalysisExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* AnalysisExportView.swift */; };
+		B1000000000000000000000E /* ExportAnalysisMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* ExportAnalysisMath.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,12 +47,20 @@
 		A2000000000000000000000B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		A2000000000000000000000C /* RunningArchiveSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RunningArchiveSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A2000000000000000000000E /* profile.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ../../../assets/profile.png; sourceTree = "<group>"; };
+		A2000000000000000000000E /* ../../../assets/profile.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ../../../assets/profile.png; sourceTree = "<group>"; };
 		B20000000000000000000001 /* ArchiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveModels.swift; sourceTree = "<group>"; };
 		B20000000000000000000003 /* ArchiveStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveStore.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* ArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveViews.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* ShareStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStudio.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* HealthArchiveCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthArchiveCache.swift; sourceTree = "<group>"; };
+		B20000000000000000000007 /* MonthlyReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyReview.swift; sourceTree = "<group>"; };
+		B20000000000000000000008 /* MonthlyReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyReport.swift; sourceTree = "<group>"; };
+		B20000000000000000000009 /* TrainingJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingJournal.swift; sourceTree = "<group>"; };
+		B2000000000000000000000A /* TrainingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingViews.swift; sourceTree = "<group>"; };
+		B2000000000000000000000B /* ExportFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFileWriter.swift; sourceTree = "<group>"; };
+		B2000000000000000000000C /* AnalysisExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisExport.swift; sourceTree = "<group>"; };
+		B2000000000000000000000D /* AnalysisExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisExportView.swift; sourceTree = "<group>"; };
+		B2000000000000000000000E /* ExportAnalysisMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportAnalysisMath.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +94,14 @@
 				B20000000000000000000001 /* ArchiveModels.swift */,
 				B20000000000000000000003 /* ArchiveStore.swift */,
 				B20000000000000000000006 /* HealthArchiveCache.swift */,
+				B20000000000000000000007 /* MonthlyReview.swift */,
+				B20000000000000000000008 /* MonthlyReport.swift */,
+				B2000000000000000000000B /* ExportFileWriter.swift */,
+				B2000000000000000000000C /* AnalysisExport.swift */,
+				B2000000000000000000000D /* AnalysisExportView.swift */,
+				B2000000000000000000000E /* ExportAnalysisMath.swift */,
+				B2000000000000000000000A /* TrainingViews.swift */,
+				B20000000000000000000009 /* TrainingJournal.swift */,
 				B20000000000000000000004 /* ArchiveViews.swift */,
 				B20000000000000000000005 /* ShareStudio.swift */,
 				A20000000000000000000003 /* Models.swift */,
@@ -87,7 +111,7 @@
 				A20000000000000000000007 /* Info.plist */,
 				A20000000000000000000008 /* RunningArchiveSync.entitlements */,
 				A2000000000000000000000D /* Assets.xcassets */,
-				A2000000000000000000000E /* profile.png */,
+				A2000000000000000000000E /* ../../../assets/profile.png */,
 			);
 			path = RunningArchiveSync;
 			sourceTree = "<group>";
@@ -170,7 +194,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000000000000000000000A /* Assets.xcassets in Resources */,
-				A1000000000000000000000B /* profile.png in Resources */,
+				A1000000000000000000000B /* ../../../assets/profile.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,6 +210,14 @@
 				B10000000000000000000001 /* ArchiveModels.swift in Sources */,
 				B10000000000000000000003 /* ArchiveStore.swift in Sources */,
 				B10000000000000000000006 /* HealthArchiveCache.swift in Sources */,
+				B10000000000000000000007 /* MonthlyReview.swift in Sources */,
+				B10000000000000000000008 /* MonthlyReport.swift in Sources */,
+				B1000000000000000000000B /* ExportFileWriter.swift in Sources */,
+				B1000000000000000000000C /* AnalysisExport.swift in Sources */,
+				B1000000000000000000000D /* AnalysisExportView.swift in Sources */,
+				B1000000000000000000000E /* ExportAnalysisMath.swift in Sources */,
+				B1000000000000000000000A /* TrainingViews.swift in Sources */,
+				B10000000000000000000009 /* TrainingJournal.swift in Sources */,
 				B10000000000000000000004 /* ArchiveViews.swift in Sources */,
 				B10000000000000000000005 /* ShareStudio.swift in Sources */,
 				A10000000000000000000003 /* Models.swift in Sources */,
@@ -237,10 +269,10 @@
 				CODE_SIGN_ENTITLEMENTS = RunningArchiveSync/RunningArchiveSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = 8B3P89L9J9;
+				DEVELOPMENT_TEAM = U7B9SLC7NF;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningArchiveSync/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.6;
 				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qiuzhiguo.RunningArchiveSync;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -259,10 +291,10 @@
 				CODE_SIGN_ENTITLEMENTS = RunningArchiveSync/RunningArchiveSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = 8B3P89L9J9;
+				DEVELOPMENT_TEAM = U7B9SLC7NF;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningArchiveSync/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.6;
 				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qiuzhiguo.RunningArchiveSync;
 				PRODUCT_NAME = "$(TARGET_NAME)";

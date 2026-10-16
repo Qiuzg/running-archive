@@ -23,16 +23,16 @@ enum RunTheme {
 struct DashboardView: View {
     @EnvironmentObject private var store: ArchiveStore
     @Environment(\.colorScheme) private var colorScheme
+    @State private var mapFocusRequest = 0
 
     var body: some View {
         NavigationStack {
-            hero
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(edges: .top)
-            .background(RunTheme.page)
-            .overlay {
-                if store.isLoading && store.activities.isEmpty { ProgressView().controlSize(.large) }
+            GeometryReader { geometry in
+                hero
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .background(RunTheme.page)
             }
+            .ignoresSafeArea(edges: .top)
             .navigationDestination(for: ArchiveActivity.self) { activity in
                 ActivityDetailView(activity: activity)
             }
@@ -44,10 +44,10 @@ struct DashboardView: View {
 
     private var hero: some View {
         ZStack(alignment: .bottom) {
-            RouteMapView(routes: Array(store.routes.prefix(40)), colorScheme: colorScheme)
-                .frame(height: max(UIScreen.main.bounds.height, 640))
+            RouteMapView(routes: Array(store.routes.prefix(40)), colorScheme: colorScheme, focusRequest: mapFocusRequest)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             routeAtlasLabel
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(.top, 76)
                 .padding(.horizontal, 18)
                 .allowsHitTesting(false)
@@ -58,21 +58,81 @@ struct DashboardView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 150)
+            .frame(height: 250)
             .allowsHitTesting(false)
+            VStack(alignment: .trailing, spacing: 12) {
+                if !store.routes.isEmpty {
+                    Button { mapFocusRequest += 1 } label: {
+                        Label("回到路线", systemImage: "scope")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(RunTheme.ink)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("回到近期路线")
+                }
+                heroSummaryCard
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 85)
+
+            if store.isLoading && store.activities.isEmpty {
+                ProgressView("正在读取 Apple Health")
+                    .padding(18)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = store.errorMessage, store.activities.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "heart.text.square")
+                        .font(.system(size: 34))
+                        .foregroundStyle(RunTheme.accent)
+                    Text("无法读取跑步档案")
+                        .font(.headline.weight(.bold))
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                    Button("重试") { Task { await store.load(force: true) } }
+                }
+                .padding(22)
+                .frame(width: 280)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var heroSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 profileAvatar
-                AtlasHeroMetric(
-                    label: "年度跑量",
-                    value: store.summary.map { "\(Int($0.yearlyDistanceKm)) km" } ?? "--",
-                    accent: Color(red: 0.16, green: 0.43, blue: 0.94)
-                )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("我的跑步档案")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                    Text(store.summary.map { "\(Int($0.totalDistanceKm)) km" } ?? "-- km")
+                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(RunTheme.ink)
+                }
+                Spacer()
+                Text("累计跑量")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 6) {
+                AtlasHeroMetric(label: "今年", value: store.summary.map { "\(Int($0.yearlyDistanceKm)) km" } ?? "--", accent: RunTheme.route)
                 AtlasHeroMetric(label: "全马 PB", value: store.summary?.marathonPb ?? "--", accent: RunTheme.mint)
                 AtlasHeroMetric(label: "半马 PB", value: store.summary?.halfMarathonPb ?? "--", accent: RunTheme.accent)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 174)
         }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.25), lineWidth: 1))
+        .frame(maxWidth: .infinity)
     }
 
     private var routeAtlasLabel: some View {
@@ -84,7 +144,18 @@ struct DashboardView: View {
             Text("\(store.routes.count) 条轨迹 · \(formatNumber(store.routes.reduce(0) { $0 + $1.distanceKm })) km")
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.72))
+            if let status = store.routeScanStatus {
+                Label(status, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.4), in: Capsule())
+                    .padding(.top, 5)
+            }
         }
+        .padding(12)
+        .background(.black.opacity(0.46), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -401,7 +472,7 @@ struct SummaryCollectionView: View {
     @EnvironmentObject private var store: ArchiveStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedYear = Calendar.current.component(.year, from: .now)
-    @State private var selectedMonth: Int?
+    @State private var openedMonth: Date?
     @State private var atlasExportImage: UIImage?
     @State private var showingAtlasShare = false
     @State private var isExportingAtlas = false
@@ -423,36 +494,46 @@ struct SummaryCollectionView: View {
 
     private var yearDistance: Double { monthlyTotals.reduce(0, +) }
     private var totalDistance: Double { store.summary?.totalDistanceKm ?? store.activities.reduce(0) { $0 + $1.distanceKm } }
-    private var activeMonths: Int { monthlyTotals.filter { $0 > 0 }.count }
-    private var longestDistance: Double { yearActivities.map(\.distanceKm).max() ?? 0 }
-    private var selectedMonthActivities: [ArchiveActivity] {
-        guard let selectedMonth else { return [] }
-        return yearActivities
-            .filter { Calendar.current.component(.month, from: $0.date) == selectedMonth + 1 }
-            .sorted { $0.date < $1.date }
-    }
     private var routeEntries: [ArchiveActivity] {
-        store.activities.filter { $0.routeId != nil && $0.distanceKm >= 10 }.sorted { $0.date > $1.date }
+        store.activities.filter { store.routeSummary(id: $0.routeId) != nil && $0.distanceKm >= 10 }
+            .sorted { $0.date > $1.date }
     }
     private var routeTotalDistance: Double { routeEntries.reduce(0) { $0 + $1.distanceKm } }
     private var routeMarathonCount: Int { routeEntries.filter { $0.kind == .race && (41.0...44.0).contains($0.distanceKm) }.count }
     private var routeHalfCount: Int { routeEntries.filter { $0.kind == .race && (20.0...23.0).contains($0.distanceKm) }.count }
     private var routeRunCount: Int { routeEntries.count - routeMarathonCount - routeHalfCount }
+    private var recentActivities: [ArchiveActivity] {
+        let start = Calendar.current.date(byAdding: .day, value: -6, to: Calendar.current.startOfDay(for: .now)) ?? .distantPast
+        return store.activities.filter { $0.date >= start }
+    }
+    private var previousWeekDistance: Double {
+        let today = Calendar.current.startOfDay(for: .now)
+        let start = Calendar.current.date(byAdding: .day, value: -13, to: today) ?? .distantPast
+        let end = Calendar.current.date(byAdding: .day, value: -6, to: today) ?? .distantFuture
+        return store.activities.filter { $0.date >= start && $0.date < end }.reduce(0) { $0 + $1.distanceKm }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 17) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("跑步汇总")
+                            .font(.system(size: 30, weight: .black, design: .rounded))
+                            .foregroundStyle(RunTheme.ink)
+                        Text("\(String(selectedYear)) 年 · \(yearActivities.count) 次跑步")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                     totalDistanceCard
                     yearSwitcher
                     monthlySummaryCard
-                    if selectedMonth != nil {
-                        dailyDetail
-                    } else {
-                        Text("点击柱状图中的月份，查看每天的跑步数据")
-                            .font(.caption)
+                    recentTrainingCard
+                    TrainingHubLinks()
+                    if let status = store.routeScanStatus {
+                        Label(status, systemImage: "map")
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                     routeCollection
                 }
@@ -463,12 +544,19 @@ struct SummaryCollectionView: View {
             .background(RunTheme.deepPage)
             .scrollIndicators(.hidden)
             .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("汇总")
             .toolbarBackground(RunTheme.deepPage, for: .navigationBar)
             .navigationDestination(for: ArchiveActivity.self) { ActivityDetailView(activity: $0) }
+            .navigationDestination(item: $openedMonth) { month in
+                MonthlyReviewView(month: month)
+            }
             .toolbarColorScheme(colorScheme == .dark ? .dark : .light, for: .navigationBar)
+            .onAppear {
+                if !years.contains(selectedYear) { selectedYear = years.first ?? Calendar.current.component(.year, from: .now) }
+            }
             .onChange(of: store.activities.count) { _, _ in
                 if !years.contains(selectedYear) { selectedYear = years.first ?? Calendar.current.component(.year, from: .now) }
-                selectedMonth = nil
+
             }
             .sheet(isPresented: $showingAtlasShare) {
                 if let atlasExportImage { ShareSheet(items: [atlasExportImage]) }
@@ -481,7 +569,7 @@ struct SummaryCollectionView: View {
             HStack(spacing: 7) {
                 ForEach(years.isEmpty ? [selectedYear] : years, id: \.self) { year in
                     Button { selectedYear = year } label: {
-                        Text("\(year)")
+                        Text(String(year))
                             .font(.caption.weight(.bold).monospacedDigit())
                             .foregroundStyle(selectedYear == year ? RunTheme.ink : .secondary)
                             .padding(.horizontal, 13)
@@ -517,97 +605,108 @@ struct SummaryCollectionView: View {
         .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private var monthlySummaryCard: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("月度跑量").font(.subheadline.weight(.bold)).foregroundStyle(RunTheme.paper)
+    private var recentTrainingCard: some View {
+        let distance = recentActivities.reduce(0) { $0 + $1.distanceKm }
+        let longest = recentActivities.map(\.distanceKm).max() ?? 0
+        return VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Label("近 7 天", systemImage: "calendar.badge.clock")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(RunTheme.ink)
                 Spacer()
-                Text("\(formatKm(yearDistance)) km")
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(RunTheme.mint)
+                Text("持续积累")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(RunTheme.accent)
             }
-
-            Chart(Array(monthlyTotals.enumerated()), id: \.offset) { item in
-                BarMark(x: .value("月份", item.offset + 1), y: .value("公里", item.element))
-                    .foregroundStyle(item.element == (monthlyTotals.max() ?? 0) && item.element > 0 ? RunTheme.accent : RunTheme.route.opacity(0.62))
-                    .cornerRadius(7)
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(formatKm(distance))
+                    .font(.system(size: 34, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(RunTheme.ink)
+                Text("km")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(recentActivities.count) 次训练")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(RunTheme.route)
             }
-            .chartXScale(domain: 0.5...12.5)
-            .chartYScale(domain: 0...max(monthlyTotals.max() ?? 0, 10))
-            .chartXAxis {
-                AxisMarks(values: [1, 3, 5, 7, 9, 11]) { value in
-                    AxisValueLabel { if let month = value.as(Int.self) { Text("\(month)月") } }
-                }
+            Rectangle().fill(RunTheme.route.opacity(0.16)).frame(height: 1)
+            HStack {
+                Text("最长单次  \(formatKm(longest)) km")
+                Spacer()
+                Text(previousWeekDistance > 0
+                     ? String(format: "较前 7 天 %+.0f%%", (distance / previousWeekDistance - 1) * 100)
+                     : "前 7 天无记录")
             }
-            .chartYAxis(.hidden)
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Rectangle()
-                        .fill(.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture { location in
-                            guard let plotFrameAnchor = proxy.plotFrame else { return }
-                            let plotFrame = geometry[plotFrameAnchor]
-                            let x = location.x - plotFrame.origin.x
-                            guard let month = proxy.value(atX: x, as: Int.self), (1...12).contains(month) else { return }
-                            selectedMonth = month - 1
-                        }
-                }
-            }
-            .frame(height: 154)
-
-            HStack(spacing: 8) {
-                SummaryMiniMetric(label: "月均跑量", value: formatKm(activeMonths > 0 ? yearDistance / Double(activeMonths) : 0))
-                SummaryMiniMetric(label: "训练月份", value: "\(activeMonths) 个月")
-                SummaryMiniMetric(label: "最长距离", value: "\(formatKm(longestDistance)) km")
-            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
         }
-        .padding(15)
-        .background(RunTheme.deepPanel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(17)
+        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private var dailyDetail: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(selectedYear) 年 \((selectedMonth ?? 0) + 1) 月")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(RunTheme.ink)
-                    Text("\(selectedMonthActivities.count) 次训练 · \(formatKm(selectedMonthActivities.reduce(0) { $0 + $1.distanceKm })) km")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    private var monthlySummaryCard: some View {
+        let month = selectedYear == Calendar.current.component(.year, from: .now)
+            ? Calendar.current.component(.month, from: .now)
+            : (yearActivities.map { Calendar.current.component(.month, from: $0.date) }.max() ?? 1)
+        return VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("每一步，都算数").font(.title3.bold())
+                    Text("年度跑量 · \(formatKm(yearDistance)) km")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { selectedMonth = nil } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if selectedMonthActivities.isEmpty {
-                Text("这个月没有跑步记录")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(spacing: 8) {
-                    MonthlyDetailMetric(label: "训练次数", value: "\(selectedMonthActivities.count)")
-                    MonthlyDetailMetric(label: "月度跑量", value: "\(formatKm(selectedMonthActivities.reduce(0) { $0 + $1.distanceKm })) km")
-                    MonthlyDetailMetric(label: "最长单次", value: "\(formatKm(selectedMonthActivities.map(\.distanceKm).max() ?? 0)) km")
-                }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 9), GridItem(.flexible(), spacing: 9)], spacing: 9) {
-                    ForEach(selectedMonthActivities) { activity in
-                        NavigationLink(value: activity) {
-                            MonthlyRunTile(activity: activity)
-                        }
-                        .buttonStyle(.plain)
+                Menu {
+                    ForEach(1...12, id: \.self) { value in
+                        Button("\(value) 月 · \(formatKm(monthlyTotals[value - 1])) km") { openMonth(value) }
                     }
+                } label: {
+                    Image(systemName: "calendar").font(.title3).padding(10)
+                }
+                .accessibilityLabel("选择月份查看月报")
+            }
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(0..<12, id: \.self) { index in
+                    Button { openMonth(index + 1) } label: {
+                        VStack(spacing: 9) {
+                            Spacer(minLength: 0)
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(index + 1 == month ? RunTheme.accent : RunTheme.route.opacity(0.5))
+                                .frame(height: max(4, 100 * monthlyTotals[index] / max(monthlyTotals.max() ?? 0, 1)))
+                            Text("\(index + 1)").font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 124)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(index + 1) 月，\(formatKm(monthlyTotals[index])) 公里，查看月报")
                 }
             }
+            Button { openMonth(month) } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\(month) 月跑步手记").font(.headline)
+                        Text("\(formatKm(monthlyTotals[month - 1])) km · 日历、明细与分享")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.up.right").font(.title3.weight(.semibold))
+                }
+                .padding(16)
+                .background(RunTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
         }
-        .padding(14)
-        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .foregroundStyle(RunTheme.ink)
+        .padding(18)
+        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private func openMonth(_ month: Int) {
+        openedMonth = Calendar.current.date(from: DateComponents(year: selectedYear, month: month, day: 1))
     }
 
     private var routeCollection: some View {
@@ -620,7 +719,7 @@ struct SummaryCollectionView: View {
                         .foregroundStyle(RunTheme.accent)
                         .minimumScaleFactor(0.65)
                         .lineLimit(1)
-                    Text("Over 10km Runs")
+                    Text("长距离路线")
                         .font(.system(size: 27, weight: .black, design: .rounded))
                         .foregroundStyle(RunTheme.ink)
                 }
@@ -702,19 +801,6 @@ struct SummaryCollectionView: View {
             atlasExportImage = image
             showingAtlasShare = true
         }
-    }
-}
-
-private struct SummaryMiniMetric: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.caption2).foregroundStyle(RunTheme.paper.opacity(0.58))
-            Text(value).font(.subheadline.weight(.black).monospacedDigit()).foregroundStyle(RunTheme.paper)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -904,61 +990,6 @@ private enum AtlasExportImageGenerator {
     }
 }
 
-private struct MonthlyDetailMetric: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.subheadline.weight(.black).monospacedDigit())
-                .foregroundStyle(RunTheme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(RunTheme.deepPage.opacity(0.58), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-    }
-}
-
-private struct MonthlyRunTile: View {
-    let activity: ArchiveActivity
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(activity.date.formatted(.dateTime.month().day()))
-                    .font(.caption.weight(.black).monospacedDigit())
-                    .foregroundStyle(RunTheme.accent)
-                Spacer(minLength: 4)
-                Text("\(formatKm(activity.distanceKm)) km")
-                    .font(.caption.weight(.black).monospacedDigit())
-                    .foregroundStyle(RunTheme.ink)
-            }
-            Text(activity.name)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(RunTheme.ink)
-                .lineLimit(1)
-            Text("\(activity.pace)/km · \(activity.duration)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(11)
-        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(.primary.opacity(0.06), lineWidth: 1))
-    }
-
-    private func formatKm(_ value: Double) -> String {
-        value >= 100 ? String(format: "%.0f", value) : String(format: "%.1f", value)
-    }
-}
-
 private struct CollectionRouteCard: View {
     let activity: ArchiveActivity
     let route: ArchiveRouteSummary?
@@ -973,12 +1004,15 @@ private struct CollectionRouteCard: View {
         VStack(alignment: .leading, spacing: 9) {
             MiniRouteView(coordinates: route?.coordinates ?? [], color: routeColor)
                 .frame(maxWidth: .infinity).frame(height: 112)
-                .padding(8)
+                .background(RunTheme.route.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text(activity.name).font(.subheadline.bold()).lineLimit(1)
             Text("\(formatKm(activity.distanceKm)) km · \(activity.date.formatted(date: .numeric, time: .omitted))")
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(11)
+        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(.primary.opacity(0.06), lineWidth: 1))
     }
 
     private func formatKm(_ value: Double) -> String {
@@ -1046,17 +1080,76 @@ struct ActivityListView: View {
     }
 
     @EnvironmentObject private var store: ArchiveStore
+    @EnvironmentObject private var journal: TrainingJournal
+    @State private var trainingKind: TrainingKind = .unspecified
     @State private var filter: Filter = .all
+    @State private var searchText = ""
+    @State private var selectedYear: Int?
+    @State private var routeOnly = false
+    @State private var longDistanceOnly = false
+
+    private var years: [Int] {
+        Array(Set(store.activities.map { Calendar.current.component(.year, from: $0.date) })).sorted(by: >)
+    }
 
     private var filtered: [ArchiveActivity] {
-        store.activities.filter { item in
-            filter == .all || (filter == .run && item.kind == .run) || (filter == .race && item.kind == .race)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.activities.filter { item in
+            let matchesType = filter == .all || (filter == .run && item.kind == .run) || (filter == .race && item.kind == .race)
+            let matchesYear = selectedYear == nil || Calendar.current.component(.year, from: item.date) == selectedYear
+            let matchesRoute = !routeOnly || store.routeSummary(id: item.routeId) != nil
+            let matchesDistance = !longDistanceOnly || item.distanceKm >= 10
+            let matchesSearch = query.isEmpty || item.name.localizedCaseInsensitiveContains(query)
+                || item.city.localizedCaseInsensitiveContains(query)
+                || item.date.formatted(date: .numeric, time: .omitted).contains(query)
+                || journal.annotation(item.id).note.localizedCaseInsensitiveContains(query)
+                || journal.annotation(item.id).routeName.localizedCaseInsensitiveContains(query)
+            let matchesTraining = trainingKind == .unspecified || journal.annotation(item.id).kind == trainingKind
+            return matchesType && matchesYear && matchesRoute && matchesDistance && matchesSearch && matchesTraining
+        }
+    }
+
+    private var monthKeys: [Int] {
+        Array(Set(filtered.map {
+            let parts = Calendar.current.dateComponents([.year, .month], from: $0.date)
+            return (parts.year ?? 0) * 100 + (parts.month ?? 0)
+        })).sorted(by: >)
+    }
+
+    private func activities(in monthKey: Int) -> [ArchiveActivity] {
+        filtered.filter {
+            let parts = Calendar.current.dateComponents([.year, .month], from: $0.date)
+            return (parts.year ?? 0) * 100 + (parts.month ?? 0) == monthKey
         }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 17) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("跑步记录")
+                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .foregroundStyle(RunTheme.ink)
+                    Text("\(filtered.count) 条记录 · 从一次跑步开始回顾")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("搜索名称、城市或日期", text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(13)
+                .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Filter.allCases) { item in
@@ -1073,17 +1166,60 @@ struct ActivityListView: View {
                     }
                 }
 
+                HStack(spacing: 8) {
+                    Menu {
+                        Button("所有年份") { selectedYear = nil }
+                        ForEach(years, id: \.self) { year in
+                            Button("\(year) 年") { selectedYear = year }
+                        }
+                    } label: {
+                        Label(selectedYear.map { "\($0) 年" } ?? "所有年份", systemImage: "calendar")
+                    }
+                    Spacer()
+                    Button { longDistanceOnly.toggle() } label: {
+                        Text("10 km+")
+                            .foregroundStyle(longDistanceOnly ? .white : RunTheme.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(longDistanceOnly ? RunTheme.route : RunTheme.panel, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button { routeOnly.toggle() } label: {
+                        Label("有路线", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                            .foregroundStyle(routeOnly ? .white : RunTheme.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(routeOnly ? RunTheme.route : RunTheme.panel, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(RunTheme.ink)
+
+                Picker("训练标签", selection: $trainingKind) {
+                    Text("全部训练标签").tag(TrainingKind.unspecified)
+                    ForEach(TrainingKind.allCases.filter { $0 != .unspecified }) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+
                 if filtered.isEmpty {
-                    ContentUnavailableView("没有匹配记录", systemImage: "figure.run", description: Text("试试其他类型。"))
+                    ContentUnavailableView("没有匹配记录", systemImage: "figure.run", description: Text("试试更换年份或清除筛选。"))
                         .frame(maxWidth: .infinity)
                         .padding(.top, 36)
                 } else {
-                    LazyVStack(spacing: 10) {
-                        ForEach(filtered) { activity in
-                            NavigationLink(value: activity) {
-                                ActivityLogCard(activity: activity, route: store.routeSummary(id: activity.routeId))
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        ForEach(monthKeys, id: \.self) { monthKey in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("\(monthKey / 100) 年 \(monthKey % 100) 月")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                ForEach(activities(in: monthKey)) { activity in
+                                    NavigationLink(value: activity) {
+                                        ActivityLogCard(activity: activity, route: store.routeSummary(id: activity.routeId))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -1096,6 +1232,7 @@ struct ActivityListView: View {
         .scrollIndicators(.hidden)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(RunTheme.page, for: .navigationBar)
+        .navigationTitle("记录")
         .refreshable { await store.load(force: true) }
         .navigationDestination(for: ArchiveActivity.self) { ActivityDetailView(activity: $0) }
     }
@@ -1163,10 +1300,23 @@ struct ActivityDetailView: View {
             VStack(spacing: 18) {
                 detailMap
                 VStack(alignment: .leading, spacing: 18) {
+                    Text("训练数据")
+                        .font(.title3.weight(.black))
+                        .foregroundStyle(RunTheme.ink)
                     metrics
                     if let series = route?.timeSeries {
                         ActivityCharts(series: series)
                     }
+                    ActivityJournalSection(activity: displayActivity)
+                    Button { navigation.openShare(for: displayActivity) } label: {
+                        Label("制作这次跑步的分享图", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(RunTheme.accent)
+                    .disabled(route == nil)
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.secondary)
@@ -1199,10 +1349,22 @@ struct ActivityDetailView: View {
             if let route, !route.mapCoordinates.isEmpty {
                 RouteDetailMapView(coordinates: route.mapCoordinates, colorScheme: colorScheme)
                     .frame(height: 360)
-            } else {
+            } else if route == nil && errorMessage == nil && activity.routeId != nil {
                 ZStack {
                     Rectangle().fill(.quaternary)
                     ProgressView()
+                }
+                .frame(height: 360)
+            } else {
+                ZStack {
+                    Rectangle().fill(RunTheme.deepPanel)
+                    VStack(spacing: 9) {
+                        Image(systemName: "map")
+                            .font(.system(size: 34, weight: .light))
+                        Text("这次跑步没有可用轨迹")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(RunTheme.paper.opacity(0.74))
                 }
                 .frame(height: 360)
             }
@@ -1226,16 +1388,28 @@ struct ActivityDetailView: View {
     }
 
     private var metrics: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            DetailMetric(label: "距离", value: String(format: "%.2f", displayActivity.distanceKm), unit: "km", color: RunTheme.route)
-            DetailMetric(label: "用时", value: displayActivity.duration, unit: "hh:mm:ss", color: RunTheme.accent)
-            DetailMetric(label: "平均配速", value: displayActivity.pace, unit: "/km", color: .blue)
-            DetailMetric(label: "累计爬升", value: String(format: "%.0f", route?.elevationGain ?? 0), unit: "m", color: .orange)
-            if let heart = displayActivity.avgHeartRate {
-                DetailMetric(label: "平均心率", value: "\(heart)", unit: "bpm", color: .red)
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                DetailMetric(label: "距离", value: String(format: "%.2f", displayActivity.distanceKm), unit: "km", color: RunTheme.route, prominent: true)
+                DetailMetric(label: "用时", value: displayActivity.duration, unit: "", color: RunTheme.accent, prominent: true)
             }
-            if let power = displayActivity.avgPower {
-                DetailMetric(label: "平均功率", value: "\(Int(power.rounded()))", unit: "W", color: .purple)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                DetailMetric(label: "平均配速", value: displayActivity.pace, unit: "/km", color: .blue)
+                if let route, !route.mapCoordinates.isEmpty {
+                    DetailMetric(label: "累计爬升", value: String(format: "%.0f", route.elevationGain), unit: "m", color: .orange)
+                }
+                if let heart = displayActivity.avgHeartRate {
+                    DetailMetric(label: "平均心率", value: "\(heart)", unit: "bpm", color: .red)
+                }
+                if let maxHeart = displayActivity.maxHeartRate {
+                    DetailMetric(label: "最高心率", value: "\(maxHeart)", unit: "bpm", color: RunTheme.accent)
+                }
+                if let cadence = displayActivity.avgCadence, cadence > 0 {
+                    DetailMetric(label: "平均步频", value: "\(Int(cadence.rounded()))", unit: "步/分", color: RunTheme.route)
+                }
+                if let power = displayActivity.avgPower {
+                    DetailMetric(label: "平均功率", value: "\(Int(power.rounded()))", unit: "W", color: .purple)
+                }
             }
         }
     }
@@ -1246,6 +1420,7 @@ private struct DetailMetric: View {
     let value: String
     let unit: String
     let color: Color
+    var prominent = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -1254,10 +1429,14 @@ private struct DetailMetric: View {
                 Spacer(minLength: 0)
                 Text(unit).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
             }
-            Text(value).font(.title2.bold()).monospacedDigit().minimumScaleFactor(0.65).lineLimit(1)
+            Text(value)
+                .font(prominent ? .system(size: 32, weight: .black, design: .rounded) : .title2.bold())
+                .monospacedDigit()
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(prominent ? 18 : 14)
         .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
@@ -1268,133 +1447,321 @@ private struct ChartPoint: Identifiable {
     let value: Double
 }
 
-private func sampledChartPoints(_ points: [ChartPoint], limit: Int = 360) -> [ChartPoint] {
+private func sampledChartPoints(_ points: [ChartPoint], limit: Int = 280) -> [ChartPoint] {
     guard points.count > limit, limit > 1 else { return points }
     let step = Double(points.count - 1) / Double(limit - 1)
     return (0..<limit).map { points[Int((Double($0) * step).rounded())] }
 }
 
-struct ActivityCharts: View {
-    let series: ArchiveTimeSeries
+private enum ActivityMetric: String, CaseIterable {
+    case pace = "配速"
+    case heart = "心率"
+    case elevation = "海拔"
+
+    var unit: String {
+        switch self {
+        case .pace: return "/km"
+        case .heart: return "bpm"
+        case .elevation: return "m"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pace: return RunTheme.mint
+        case .heart: return Color(red: 1, green: 0.49, blue: 0.36)
+        case .elevation: return Color(red: 1, green: 0.73, blue: 0.40)
+        }
+    }
+
+    var lowLabel: String { self == .pace ? "最快" : "最低" }
+    var highLabel: String { self == .pace ? "最慢" : "最高" }
+}
+
+private final class ActivityTrendData {
+    let points: [ChartPoint]
+    let smoothed: [ChartPoint]
+    let mean: Double
+    let minimum: Double
+    let maximum: Double
+    let timeRange: ClosedRange<Double>
+    let valueRange: ClosedRange<Double>
+
+    init(_ rawPoints: [ChartPoint]) {
+        let ordered = sampledChartPoints(rawPoints).sorted { $0.seconds < $1.seconds }
+        points = ordered
+        mean = ordered.reduce(0) { $0 + $1.value } / Double(max(1, ordered.count))
+        let sortedValues = ordered.map(\.value).sorted()
+        minimum = sortedValues.first ?? 0
+        maximum = sortedValues.last ?? 0
+        let low = sortedValues[Int(Double(max(0, sortedValues.count - 1)) * 0.05)]
+        let high = sortedValues[Int(Double(max(0, sortedValues.count - 1)) * 0.95)]
+        let spread = max(high - low, max(abs(maximum), 1) * 0.04)
+        valueRange = (low - spread * 0.16)...(high + spread * 0.16)
+        let firstTime = ordered.first?.seconds ?? 0
+        timeRange = firstTime...max(firstTime + 1, ordered.last?.seconds ?? 1)
+        smoothed = ordered.indices.map { index in
+            let neighbors = ordered[max(0, index - 2)...min(ordered.count - 1, index + 2)]
+            let average = neighbors.reduce(0) { $0 + $1.value } / Double(neighbors.count)
+            return ChartPoint(id: ordered[index].id, seconds: ordered[index].seconds, value: average)
+        }
+    }
+
+    func nearestIndex(fraction: CGFloat) -> Int {
+        let target = timeRange.lowerBound + (timeRange.upperBound - timeRange.lowerBound) * Double(min(1, max(0, fraction)))
+        var lower = 0
+        var upper = points.count - 1
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if points[middle].seconds < target { lower = middle + 1 }
+            else { upper = middle }
+        }
+        if lower > 0 && abs(points[lower - 1].seconds - target) < abs(points[lower].seconds - target) {
+            return lower - 1
+        }
+        return lower
+    }
+
+    func position(for point: ChartPoint, in size: CGSize, pace: Bool) -> CGPoint {
+        let timeSpan = max(1, timeRange.upperBound - timeRange.lowerBound)
+        let valueSpan = max(0.001, valueRange.upperBound - valueRange.lowerBound)
+        let normalized = (min(valueRange.upperBound, max(valueRange.lowerBound, point.value)) - valueRange.lowerBound) / valueSpan
+        let vertical = pace ? normalized : 1 - normalized
+        return CGPoint(
+            x: size.width * CGFloat((point.seconds - timeRange.lowerBound) / timeSpan),
+            y: 8 + max(1, size.height - 16) * CGFloat(vertical)
+        )
+    }
+}
+
+private struct ActivityTrendPlot: View, Equatable {
+    let data: ActivityTrendData
+    let metric: ActivityMetric
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.data === rhs.data && lhs.metric == rhs.metric
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            if !series.pace.isEmpty {
-                MetricLineChart(title: "配速趋势", unit: "分/公里", kind: .pace, points: sampledChartPoints(paired(series.pace)), color: .blue)
+        Canvas { context, size in
+            guard data.smoothed.count > 1 else { return }
+            for fraction in [0.18, 0.5, 0.82] {
+                let y = 8 + max(1, size.height - 16) * fraction
+                var guide = Path()
+                guide.move(to: CGPoint(x: 0, y: y))
+                guide.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(guide, with: .color(.white.opacity(0.10)), lineWidth: 1)
             }
-            if !series.elevation.isEmpty {
-                MetricLineChart(title: "海拔变化", unit: "米", kind: .number, points: sampledChartPoints(paired(series.elevation.map(Optional.some))), color: .orange)
+            let positions = data.smoothed.map { data.position(for: $0, in: size, pace: metric == .pace) }
+            var line = Path()
+            for (index, point) in positions.enumerated() {
+                if index == 0 { line.move(to: point) }
+                else { line.addLine(to: point) }
             }
-            if !series.heartRate.isEmpty {
-                let elapsed = series.heartRateElapsed ?? interpolatedElapsed(count: series.heartRate.count)
-                let values = series.heartRate.enumerated().compactMap { index, value in
-                    index < elapsed.count ? ChartPoint(id: index, seconds: elapsed[index], value: value) : nil
+            var area = line
+            area.addLine(to: CGPoint(x: positions.last?.x ?? size.width, y: size.height))
+            area.addLine(to: CGPoint(x: positions.first?.x ?? 0, y: size.height))
+            area.closeSubpath()
+            context.fill(area, with: .linearGradient(
+                Gradient(colors: [metric.color.opacity(0.36), metric.color.opacity(0.01)]),
+                startPoint: CGPoint(x: 0, y: 8),
+                endPoint: CGPoint(x: 0, y: size.height)
+            ))
+            context.stroke(line, with: .color(metric.color.opacity(0.20)), style: StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
+            context.stroke(line, with: .color(metric.color), style: StrokeStyle(lineWidth: 3.4, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+struct ActivityCharts: View {
+    @State private var selectedMetric: ActivityMetric = .pace
+    @State private var selectedIndex: Int?
+    private let dataSets: [ActivityMetric: ActivityTrendData]
+    private let ink = Color(red: 0.055, green: 0.12, blue: 0.14)
+
+    init(series: ArchiveTimeSeries) {
+        var result: [ActivityMetric: ActivityTrendData] = [:]
+        for metric in ActivityMetric.allCases {
+            let points = Self.points(for: metric, series: series)
+            if points.count > 1 { result[metric] = ActivityTrendData(points) }
+        }
+        dataSets = result
+    }
+
+    private var availableMetrics: [ActivityMetric] {
+        ActivityMetric.allCases.filter { dataSets[$0] != nil }
+    }
+
+    private var metric: ActivityMetric {
+        availableMetrics.contains(selectedMetric) ? selectedMetric : (availableMetrics.first ?? .pace)
+    }
+
+    var body: some View {
+        if let data = dataSets[metric] {
+            let selectedPoint = selectedIndex.flatMap { data.points.indices.contains($0) ? data.points[$0] : nil }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("过程表现")
+                            .font(.title3.weight(.black))
+                        Text("在曲线上左右拖动查看")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    Spacer()
+                    if selectedIndex != nil {
+                        Button("返回均值") { selectedIndex = nil }
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(metric.color)
+                            .padding(.top, 4)
+                    } else {
+                        Image(systemName: "waveform.path")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(metric.color)
+                            .frame(width: 42, height: 42)
+                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
+                    }
                 }
-                MetricLineChart(title: "心率趋势", unit: "bpm", kind: .number, points: sampledChartPoints(values), color: RunTheme.accent)
+                HStack(spacing: 8) {
+                    ForEach(availableMetrics, id: \.self) { option in
+                        Button {
+                            selectedMetric = option
+                            selectedIndex = nil
+                        } label: {
+                            Text(option.rawValue)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(metric == option ? ink : .white.opacity(0.68))
+                                .padding(.horizontal, 15)
+                                .padding(.vertical, 9)
+                                .background(metric == option ? option.color : .white.opacity(0.08), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 22)
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(valueText(selectedPoint?.value ?? data.mean, metric: metric))
+                        .font(.system(size: 46, weight: .black, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                    Text(metric.unit)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(metric.color)
+                    Spacer()
+                    Text(selectedPoint.map { timeText($0.seconds) } ?? "采样均值")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.57))
+                }
+                .padding(.top, 24)
+
+                GeometryReader { geometry in
+                    ZStack {
+                        ActivityTrendPlot(data: data, metric: metric)
+                            .equatable()
+                        if let selectedPoint {
+                            Canvas { context, size in
+                                let selected = data.position(for: selectedPoint, in: size, pace: metric == .pace)
+                                var rule = Path()
+                                rule.move(to: CGPoint(x: selected.x, y: 8))
+                                rule.addLine(to: CGPoint(x: selected.x, y: size.height - 8))
+                                context.stroke(rule, with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                                let halo = Path(ellipseIn: CGRect(x: selected.x - 8, y: selected.y - 8, width: 16, height: 16))
+                                context.fill(halo, with: .color(ink))
+                                context.stroke(halo, with: .color(metric.color), lineWidth: 3)
+                            }
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { gesture in
+                                let fraction = gesture.location.x / max(1, geometry.size.width)
+                                let next = data.nearestIndex(fraction: fraction)
+                                if selectedIndex != next { selectedIndex = next }
+                            }
+                    )
+                }
+                .frame(height: 174)
+                .padding(.top, 16)
+
+                HStack {
+                    Text(timeText(data.timeRange.lowerBound))
+                    Spacer()
+                    Text(timeText((data.timeRange.lowerBound + data.timeRange.upperBound) / 2))
+                    Spacer()
+                    Text(timeText(data.timeRange.upperBound))
+                }
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.48))
+                .padding(.top, 8)
+
+                Rectangle()
+                    .fill(.white.opacity(0.11))
+                    .frame(height: 1)
+                    .padding(.top, 21)
+                HStack(spacing: 8) {
+                    Text("\(metric.lowLabel) \(valueText(data.minimum, metric: metric)) \(metric.unit)")
+                    Spacer()
+                    Text("\(metric.highLabel) \(valueText(data.maximum, metric: metric)) \(metric.unit)")
+                }
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.62))
+                .padding(.top, 14)
+            }
+            .padding(20)
+            .foregroundStyle(.white)
+            .background(
+                LinearGradient(
+                    colors: [Color(red: 0.09, green: 0.20, blue: 0.22), ink],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 25, style: .continuous)
+            )
+        }
+    }
+
+    private static func points(for metric: ActivityMetric, series: ArchiveTimeSeries) -> [ChartPoint] {
+        switch metric {
+        case .pace:
+            return paired(series.pace, elapsed: series.elapsed).filter { (2...30).contains($0.value) }
+        case .elevation:
+            return paired(series.elevation.map(Optional.some), elapsed: series.elapsed)
+        case .heart:
+            let elapsed = series.heartRateElapsed ?? interpolatedElapsed(series.heartRate.count, series.elapsed)
+            return series.heartRate.enumerated().compactMap { index, value in
+                guard index < elapsed.count, value.isFinite, value > 0, elapsed[index].isFinite else { return nil }
+                return ChartPoint(id: index, seconds: elapsed[index], value: value)
             }
         }
     }
 
-    private func paired(_ values: [Double?]) -> [ChartPoint] {
+    private static func paired(_ values: [Double?], elapsed: [Double]) -> [ChartPoint] {
         values.enumerated().compactMap { index, value in
-            guard let value, index < series.elapsed.count, value.isFinite else { return nil }
-            return ChartPoint(id: index, seconds: series.elapsed[index], value: value)
+            guard let value, index < elapsed.count, value.isFinite, elapsed[index].isFinite else { return nil }
+            return ChartPoint(id: index, seconds: elapsed[index], value: value)
         }
     }
 
-    private func interpolatedElapsed(count: Int) -> [Double] {
-        guard count > 1, let first = series.elapsed.first, let last = series.elapsed.last else {
+    private static func interpolatedElapsed(_ count: Int, _ elapsed: [Double]) -> [Double] {
+        guard count > 1, let first = elapsed.first, let last = elapsed.last else {
             return Array(0..<count).map(Double.init)
         }
         return (0..<count).map { first + (last - first) * Double($0) / Double(count - 1) }
     }
-}
 
-private struct MetricLineChart: View {
-    enum ValueKind { case pace, number }
-
-    let title: String
-    let unit: String
-    let kind: ValueKind
-    let points: [ChartPoint]
-    let color: Color
-
-    private var xDomain: ClosedRange<Double> {
-        let maximum = points.map { max(0, $0.seconds / 60) }.max() ?? 1
-        return 0...max(1, maximum)
-    }
-
-    private var yDomain: ClosedRange<Double> {
-        let values = points.map { plottedValue($0.value) }.filter(\.isFinite)
-        guard let minimum = values.min(), let maximum = values.max() else { return 0...1 }
-        if abs(maximum - minimum) < 0.001 {
-            let padding = kind == .pace ? max(minimum * 0.05, 0.005) : 1
-            return max(0, minimum - padding)...(maximum + padding)
+    private func valueText(_ value: Double, metric: ActivityMetric) -> String {
+        if metric == .pace {
+            let seconds = max(0, Int((value * 60).rounded()))
+            return String(format: "%d:%02d", seconds / 60, seconds % 60)
         }
-        let padding = max((maximum - minimum) * 0.08, kind == .pace ? 0.005 : 1)
-        return max(0, minimum - padding)...(maximum + padding)
+        return String(format: "%.0f", value)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title).font(.headline)
-                Spacer()
-                Text(unit).font(.caption).foregroundStyle(.secondary)
-            }
-            Chart(points) { point in
-                AreaMark(
-                    x: .value("时间", point.seconds / 60),
-                    yStart: .value("基线", yDomain.lowerBound),
-                    yEnd: .value(unit, plottedValue(point.value))
-                )
-                    .foregroundStyle(color.opacity(0.10))
-                LineMark(x: .value("时间", point.seconds / 60), y: .value(unit, plottedValue(point.value)))
-                    .foregroundStyle(color).lineStyle(StrokeStyle(lineWidth: 2))
-            }
-            .chartXScale(domain: xDomain)
-            .chartYScale(domain: yDomain)
-            .chartXAxis {
-                AxisMarks(position: .bottom, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.6, dash: [3, 3]))
-                        .foregroundStyle(.secondary.opacity(0.28))
-                    AxisTick()
-                    AxisValueLabel {
-                        if let minutes = value.as(Double.self) {
-                            Text(String(format: "%.0f", minutes))
-                        }
-                    }
-                }
-            }
-            .chartXAxisLabel("分钟")
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.6, dash: [3, 3]))
-                        .foregroundStyle(.secondary.opacity(0.28))
-                    AxisValueLabel {
-                        if let metric = value.as(Double.self) {
-                            if kind == .pace, metric > 0 { Text(paceAxisLabel(1 / metric)) }
-                            else { Text(String(format: "%.0f", metric)) }
-                        }
-                    }
-                }
-            }
-            .chartPlotStyle { plot in
-                plot.clipped()
-            }
-            .frame(height: 150)
-        }
-        .padding(15)
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private func paceAxisLabel(_ minutes: Double) -> String {
-        let totalSeconds = max(0, Int((minutes * 60).rounded()))
-        return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
-    }
-
-    private func plottedValue(_ value: Double) -> Double {
-        kind == .pace && value > 0 ? 1 / value : value
+    private func timeText(_ seconds: Double) -> String {
+        let minutes = max(0, Int(seconds / 60))
+        return String(format: "%d:%02d", minutes / 60, minutes % 60)
     }
 }
 
@@ -1438,6 +1805,7 @@ func normalizedPoints(_ coordinates: [CLLocationCoordinate2D], size: CGSize, ins
 struct RouteMapView: UIViewRepresentable {
     let routes: [ArchiveRouteSummary]
     let colorScheme: ColorScheme
+    let focusRequest: Int
 
     func makeCoordinator() -> OverviewMapCoordinator { OverviewMapCoordinator() }
 
@@ -1459,7 +1827,7 @@ struct RouteMapView: UIViewRepresentable {
     func updateUIView(_ map: MKMapView, context: Context) {
         map.overrideUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         let appearance = colorScheme == .dark ? "dark" : "light"
-        context.coordinator.update(routes: routes, appearance: appearance, on: map)
+        context.coordinator.update(routes: routes, appearance: appearance, focusRequest: focusRequest, on: map)
     }
 }
 
@@ -1467,27 +1835,31 @@ final class OverviewMapCoordinator: NSObject, MKMapViewDelegate {
     private var signature = ""
     private var appearanceSignature = ""
     private var hasSetInitialRegion = false
+    private var lastFocusRequest = 0
     private var isChangingRegion = false
     private var pendingRoutes: [ArchiveRouteSummary]?
     private var pendingAppearance: String?
+    private var pendingFocusRequest: Int?
 
-    func update(routes: [ArchiveRouteSummary], appearance: String, on map: MKMapView) {
+    func update(routes: [ArchiveRouteSummary], appearance: String, focusRequest: Int, on map: MKMapView) {
         guard !isChangingRegion else {
             pendingRoutes = routes
             pendingAppearance = appearance
+            pendingFocusRequest = focusRequest
             return
         }
 
         if appearanceSignature != appearance {
             appearanceSignature = appearance
             signature = ""
-            hasSetInitialRegion = false
         }
 
+        let shouldFocus = lastFocusRequest != focusRequest
+        lastFocusRequest = focusRequest
         let nextSignature = "\(appearance)|" + routes.map {
             "\($0.id):\($0.previewCoordinates.count)"
         }.joined(separator: "|")
-        guard signature != nextSignature else { return }
+        guard signature != nextSignature || shouldFocus else { return }
         signature = nextSignature
 
         let visibleRoutes = distinctRoutes(from: routes)
@@ -1498,18 +1870,56 @@ final class OverviewMapCoordinator: NSObject, MKMapViewDelegate {
         }
 
         map.removeOverlays(map.overlays)
-        guard !lines.isEmpty else { return }
+        guard !lines.isEmpty else {
+            if !hasSetInitialRegion { setFallbackRegion(on: map) }
+            return
+        }
 
         let routesOverlay = MKMultiPolyline(lines)
         map.addOverlay(routesOverlay)
-        if !hasSetInitialRegion {
-            map.setVisibleMapRect(
-                routesOverlay.boundingMapRect,
-                edgePadding: UIEdgeInsets(top: 70, left: 32, bottom: 80, right: 32),
-                animated: false
-            )
+        if !hasSetInitialRegion || shouldFocus {
+            focusOnRecentRoute(routes.first, on: map)
             hasSetInitialRegion = true
         }
+    }
+
+    private func setFallbackRegion(on map: MKMapView) {
+        let defaults = UserDefaults.standard
+        let latitude = defaults.object(forKey: "archiveMapLatitude") as? Double ?? 32.05
+        let longitude = defaults.object(forKey: "archiveMapLongitude") as? Double ?? 118.78
+        map.setRegion(
+            MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.18, longitudeDelta: 0.18)
+            ),
+            animated: false
+        )
+    }
+
+    private func focusOnRecentRoute(_ route: ArchiveRouteSummary?, on map: MKMapView) {
+        guard let coordinates = route?.coordinates.map(mapDisplayCoordinate), !coordinates.isEmpty else { return }
+        let points = coordinates.map(MKMapPoint.init)
+        let minX = points.map(\.x).min() ?? 0
+        let maxX = points.map(\.x).max() ?? 0
+        let minY = points.map(\.y).min() ?? 0
+        let maxY = points.map(\.y).max() ?? 0
+        let center = coordinates[coordinates.count / 2]
+        let minimumSide = MKMapPointsPerMeterAtLatitude(center.latitude) * 14_000
+        let width = max(maxX - minX, minimumSide)
+        let height = max(maxY - minY, minimumSide)
+        let rect = MKMapRect(
+            x: (minX + maxX - width) / 2,
+            y: (minY + maxY - height) / 2,
+            width: width,
+            height: height
+        )
+        map.setVisibleMapRect(
+            rect,
+            edgePadding: UIEdgeInsets(top: 110, left: 28, bottom: 215, right: 28),
+            animated: hasSetInitialRegion
+        )
+        UserDefaults.standard.set(center.latitude, forKey: "archiveMapLatitude")
+        UserDefaults.standard.set(center.longitude, forKey: "archiveMapLongitude")
     }
 
     func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
@@ -1520,9 +1930,11 @@ final class OverviewMapCoordinator: NSObject, MKMapViewDelegate {
         isChangingRegion = false
         guard let pendingRoutes else { return }
         let appearance = pendingAppearance ?? appearanceSignature
+        let focusRequest = pendingFocusRequest ?? lastFocusRequest
         self.pendingRoutes = nil
         pendingAppearance = nil
-        update(routes: pendingRoutes, appearance: appearance, on: mapView)
+        pendingFocusRequest = nil
+        update(routes: pendingRoutes, appearance: appearance, focusRequest: focusRequest, on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -1709,7 +2121,6 @@ private func transformLatitude(_ x: Double, _ y: Double) -> Double {
     result += (160.0 * sin(y / 12.0 * Double.pi) + 320.0 * sin(y * Double.pi / 30.0)) * 2.0 / 3.0
     return result
 }
-
 private func transformLongitude(_ x: Double, _ y: Double) -> Double {
     var result = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * sqrt(abs(x))
     result += (20.0 * sin(6.0 * x * Double.pi) + 20.0 * sin(2.0 * x * Double.pi)) * 2.0 / 3.0

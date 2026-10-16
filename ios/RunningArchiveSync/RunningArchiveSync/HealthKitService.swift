@@ -18,6 +18,7 @@ final class HealthKitService {
     private struct QuantitySeriesPoint {
         let quantity: HKQuantity
         let dateInterval: DateInterval
+        var sample: HKQuantitySample? = nil
     }
 
     private let store = HKHealthStore()
@@ -32,13 +33,20 @@ final class HealthKitService {
         }
     }
 
-    func requestAuthorization() async throws {
+    func requestAuthorization(includeExportMetrics: Bool = false) async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw HealthSyncError.unavailable }
         var readTypes: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
         readTypes.insert(try heartRateType)
         if let power = HKQuantityType.quantityType(forIdentifier: .runningPower) { readTypes.insert(power) }
         if let speed = HKQuantityType.quantityType(forIdentifier: .runningSpeed) { readTypes.insert(speed) }
+        if let energy = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { readTypes.insert(energy) }
         if let steps = HKQuantityType.quantityType(forIdentifier: .stepCount) { readTypes.insert(steps) }
+        if includeExportMetrics {
+            for identifier: HKQuantityTypeIdentifier in [.runningStrideLength, .runningGroundContactTime,
+                .runningVerticalOscillation, .vo2Max, .heartRateRecoveryOneMinute] {
+                if let type = HKQuantityType.quantityType(forIdentifier: identifier) { readTypes.insert(type) }
+            }
+        }
         try await store.requestAuthorization(toShare: [], read: readTypes)
     }
 
@@ -123,6 +131,121 @@ final class HealthKitService {
             runningSpeedSamples: speed,
             intervals: intervals
         )
+    }
+
+    /// Read full native intervals for both export formats. Only the file packaging differs.
+    func exportWorkout(id: String) async throws -> ExportWorkout {
+        guard let workout = try await workout(forID: id) else { throw LocalArchiveError.workoutUnavailable }
+        try Task.checkCancellation()
+        let heartType = try heartRateType
+        let heartUnit = HKUnit.count().unitDivided(by: .minute())
+        let heart = workout.statistics(for: heartType)
+        func statistics(_ identifier: HKQuantityTypeIdentifier) -> HKStatistics? {
+            HKQuantityType.quantityType(forIdentifier: identifier).flatMap { workout.statistics(for: $0) }
+        }
+        let steps = statistics(.stepCount)?.sumQuantity()?.doubleValue(for: .count())
+        var samples: [ExportRawSample] = [], issues: [String: String] = [:]
+        var points: [RoutePointPayload] = []
+        let metrics: [(HKQuantityTypeIdentifier, ExportMetric, HKUnit, String)] = [
+            (.heartRate, .heartRate, heartUnit, "bpm"),
+            (.runningSpeed, .speed, .meter().unitDivided(by: .second()), "m/s"),
+            (.runningPower, .power, .watt(), "W"),
+            (.stepCount, .steps, .count(), "count"),
+            (.runningStrideLength, .stride, .meter(), "m"),
+            (.runningGroundContactTime, .contact, .secondUnit(with: .milli), "ms"),
+            (.runningVerticalOscillation, .oscillation, .meterUnit(with: .centi), "cm")
+        ]
+        for (identifier, metric, unit, symbol) in metrics {
+            try Task.checkCancellation()
+            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
+            do {
+                let raw = try await quantitySeriesPoints(type: type, workout: workout, forExport: true)
+                samples += raw.filter { $0.dateInterval.end >= workout.startDate && $0.dateInterval.start < workout.endDate }.map { point in
+                    let sample = point.sample
+                    let bundle = sample?.sourceRevision.source.bundleIdentifier ?? ""
+                    let sameSource = bundle == workout.sourceRevision.source.bundleIdentifier
+                    let sameDevice = sample?.device?.localIdentifier != nil && sample?.device?.localIdentifier == workout.device?.localIdentifier
+                    return ExportRawSample(metric: metric.rawValue, start: point.dateInterval.start,
+                        end: point.dateInterval.end, value: point.quantity.doubleValue(for: unit), unit: symbol,
+                        source: sample?.sourceRevision.source.name ?? "未知来源", sourceBundle: bundle,
+                        device: [sample?.device?.manufacturer, sample?.device?.model, sample?.device?.name].compactMap { $0 }.joined(separator: " / "),
+                        deviceKey: sample?.device?.localIdentifier ?? "", sourcePriority: sameDevice ? 2 : (sameSource ? 1 : 0))
+                }
+            } catch is CancellationError { throw CancellationError() }
+            catch { issues[metric.rawValue] = error.localizedDescription }
+        }
+        do {
+            points = try await routeLocations(for: workout).map {
+                RoutePointPayload(timestamp: $0.timestamp, latitude: $0.coordinate.latitude,
+                    longitude: $0.coordinate.longitude, altitude: $0.altitude, speedMps: $0.speed >= 0 ? $0.speed : nil)
+            }
+        } catch is CancellationError { throw CancellationError() }
+        catch { issues["gps"] = error.localizedDescription }
+        try Task.checkCancellation()
+        return ExportWorkout(uuid: workout.uuid.uuidString, start: workout.startDate, end: workout.endDate,
+            distanceKm: workout.totalDistance?.doubleValue(for: .meterUnit(with: .kilo)), duration: workout.duration,
+            heartRate: heart?.averageQuantity()?.doubleValue(for: heartUnit),
+            maxHeartRate: heart?.maximumQuantity()?.doubleValue(for: heartUnit),
+            power: statistics(.runningPower)?.averageQuantity()?.doubleValue(for: .watt()),
+            cadence: steps.flatMap { workout.duration > 0 ? $0 / (workout.duration / 60) : nil },
+            energyKcal: statistics(.activeEnergyBurned)?.sumQuantity()?.doubleValue(for: .kilocalorie()),
+            elevationGain: (workout.metadata?[HKMetadataKeyElevationAscended] as? HKQuantity)?.doubleValue(for: .meter()),
+            indoor: (workout.metadata?[HKMetadataKeyIndoorWorkout] as? NSNumber)?.boolValue,
+            source: workout.sourceRevision.source.name, sourceBundle: workout.sourceRevision.source.bundleIdentifier,
+            device: [workout.device?.manufacturer, workout.device?.model, workout.device?.name].compactMap { $0 }.joined(separator: " / "),
+            points: points, samples: samples, intervals: workoutIntervals(for: workout),
+            stride: statistics(.runningStrideLength)?.averageQuantity()?.doubleValue(for: .meter()),
+            contact: statistics(.runningGroundContactTime)?.averageQuantity()?.doubleValue(for: .secondUnit(with: .milli)),
+            oscillation: statistics(.runningVerticalOscillation)?.averageQuantity()?.doubleValue(for: .meterUnit(with: .centi)),
+            elevationLoss: (workout.metadata?[HKMetadataKeyElevationDescended] as? HKQuantity)?.doubleValue(for: .meter()),
+            steps: steps, pauses: exportPauses(workout), readIssues: issues)
+    }
+
+    func exportReferences(start: Date, end: Date) async throws -> ExportReferenceData {
+        var result = ExportReferenceData()
+        for (identifier, label, unit, symbol): (HKQuantityTypeIdentifier, String, HKUnit, String) in [
+            (.vo2Max, "VO2 max", .literUnit(with: .milli).unitDivided(by: .gramUnit(with: .kilo).unitMultiplied(by: .minute())), "ml/kg/min"),
+            (.heartRateRecoveryOneMinute, "1 分钟心率恢复（系统记录）", .count().unitDivided(by: .minute()), "bpm")
+        ] {
+            try Task.checkCancellation()
+            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
+            do {
+                let values: [HKQuantitySample] = try await withCheckedThrowingContinuation { continuation in
+                    let query = HKSampleQuery(sampleType: type,
+                        predicate: HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate),
+                        limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
+                        if let error, !Self.isNoData(error) { continuation.resume(throwing: error) }
+                        else { continuation.resume(returning: samples as? [HKQuantitySample] ?? []) }
+                    }
+                    store.execute(query)
+                }
+                result.samples += values.filter { $0.startDate >= start && $0.startDate < end }.map {
+                    ExportReferenceSample(metric: label, date: $0.startDate, value: $0.quantity.doubleValue(for: unit), unit: symbol,
+                        source: $0.sourceRevision.source.name + " / " + $0.sourceRevision.source.bundleIdentifier,
+                        method: ($0.metadata?[HKMetadataKeyWasTakenInLab] as? NSNumber)?.boolValue == true ? "来源标注为实验室测量" : "未标注为实验室测量，可能为设备估算")
+                }
+            } catch is CancellationError { throw CancellationError() }
+            catch { result.issues[label] = error.localizedDescription }
+        }
+        return result
+    }
+
+    private func exportPauses(_ workout: HKWorkout) -> [DateInterval] {
+        var manual = false, motion = false, pausedAt: Date?, result: [DateInterval] = []
+        for event in (workout.workoutEvents ?? []).sorted(by: { $0.dateInterval.start < $1.dateInterval.start }) {
+            switch event.type {
+            case .pause: manual = true
+            case .resume: manual = false
+            case .motionPaused: motion = true
+            case .motionResumed: motion = false
+            default: continue
+            }
+            let date = min(workout.endDate, max(workout.startDate, event.dateInterval.start))
+            if manual || motion { if pausedAt == nil { pausedAt = date } }
+            else if let start = pausedAt { result.append(DateInterval(start: start, end: max(start, date))); pausedAt = nil }
+        }
+        if let start = pausedAt { result.append(DateInterval(start: start, end: workout.endDate)) }
+        return result
     }
 
     private func workoutIntervals(for workout: HKWorkout) -> [WorkoutIntervalPayload] {
@@ -268,14 +391,14 @@ final class HealthKitService {
         return all.sorted { $0.timestamp < $1.timestamp }
     }
 
-    private func quantitySeriesPoints(type: HKQuantityType, workout: HKWorkout) async throws -> [QuantitySeriesPoint] {
+    private func quantitySeriesPoints(type: HKQuantityType, workout: HKWorkout, forExport: Bool = false) async throws -> [QuantitySeriesPoint] {
         try await withCheckedThrowingContinuation { continuation in
             var collected: [QuantitySeriesPoint] = []
             var resumed = false
             let query = HKQuantitySeriesSampleQuery(
                 quantityType: type,
-                predicate: samplePredicate(for: workout)
-            ) { _, quantity, interval, _, done, error in
+                predicate: forExport ? HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate, options: []) : samplePredicate(for: workout)
+            ) { _, quantity, interval, sample, done, error in
                 if resumed { return }
                 if let error {
                     resumed = true
@@ -287,7 +410,7 @@ final class HealthKitService {
                     return
                 }
                 if let quantity, let interval {
-                    collected.append(QuantitySeriesPoint(quantity: quantity, dateInterval: interval))
+                    collected.append(QuantitySeriesPoint(quantity: quantity, dateInterval: interval, sample: sample))
                 }
                 if done {
                     resumed = true
@@ -296,6 +419,7 @@ final class HealthKitService {
                     })
                 }
             }
+            query.includeSample = forExport
             query.orderByQuantitySampleStartDate = true
             store.execute(query)
         }

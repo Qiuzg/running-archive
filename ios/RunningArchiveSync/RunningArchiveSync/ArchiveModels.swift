@@ -137,6 +137,7 @@ struct ArchiveActivity: Identifiable, Hashable {
     let avgHeartRate: Int?
     let maxHeartRate: Int?
     let avgPower: Double?
+    let avgCadence: Double?
     let isPb: Bool
 
     init(run: ArchiveRun) {
@@ -152,6 +153,7 @@ struct ArchiveActivity: Identifiable, Hashable {
         avgHeartRate = run.avgHeartRate
         maxHeartRate = nil
         avgPower = run.avgPower
+        avgCadence = nil
         isPb = false
     }
 
@@ -168,6 +170,7 @@ struct ArchiveActivity: Identifiable, Hashable {
         avgHeartRate = race.avgHeartRate
         maxHeartRate = race.maxHeartRate
         avgPower = race.avgPower
+        avgCadence = nil
         isPb = race.isPb
     }
 
@@ -187,6 +190,7 @@ struct ArchiveActivity: Identifiable, Hashable {
         avgHeartRate = preview.avgHeartRate
         maxHeartRate = preview.maxHeartRate
         avgPower = preview.avgPower
+        avgCadence = nil
         self.isPb = isPb
     }
 
@@ -203,6 +207,7 @@ struct ArchiveActivity: Identifiable, Hashable {
         avgHeartRate = payload.avgHeartRate ?? activity.avgHeartRate
         maxHeartRate = payload.maxHeartRate ?? activity.maxHeartRate
         avgPower = payload.avgPower ?? activity.avgPower
+        avgCadence = payload.avgCadence ?? activity.avgCadence
         isPb = activity.isPb
     }
 

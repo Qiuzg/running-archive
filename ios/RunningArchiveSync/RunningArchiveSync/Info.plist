@@ -1,19 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>CFBundleDisplayName</key><string>Running Archive</string>
-  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
-  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>2.1</string>
-  <key>CFBundleVersion</key><string>2</string>
-  <key>CARTOAPIKey</key><string>cb1_2eml_1_5fc8ea38900ad1d3cf90383c</string>
-  <key>LSRequiresIPhoneOS</key><true/>
-  <key>NSHealthShareUsageDescription</key><string>读取你的跑步、轨迹、心率和功率，用于本地档案、分享图片和可选的网站同步。</string>
-  <key>NSPhotoLibraryAddUsageDescription</key><string>将生成的跑步分享图片保存到系统相册。</string>
-  <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
-  <key>UILaunchScreen</key><dict/>
-  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
-</dict></plist>
+<plist version="1.0">
+<dict>
+	<key>CARTOAPIKey</key>
+	<string>cb1_2eml_1_5fc8ea38900ad1d3cf90383c</string>
+	<key>CFBundleDisplayName</key>
+	<string>Running Archive</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.1</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>读取你的跑步、轨迹、心率、步数、功率、跑姿和体能参考数据，用于本地档案、客观数据导出、分享图片和可选的网站同步。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>将生成的跑步分享图片保存到系统相册。</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+</dict>
+</plist>

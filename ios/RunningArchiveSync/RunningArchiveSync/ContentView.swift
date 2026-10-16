@@ -8,6 +8,8 @@ final class HealthSyncViewModel: ObservableObject {
     @Published var status = "先授权健康数据，再检查新增跑步。"
     @Published var errorDetails: String?
     @Published var isWorking = false
+    @Published var hasCheckedHealth = false
+    @Published var syncProgress: Double?
     @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? RunningArchiveConfiguration.defaultServerURL
     @Published var token = KeychainStore.read("syncToken")
 
@@ -19,6 +21,7 @@ final class HealthSyncViewModel: ObservableObject {
         await work("正在请求健康数据权限…") {
             try await health.requestAuthorization()
             let all = try await health.runningWorkoutPreviews()
+            hasCheckedHealth = true
             var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
             var retryCount = 0
             if !UserDefaults.standard.bool(forKey: heartRateResyncMigrationKey) {
@@ -59,6 +62,7 @@ final class HealthSyncViewModel: ObservableObject {
         UserDefaults.standard.set(serverURL, forKey: "serverURL")
         KeychainStore.write(token, account: "syncToken")
         await work("正在读取路线和心率…") {
+            syncProgress = 0
             var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
             var completed = 0
             var created = 0
@@ -68,6 +72,7 @@ final class HealthSyncViewModel: ObservableObject {
             var failures: [String] = []
 
             for (index, workout) in selected.enumerated() {
+                defer { syncProgress = Double(index + 1) / Double(selected.count) }
                 do {
                     status = "正在准备第 \(index + 1)/\(selected.count) 条跑步…"
                     guard let payload = try await health.payload(forWorkoutID: workout.id) else {
@@ -99,6 +104,7 @@ final class HealthSyncViewModel: ObservableObject {
             } else {
                 status = result
             }
+            syncProgress = nil
         }
     }
 
@@ -114,7 +120,19 @@ final class HealthSyncViewModel: ObservableObject {
             status = "失败：\(message)"
             errorDetails = message
         }
+        syncProgress = nil
         isWorking = false
+    }
+}
+
+private struct ArchiveBottomBarFrameKey: EnvironmentKey {
+    static let defaultValue = CGRect.zero
+}
+
+extension EnvironmentValues {
+    var archiveBottomBarFrame: CGRect {
+        get { self[ArchiveBottomBarFrameKey.self] }
+        set { self[ArchiveBottomBarFrameKey.self] = newValue }
     }
 }
 
@@ -123,18 +141,26 @@ struct ContentView: View {
     @StateObject private var archiveStore = ArchiveStore()
     @StateObject private var appearance = AppearanceStore()
     @StateObject private var navigation = ArchiveNavigationStore()
+    @StateObject private var journal = TrainingJournal()
+    @State private var bottomBarFrame = CGRect.zero
 
     var body: some View {
         currentScreen
+        .environment(\.archiveBottomBarFrame, bottomBarFrame)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ArchiveTabBar(selection: $navigation.selectedTab)
                 .padding(.horizontal, 10)
                 .padding(.top, 8)
                 .padding(.bottom, 6)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { bottomBarFrame = $0 }
         }
         .environmentObject(archiveStore)
         .environmentObject(appearance)
         .environmentObject(navigation)
+        .environmentObject(journal)
+        .alert("跑步手记", isPresented: Binding(get: { journal.errorMessage != nil }, set: { if !$0 { journal.errorMessage = nil } })) {
+            Button("好") { journal.errorMessage = nil }
+        } message: { Text(journal.errorMessage ?? "") }
         .preferredColorScheme(appearance.preferredColorScheme)
         .tint(RunTheme.accent)
         .task {
@@ -276,9 +302,17 @@ struct HealthSyncView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 17) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("同步到网站")
+                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .foregroundStyle(RunTheme.ink)
+                    Text("本机档案可离线查看；这里用于把选中的跑步上传到个人网站。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
-                        Image(systemName: model.errorDetails == nil ? "checkmark" : "exclamationmark")
+                        Image(systemName: model.errorDetails != nil ? "exclamationmark" : (model.hasCheckedHealth ? "checkmark" : "heart.text.square"))
                             .font(.headline.weight(.black))
                             .foregroundStyle(model.errorDetails == nil ? Color.green : RunTheme.accent)
                             .frame(width: 30, height: 30)
@@ -287,7 +321,7 @@ struct HealthSyncView: View {
                                 in: Circle()
                             )
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(model.errorDetails == nil ? "HealthKit 已准备" : "同步出现错误")
+                            Text(model.errorDetails != nil ? "同步出现错误" : (model.isWorking ? "正在处理" : (model.hasCheckedHealth ? "HealthKit 已准备" : "等待检查健康数据")))
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(RunTheme.ink)
                             Text(model.status)
@@ -296,6 +330,11 @@ struct HealthSyncView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
+                    }
+                    if let progress = model.syncProgress {
+                        ProgressView(value: progress)
+                            .tint(RunTheme.accent)
+                            .accessibilityLabel("上传进度")
                     }
                     if let errorDetails = model.errorDetails {
                         Divider()
@@ -357,7 +396,7 @@ struct HealthSyncView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(model.selectedIDs.contains(workout.id) ? "路线已读" : "待同步")
+                                    Text(model.selectedIDs.contains(workout.id) ? "已选择" : "未选择")
                                         .font(.caption2.weight(.bold))
                                         .foregroundStyle(RunTheme.route)
                                 }
@@ -418,6 +457,7 @@ struct HealthSyncView: View {
         .background(RunTheme.page)
         .scrollIndicators(.hidden)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("同步")
         .toolbarBackground(RunTheme.page, for: .navigationBar)
         .disabled(model.isWorking)
         .overlay { if model.isWorking { ProgressView().controlSize(.large) } }
