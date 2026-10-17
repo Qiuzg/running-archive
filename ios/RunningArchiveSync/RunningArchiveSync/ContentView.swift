@@ -125,39 +125,39 @@ final class HealthSyncViewModel: ObservableObject {
     }
 }
 
-private struct ArchiveBottomBarFrameKey: EnvironmentKey {
-    static let defaultValue = CGRect.zero
-}
-
-extension EnvironmentValues {
-    var archiveBottomBarFrame: CGRect {
-        get { self[ArchiveBottomBarFrameKey.self] }
-        set { self[ArchiveBottomBarFrameKey.self] = newValue }
-    }
-}
-
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var archiveStore = ArchiveStore()
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var archiveStore = RunningArchiveRuntime.shared.archive
     @StateObject private var appearance = AppearanceStore()
     @StateObject private var navigation = ArchiveNavigationStore()
-    @StateObject private var journal = TrainingJournal()
-    @State private var bottomBarFrame = CGRect.zero
+    @StateObject private var journal = RunningArchiveRuntime.shared.journal
+    @StateObject private var training = RunningArchiveRuntime.shared.training
+
+    private var showsBottomBar: Bool { navigation.presentedDetailIDs.isEmpty }
 
     var body: some View {
-        currentScreen
-        .environment(\.archiveBottomBarFrame, bottomBarFrame)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ArchiveTabBar(selection: $navigation.selectedTab)
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-                .padding(.bottom, 6)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { bottomBarFrame = $0 }
+        // Bound the whole NavigationStack, including pushed destinations, above the bar.
+        // An inset outside NavigationStack can be ignored by its scroll views on iOS.
+        VStack(spacing: 0) {
+            currentScreen
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showsBottomBar && navigation.selectedTab != .archive {
+                bottomBar
+            }
         }
+        .overlay(alignment: .bottom) {
+            // The map home deliberately extends behind its floating navigation.
+            if showsBottomBar && navigation.selectedTab == .archive {
+                bottomBar
+            }
+        }
+        .background(RunTheme.page)
         .environmentObject(archiveStore)
         .environmentObject(appearance)
         .environmentObject(navigation)
         .environmentObject(journal)
+        .environmentObject(training)
         .alert("跑步手记", isPresented: Binding(get: { journal.errorMessage != nil }, set: { if !$0 { journal.errorMessage = nil } })) {
             Button("好") { journal.errorMessage = nil }
         } message: { Text(journal.errorMessage ?? "") }
@@ -165,8 +165,21 @@ struct ContentView: View {
         .tint(RunTheme.accent)
         .task {
             archiveStore.configureCache(modelContext)
-            await archiveStore.load()
+            RunningArchiveRuntime.shared.startObserving()
+            await RunningArchiveRuntime.shared.refresh(authorize: true)
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await RunningArchiveRuntime.shared.refresh(authorize: false) }
+            }
+        }
+    }
+
+    private var bottomBar: some View {
+        ArchiveTabBar(selection: $navigation.selectedTab)
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -179,7 +192,7 @@ struct ContentView: View {
         case .log:
             NavigationStack { ActivityListView() }
         case .share:
-            NavigationStack { ShareStudioView(initialActivity: navigation.shareActivity) }
+            NavigationStack { ShareHubView() }
         case .sync:
             NavigationStack { HealthSyncView() }
         }
@@ -190,9 +203,12 @@ struct ContentView: View {
 final class ArchiveNavigationStore: ObservableObject {
     @Published var selectedTab: ArchiveTab = .archive
     @Published var shareActivity: ArchiveActivity?
+    @Published var shareScope: ArchiveShareScope = .run
+    @Published var presentedDetailIDs: Set<String> = []
 
     func openShare(for activity: ArchiveActivity) {
         shareActivity = activity
+        shareScope = .run
         selectedTab = .share
     }
 }
@@ -289,9 +305,7 @@ private struct ArchiveTabBar: View {
             }
         }
         .padding(5)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.primary.opacity(0.08), lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+        .glassEffect(.regular, in: .capsule)
     }
 }
 
@@ -452,7 +466,7 @@ struct HealthSyncView: View {
             }
             .padding(.horizontal, 17)
             .padding(.top, 24)
-            .padding(.bottom, 140)
+            .padding(.bottom, 24)
         }
         .background(RunTheme.page)
         .scrollIndicators(.hidden)

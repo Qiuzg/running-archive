@@ -9,6 +9,7 @@ enum ShareLayout: String, CaseIterable, Identifiable {
     case detailed = "竖屏 9:16"
     var id: Self { self }
     var size: CGSize { self == .compact ? CGSize(width: 1080, height: 1440) : CGSize(width: 1080, height: 1920) }
+    var mapSize: CGSize { size }
     // 1.5x keeps the exported PNG sharper than the web canvas while avoiding
     // the very large intermediate bitmaps that can lock up an iPhone.
     var renderScale: CGFloat { 1.5 }
@@ -79,12 +80,13 @@ struct ShareStudioView: View {
         ScrollView {
             VStack(spacing: 18) {
                 preview
+                activitySelector
                 controls
                 actions
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
-            .padding(.bottom, 140)
+            .padding(.bottom, 24)
         }
         .background(RunTheme.page)
         .navigationTitle("分享")
@@ -116,173 +118,79 @@ struct ShareStudioView: View {
         }
     }
 
-    @ViewBuilder private var preview: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("分享预览")
-                    .font(.subheadline.weight(.bold))
+    private var activitySelector: some View {
+        Button { showingActivityPicker = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "figure.run").font(.title3).foregroundStyle(RunTheme.accent)
+                    .frame(width: 38, height: 38).background(RunTheme.accent.opacity(0.09), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("跑步记录").font(.caption).foregroundStyle(.secondary)
+                    Text(selected.map { $0.date.formatted(.dateTime.year().month().day()) + String(format: " · %.2f km", $0.distanceKm) } ?? "选择想分享的一次跑步")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                }
                 Spacer()
-                Text(layout.rawValue)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(RunTheme.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RunTheme.accent.opacity(0.1), in: Capsule())
-            }
+                Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }.padding(14).background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+        }.buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var preview: some View {
+        VStack(spacing: 12) {
             GeometryReader { geometry in
                 let scale = geometry.size.width / layout.size.width
                 ZStack(alignment: .topLeading) {
                     if let renderedImage {
-                        Image(uiImage: renderedImage)
-                            .resizable()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
+                        Image(uiImage: renderedImage).resizable().frame(width: geometry.size.width, height: geometry.size.height)
                     } else if let selected, let previewRoute {
-                        ShareCardView(
-                            activity: selected,
-                            route: previewRoute,
-                            mapImage: nil,
-                            layout: layout,
-                            title: displayTitle,
-                            dark: darkCard,
-                            includeQRCode: includeQRCode
-                        )
-                        .scaleEffect(scale, anchor: .topLeading)
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                        ShareCardView(activity: selected, route: previewRoute, mapImage: nil, layout: layout,
+                            title: displayTitle, dark: darkCard, includeQRCode: includeQRCode)
+                            .scaleEffect(scale, anchor: .topLeading)
+                            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
                     } else {
-                        ContentUnavailableView("路线准备中", systemImage: "map", description: Text("路线整理完成后即可预览分享图。"))
+                        ContentUnavailableView("路线准备中", systemImage: "map")
                             .frame(width: geometry.size.width, height: geometry.size.height)
                     }
                     if isRendering {
-                        ProgressView("正在生成真实地图…")
-                            .padding(16)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 15))
+                        ProgressView("正在生成地图…").padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 15))
                             .frame(width: geometry.size.width, height: geometry.size.height)
                     }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }.clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.09), radius: 14, y: 5)
             }
             .aspectRatio(layout.size, contentMode: .fit)
-            if renderedImage == nil {
-                Text("预览为路线示意，生成后会替换为真实地图。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.top, 2)
+            .frame(maxWidth: layout == .compact ? 286 : 238)
+            Text(renderedImage == nil ? "预览为轨迹示意 · 生成后显示真实地图" : "图片已生成，可保存或分享")
+                .font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity).padding(.vertical, 4)
     }
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("生成设置")
-                .font(.headline.weight(.bold))
-                .padding(.horizontal, 4)
-            settingGroup(title: "内容") {
-                VStack(spacing: 0) {
-                    settingRow(icon: "figure.run", title: "跑步记录") {
-                        Button { showingActivityPicker = true } label: {
-                            HStack(spacing: 6) {
-                                Text(selected.map { "\($0.date.formatted(date: .numeric, time: .omitted)) · \(String(format: "%.1f", $0.distanceKm)) km" } ?? "选择记录")
-                                    .lineLimit(1)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.bold))
-                            }
-                            .foregroundStyle(RunTheme.accent)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Divider().padding(.leading, 52)
-                    settingRow(icon: "textformat", title: "图片标题") {
-                        TextField(selected?.name ?? "户外跑步", text: $shareTitle)
-                            .multilineTextAlignment(.trailing)
-                            .lineLimit(1)
-                            .foregroundStyle(RunTheme.ink)
-                    }
-                }
-            }
-            settingGroup(title: "样式") {
-                VStack(spacing: 0) {
-                    settingPickerRow(title: "版式", options: ShareLayout.allCases, selection: $layout)
-                    Divider().padding(.horizontal, 16)
-                    settingPickerRow(title: "地图", options: ShareMapProvider.allCases, selection: $mapProvider)
-                    Divider().padding(.horizontal, 16)
-                    HStack {
-                        Label("夜间配色", systemImage: darkCard ? "moon.fill" : "sun.max.fill")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Toggle("", isOn: $darkCard)
-                            .labelsHidden()
-                            .tint(RunTheme.accent)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    Divider().padding(.horizontal, 16)
-                    HStack {
-                        Label("附上档案二维码", systemImage: "qrcode")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Toggle("", isOn: $includeQRCode)
-                            .labelsHidden()
-                            .tint(RunTheme.accent)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                }
-            }
+            Text("图片设置").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                HStack {
+                    Text("版式").font(.subheadline)
+                    Spacer()
+                    Picker("版式", selection: $layout) {
+                        ForEach(ShareLayout.allCases) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented).frame(maxWidth: 238)
+                }.padding(14)
+                Divider().padding(.horizontal, 14)
+                Picker("配色", selection: $darkCard) { Text("浅色").tag(false); Text("深色").tag(true) }
+                    .pickerStyle(.menu).padding(.horizontal, 14).padding(.vertical, 6)
+                Divider().padding(.horizontal, 14)
+                Picker("底图", selection: $mapProvider) {
+                    ForEach(ShareMapProvider.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.menu).padding(.horizontal, 14).padding(.vertical, 6)
+                Divider().padding(.horizontal, 14)
+                HStack {
+                    Text("标题").font(.subheadline)
+                    TextField(selected?.name ?? "户外跑步", text: $shareTitle).multilineTextAlignment(.trailing).font(.subheadline)
+                }.padding(14)
+                Divider().padding(.horizontal, 14)
+                Toggle("附上档案二维码", isOn: $includeQRCode).font(.subheadline).tint(RunTheme.accent).padding(14)
+            }.background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
         }
-    }
-
-    private func settingGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-            content()
-                .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.primary.opacity(0.06), lineWidth: 1))
-        }
-    }
-
-    private func settingRow<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(RunTheme.accent)
-                .frame(width: 24)
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            Spacer(minLength: 10)
-            content()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    private func settingPickerRow<Option: RawRepresentable & CaseIterable & Identifiable>(title: String, options: Option.AllCases, selection: Binding<Option>) -> some View where Option.RawValue == String {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            HStack(spacing: 8) {
-                ForEach(Array(options)) { option in
-                    Button {
-                        selection.wrappedValue = option
-                    } label: {
-                        Text(option.rawValue)
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .background(
-                                selection.wrappedValue.id == option.id ? RunTheme.accent.opacity(0.14) : RunTheme.page,
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            )
-                            .foregroundStyle(selection.wrappedValue.id == option.id ? RunTheme.accent : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
     }
 
     private var actions: some View {
@@ -302,6 +210,7 @@ struct ShareStudioView: View {
                 }
                 .buttonStyle(.bordered)
             }
+            if renderedImage != nil {
             HStack(spacing: 10) {
                 Button { saveToPhotos() } label: {
                     Label("保存相册", systemImage: "photo.on.rectangle")
@@ -315,6 +224,7 @@ struct ShareStudioView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(renderedImage == nil || isRendering)
+            }
             }
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -380,7 +290,7 @@ struct ShareStudioView: View {
             guard !Task.isCancelled, renderRequested, selectedID == requestedActivityID else { return }
             let mapImage = try await ShareImageGenerator.routeSnapshot(
                 coordinates: detail.mapCoordinates,
-                size: layout.size,
+                size: layout.mapSize,
                 dark: darkCard,
                 provider: mapProvider,
                 scale: layout.renderScale
@@ -516,7 +426,7 @@ private struct ShareCardView: View {
                 .padding(.bottom, tall ? 42 : 33)
                 Text(displayTitle)
                     .font(.system(size: tall ? 64 : 57, weight: .semibold))
-                    .lineLimit(1).minimumScaleFactor(0.55)
+                    .lineLimit(2).minimumScaleFactor(0.8)
                 HStack(spacing: 12) {
                     Text(activity.kind == .race ? "比赛记录" : "户外跑步")
                     if !activity.city.isEmpty { Text("/  \(activity.city)") }
@@ -612,7 +522,7 @@ private struct ShareRoutePreview: View {
             context.stroke(
                 path,
                 with: .color(dark ? Color.black.opacity(0.42) : Color.white.opacity(0.95)),
-                style: StrokeStyle(lineWidth: 20, lineCap: .round, lineJoin: .round)
+                style: StrokeStyle(lineWidth: 16, lineCap: .round, lineJoin: .round)
             )
             context.stroke(
                 path,
@@ -739,6 +649,11 @@ enum ShareImageGenerator {
                 let y = CGFloat((Double(tile.y * 256) - mapLayout.centerY) * mapLayout.worldScale + mapLayout.targetCenterY)
                 tile.image.draw(in: CGRect(x: x, y: y, width: tileSize * mapLayout.worldScale, height: tileSize * mapLayout.worldScale))
             }
+            // Quiet the basemap only; draw the full-colour route and markers afterwards.
+            if !dark {
+                context.setFillColor(UIColor(red: 0.975, green: 0.967, blue: 0.945, alpha: 0.22).cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+            }
             let projected = mapLayout.coordinates.map {
                 projectedPoint($0, zoom: mapLayout.zoom, centerX: mapLayout.centerX, centerY: mapLayout.centerY, targetCenterY: mapLayout.targetCenterY, worldScale: mapLayout.worldScale, size: size)
             }
@@ -751,7 +666,7 @@ enum ShareImageGenerator {
             context.setLineJoin(.round)
             context.addPath(path)
             context.setStrokeColor((dark ? UIColor(red: 0.03, green: 0.05, blue: 0.08, alpha: 0.86) : UIColor.white.withAlphaComponent(0.94)).cgColor)
-            context.setLineWidth(dark ? 14 : 18)
+            context.setLineWidth(dark ? 14 : 15)
             context.strokePath()
             context.addPath(path)
             context.setStrokeColor((dark ? UIColor(red: 1, green: 0.42, blue: 0.28, alpha: 1) : UIColor(red: 0.88, green: 0.29, blue: 0.16, alpha: 1)).cgColor)

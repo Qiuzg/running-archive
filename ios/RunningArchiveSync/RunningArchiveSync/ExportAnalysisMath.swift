@@ -1,6 +1,6 @@
 import Foundation
 
-enum ExportMetric: String, CaseIterable {
+enum ExportMetric: String, Codable, CaseIterable {
     case heartRate = "heart_rate", speed = "running_speed", power = "running_power"
     case steps = "step_count", stride = "stride_length", contact = "ground_contact_time", oscillation = "vertical_oscillation"
     var name: String {

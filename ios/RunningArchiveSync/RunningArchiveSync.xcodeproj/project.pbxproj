@@ -31,6 +31,13 @@
 		B1000000000000000000000C /* AnalysisExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000C /* AnalysisExport.swift */; };
 		B1000000000000000000000D /* AnalysisExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* AnalysisExportView.swift */; };
 		B1000000000000000000000E /* ExportAnalysisMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* ExportAnalysisMath.swift */; };
+		C10000000000000000000001 /* YearlyReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* YearlyReport.swift */; };
+		C10000000000000000000002 /* PeriodSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* PeriodSharing.swift */; };
+		C10000000000000000000003 /* AITrainingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* AITrainingModels.swift */; };
+		C10000000000000000000004 /* AITrainingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* AITrainingService.swift */; };
+		C10000000000000000000005 /* AITrainingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000005 /* AITrainingStore.swift */; };
+		C10000000000000000000006 /* AITrainingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000006 /* AITrainingViews.swift */; };
+		C10000000000000000000007 /* ActivityHealthMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000007 /* ActivityHealthMetrics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +68,13 @@
 		B2000000000000000000000C /* AnalysisExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisExport.swift; sourceTree = "<group>"; };
 		B2000000000000000000000D /* AnalysisExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisExportView.swift; sourceTree = "<group>"; };
 		B2000000000000000000000E /* ExportAnalysisMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportAnalysisMath.swift; sourceTree = "<group>"; };
+		C20000000000000000000001 /* YearlyReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearlyReport.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* PeriodSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeriodSharing.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* AITrainingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingModels.swift; sourceTree = "<group>"; };
+		C20000000000000000000004 /* AITrainingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingService.swift; sourceTree = "<group>"; };
+		C20000000000000000000005 /* AITrainingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingStore.swift; sourceTree = "<group>"; };
+		C20000000000000000000006 /* AITrainingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingViews.swift; sourceTree = "<group>"; };
+		C20000000000000000000007 /* ActivityHealthMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityHealthMetrics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +103,13 @@
 		A40000000000000000000002 /* RunningArchiveSync */ = {
 			isa = PBXGroup;
 			children = (
+				C20000000000000000000001 /* YearlyReport.swift */,
+				C20000000000000000000002 /* PeriodSharing.swift */,
+				C20000000000000000000003 /* AITrainingModels.swift */,
+				C20000000000000000000004 /* AITrainingService.swift */,
+				C20000000000000000000005 /* AITrainingStore.swift */,
+				C20000000000000000000006 /* AITrainingViews.swift */,
+				C20000000000000000000007 /* ActivityHealthMetrics.swift */,
 				A20000000000000000000001 /* RunningArchiveSyncApp.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
 				B20000000000000000000001 /* ArchiveModels.swift */,
@@ -205,6 +226,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10000000000000000000001 /* YearlyReport.swift in Sources */,
+				C10000000000000000000002 /* PeriodSharing.swift in Sources */,
+				C10000000000000000000003 /* AITrainingModels.swift in Sources */,
+				C10000000000000000000004 /* AITrainingService.swift in Sources */,
+				C10000000000000000000005 /* AITrainingStore.swift in Sources */,
+				C10000000000000000000006 /* AITrainingViews.swift in Sources */,
+				C10000000000000000000007 /* ActivityHealthMetrics.swift in Sources */,
 				A10000000000000000000001 /* RunningArchiveSyncApp.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
 				B10000000000000000000001 /* ArchiveModels.swift in Sources */,

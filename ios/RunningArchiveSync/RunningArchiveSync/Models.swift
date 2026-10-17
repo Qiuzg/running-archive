@@ -70,6 +70,7 @@ struct WorkoutPreview: Identifiable {
     let avgHeartRate: Int?
     let maxHeartRate: Int?
     let avgPower: Double?
+    var avgCadence: Double? = nil
 }
 
 enum RunningArchiveConfiguration {

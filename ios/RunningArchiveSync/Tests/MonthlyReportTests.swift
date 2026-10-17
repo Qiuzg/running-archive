@@ -23,6 +23,16 @@ import Foundation
         assert(shortMonth.comparisonDistance == 10)
         assert(MonthlyReport.seconds("01:02:03") == 3723 && MonthlyReport.seconds("32:15") == 1935)
         assert(MonthlyReport.seconds("--") == nil && MonthlyReport.seconds("nan:00") == nil)
+        var chartValues = Array(repeating: 10.0, count: 3465)
+        chartValues[1873] = 2
+        chartValues[2514] = 80
+        let sampled = ActivityChartSampling.indices(values: chartValues, segments: Array(repeating: 0, count: chartValues.count))
+        assert(sampled.contains(0) && sampled.contains(3464) && sampled.contains(1873) && sampled.contains(2514))
+        assert(sampled.count <= 400 && sampled == sampled.sorted() && Set(sampled).count == sampled.count)
+        let segments = chartValues.indices.map { $0 < 1800 ? 0 : 1 }
+        let discontinuous = ActivityChartSampling.indices(values: chartValues, segments: segments)
+        assert(discontinuous.contains(1799) && discontinuous.contains(1800))
+        assert(ActivityChartSampling.indices(values: [], segments: []).isEmpty)
         print("PASS: leap month, multi-run day, month boundaries, weighted pace, weekly totals, prior-year comparison, future exclusion, six-row empty calendar, invalid duration")
     }
 }

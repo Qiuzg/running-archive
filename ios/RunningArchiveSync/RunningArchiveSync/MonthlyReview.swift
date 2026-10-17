@@ -20,7 +20,11 @@ struct MonthlyReviewView: View {
             VStack(alignment: .leading, spacing: 22) {
                 monthPicker(data)
                 hero(data)
-                goalCard(data)
+                if goal > 0 { goalCard(data) }
+                else {
+                    Button("设置月度跑量目标（可选）") { editingGoal = true }
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("跑步日历").font(.headline)
@@ -37,14 +41,14 @@ struct MonthlyReviewView: View {
                 weeklyDistribution(data)
                 records(data).id("month-records")
             }
-            .padding(18).padding(.bottom, 100)
+            .padding(18)
         }
         .onChange(of: selectedDay) { _, day in
             if day != nil { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("month-records", anchor: .top) } }
         }
         }
         .background(RunTheme.page).foregroundStyle(RunTheme.ink)
-        .navigationTitle("月度手记").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("月度统计").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { sharing = true } label: { Image(systemName: "square.and.arrow.up") }
@@ -68,7 +72,7 @@ struct MonthlyReviewView: View {
             Spacer()
             VStack(spacing: 4) {
                 Text(data.title).font(.title2.bold())
-                Text(data.isCurrent ? "本月进行中" : "MONTHLY RUNNING JOURNAL")
+                Text(data.isCurrent ? "本月进行中" : "月度跑量统计")
                     .font(.system(size: 10, weight: .semibold)).tracking(1.4).foregroundStyle(.secondary)
             }
             Spacer()
@@ -82,8 +86,8 @@ struct MonthlyReviewView: View {
     private func hero(_ data: MonthlyReport) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(data.distanceText).font(.system(size: 60, weight: .bold, design: .rounded)).tracking(-3).minimumScaleFactor(0.5).lineLimit(1)
-                Text("km").font(.title3).foregroundStyle(RunTheme.mint)
+                Text(data.distanceText).font(.system(size: 38, weight: .bold, design: .rounded)).tracking(-1).minimumScaleFactor(0.5).lineLimit(1)
+                Text("km").font(.title3).foregroundStyle(RunTheme.route)
                 Spacer(minLength: 0)
             }
             HStack(alignment: .top) {
@@ -91,24 +95,24 @@ struct MonthlyReviewView: View {
                 metric("累计用时", data.durationText)
                 metric("平均配速", data.paceText)
             }
-            Rectangle().fill(.white.opacity(0.15)).frame(height: 1)
+            Rectangle().fill(RunTheme.ink.opacity(0.10)).frame(height: 1)
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "arrow.left.arrow.right").foregroundStyle(RunTheme.mint)
+                Image(systemName: "arrow.left.arrow.right").foregroundStyle(RunTheme.route)
                 Text(data.comparisonLabel).font(.caption)
                 Spacer(minLength: 2)
                 Text(data.changeText).font(.subheadline.bold()).fixedSize()
             }
-            .foregroundStyle(RunTheme.paper.opacity(0.75))
+            .foregroundStyle(.secondary)
             Button { sharing = true } label: {
                 Label("生成本月跑步海报", systemImage: "square.and.arrow.up")
                     .font(.subheadline.bold()).frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .foregroundStyle(Color(red: 0.06, green: 0.13, blue: 0.14))
-                    .background(RunTheme.mint, in: Capsule())
+                    .foregroundStyle(.white)
+                    .background(RunTheme.accent, in: Capsule())
             }
             .disabled(data.activities.isEmpty).opacity(data.activities.isEmpty ? 0.4 : 1)
         }
-        .foregroundStyle(RunTheme.paper).padding(22)
-        .background(RunTheme.deepPanel, in: RoundedRectangle(cornerRadius: 26))
+        .foregroundStyle(RunTheme.ink).padding(22)
+        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 22))
     }
 
     private func metric(_ label: String, _ value: String) -> some View {

@@ -17,7 +17,7 @@ struct TrainingHubLinks: View {
                 NavigationLink { PersonalRecordsView() } label: { entry("个人纪录", "成绩与进步", "chart.line.uptrend.xyaxis") }
                 NavigationLink { RouteLibraryView() } label: { entry("路线收藏", "常跑路线 · GPX", "map") }
                 NavigationLink { RaceGoalsView() } label: { entry("目标赛事", "倒计时与配速", "flag.checkered") }
-                NavigationLink { TrainingPlansView() } label: { entry("训练计划", "本周安排与完成情况", "calendar") }
+                NavigationLink { AITrainingView() } label: { entry("训练计划", "本周安排与完成情况", "calendar") }
             }.buttonStyle(.plain)
             NavigationLink { AnalysisExportView() } label: {
                 HStack(spacing: 12) {
@@ -69,10 +69,10 @@ struct ActivityJournalSection: View {
                 Button("编辑") { editing = true }
             }
             HStack(spacing: 12) {
-                Text(annotation.kind.rawValue).font(.subheadline.weight(.medium))
+                if annotation.kind != .unspecified { Text(annotation.kind.rawValue).font(.subheadline.weight(.medium)) }
                 if let effort = annotation.effort { Text("体感 \(effort)/10").font(.subheadline).foregroundStyle(.secondary) }
             }
-            Text(annotation.note.isEmpty ? "记录这次跑步的感受，下次回看更有线索。" : annotation.note)
+            Text(annotation.note.isEmpty ? "备注为可选项。路线收藏、历史对比及 GPX 导出可在下方使用。" : annotation.note)
                 .font(.subheadline).foregroundStyle(annotation.note.isEmpty ? .secondary : .primary)
             if store.routeSummary(id: activity.routeId) != nil {
                 Divider()
@@ -132,13 +132,6 @@ struct AnnotationEditor: View {
         NavigationStack {
             Form {
                 if let error = journal.errorMessage { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }
-                Section("训练与体感") {
-                    Picker("训练类型", selection: $value.kind) { ForEach(TrainingKind.allCases) { Text($0.rawValue).tag($0) } }
-                    Picker("主观体感", selection: Binding(get: { value.effort ?? 0 }, set: { value.effort = $0 == 0 ? nil : $0 })) {
-                        Text("未记录").tag(0)
-                        ForEach(1...10, id: \.self) { n in Text("\(n) / 10\(n == 1 ? " · 很轻松" : (n == 10 ? " · 全力" : ""))").tag(n) }
-                    }
-                }
                 Section {
                     TextEditor(text: $value.note).frame(minHeight: 130)
                         .onChange(of: value.note) { _, text in if text.count > 2000 { value.note = String(text.prefix(2000)) } }
@@ -500,7 +493,7 @@ struct RaceGoalsView: View {
                             goalMetric("目标配速", goal.targetSeconds == nil ? "—" : "\(goal.targetPace)/km")
                         }
                         if !goal.note.isEmpty { Text(goal.note).font(.subheadline).foregroundStyle(.secondary) }
-                        NavigationLink { TrainingPlansView(initialDate: .now) } label: { Label("安排备赛训练", systemImage: "calendar.badge.plus") }.font(.subheadline)
+                        NavigationLink { AITrainingView() } label: { Label("安排备赛训练", systemImage: "calendar.badge.plus") }.font(.subheadline)
                     }.journalCard()
                 }
             }.padding(18)

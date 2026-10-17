@@ -29,6 +29,20 @@ final class CachedHealthRoute {
     }
 }
 
+/// Compact derived state; kept separately from the full, immutable HealthKit payloads.
+@Model
+final class CachedArchiveState {
+    @Attribute(.unique) var key: String
+    @Attribute(.externalStorage) var data: Data
+    var cachedAt: Date
+
+    init(key: String, data: Data, cachedAt: Date = .now) {
+        self.key = key
+        self.data = data
+        self.cachedAt = cachedAt
+    }
+}
+
 @MainActor
 final class HealthArchiveCache {
     private let context: ModelContext
@@ -37,6 +51,40 @@ final class HealthArchiveCache {
 
     init(context: ModelContext) {
         self.context = context
+    }
+
+    func overview() throws -> ArchiveOverviewSnapshot? {
+        guard let record = try stateRecord(key: "overview-v1") else { return nil }
+        return try decoder.decode(ArchiveOverviewSnapshot.self, from: record.data)
+    }
+
+    func save(overview: ArchiveOverviewSnapshot) throws {
+        try saveState(key: "overview-v1", data: encoder.encode(overview))
+    }
+
+    func metrics(id: String, newerThan cutoff: Date?) throws -> WorkoutMetricPresentation? {
+        guard let record = try stateRecord(key: "metrics-v1:" + id),
+              cutoff == nil || record.cachedAt >= cutoff! else { return nil }
+        return try decoder.decode(WorkoutMetricPresentation.self, from: record.data)
+    }
+
+    func save(metrics: WorkoutMetricPresentation, id: String) throws {
+        try saveState(key: "metrics-v1:" + id, data: encoder.encode(metrics))
+    }
+
+    private func stateRecord(key: String) throws -> CachedArchiveState? {
+        let target = key
+        var descriptor = FetchDescriptor<CachedArchiveState>(predicate: #Predicate { $0.key == target })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    private func saveState(key: String, data: Data) throws {
+        if let record = try stateRecord(key: key) {
+            record.data = data
+            record.cachedAt = .now
+        } else { context.insert(CachedArchiveState(key: key, data: data)) }
+        try context.save()
     }
 
     func workoutPayload(id: String, newerThan cutoff: Date? = nil) throws -> WorkoutPayload? {

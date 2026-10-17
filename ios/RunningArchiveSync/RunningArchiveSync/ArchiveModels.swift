@@ -1,7 +1,30 @@
 import CoreLocation
 import Foundation
 
-struct ArchiveSummary: Decodable {
+enum ActivityChartSampling {
+    /// Keep both extremes in each bucket, plus segment boundaries, so peaks and data gaps remain visible.
+    static func indices(values: [Double], segments: [Int], limit: Int = 400) -> [Int] {
+        guard values.count > limit, limit >= 4 else { return Array(values.indices) }
+        let buckets = (limit - 2) / 2
+        var kept: Set<Int> = [0, values.count - 1]
+        for bucket in 0..<buckets {
+            let start = 1 + bucket * (values.count - 2) / buckets
+            let end = 1 + (bucket + 1) * (values.count - 2) / buckets
+            guard end > start else { continue }
+            let indices = start..<end
+            if let minimum = indices.min(by: { values[$0] < values[$1] }) { kept.insert(minimum) }
+            if let maximum = indices.max(by: { values[$0] < values[$1] }) { kept.insert(maximum) }
+        }
+        if segments.count == values.count {
+            for index in 1..<segments.count where segments[index] != segments[index - 1] {
+                kept.insert(index - 1); kept.insert(index)
+            }
+        }
+        return kept.sorted()
+    }
+}
+
+struct ArchiveSummary: Codable {
     let totalDistanceKm: Double
     let yearlyDistanceKm: Double
     let marathonPb: String?
@@ -122,8 +145,8 @@ struct ArchiveRace: Decodable, Identifiable {
     let avgPower: Double?
 }
 
-struct ArchiveActivity: Identifiable, Hashable {
-    enum Kind: String { case run, race }
+struct ArchiveActivity: Codable, Identifiable, Hashable {
+    enum Kind: String, Codable { case run, race }
 
     let id: String
     let kind: Kind
@@ -190,7 +213,7 @@ struct ArchiveActivity: Identifiable, Hashable {
         avgHeartRate = preview.avgHeartRate
         maxHeartRate = preview.maxHeartRate
         avgPower = preview.avgPower
-        avgCadence = nil
+        avgCadence = preview.avgCadence
         self.isPb = isPb
     }
 
@@ -230,4 +253,9 @@ extension DateFormatter {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+}
+
+struct ArchiveOverviewSnapshot: Codable {
+    var summary: ArchiveSummary
+    var activities: [ArchiveActivity]
 }

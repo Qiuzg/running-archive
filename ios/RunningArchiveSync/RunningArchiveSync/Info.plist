@@ -23,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>读取你的跑步、轨迹、心率、步数、功率、跑姿和体能参考数据，用于本地档案、客观数据导出、分享图片和可选的网站同步。</string>
+	<string>读取跑步、路线与运动指标，用于本机档案、统计和分享；AI 训练还可读取睡眠、静息心率、HRV 和体重，结合实际运动分析并生成训练计划。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>将生成的跑步分享图片保存到系统相册。</string>
 	<key>UIApplicationSceneManifest</key>

@@ -3,8 +3,6 @@ import SwiftUI
 struct AnalysisExportView: View {
     @EnvironmentObject private var store: ArchiveStore
     @EnvironmentObject private var journal: TrainingJournal
-    @Environment(\.archiveBottomBarFrame) private var bottomBarFrame
-    @State private var pageFrame = CGRect.zero
     @State private var range = ExportRange.recent
     @State private var start = Calendar.current.date(byAdding: .day, value: -89, to: .now) ?? .now
     @State private var end = Date.now
@@ -89,10 +87,6 @@ struct AnalysisExportView: View {
             }
             exportControls
         }
-        // Navigation destinations may extend beneath the app's custom bottom bar.
-        // Measure the real overlap so this works with different text sizes and safe areas.
-        .padding(.bottom, bottomBarOverlap)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pageFrame = $0 }
         .navigationTitle("导出分析数据")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -137,11 +131,6 @@ struct AnalysisExportView: View {
                 }
             }
         }.padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
-    }
-
-    private var bottomBarOverlap: CGFloat {
-        guard !pageFrame.isEmpty, !bottomBarFrame.isEmpty else { return 0 }
-        return max(0, min(bottomBarFrame.height, pageFrame.maxY - bottomBarFrame.minY))
     }
 
     private var exportUnavailableReason: String? {

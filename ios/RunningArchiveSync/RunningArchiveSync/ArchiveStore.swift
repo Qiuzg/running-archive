@@ -31,6 +31,7 @@ final class ArchiveStore: ObservableObject {
 
     private let health = HealthKitService()
     private var cache: HealthArchiveCache?
+    private var metricsCache: [String: WorkoutMetricPresentation] = [:]
     private var detailCache: [String: ArchiveRouteDetail] = [:]
     private var routeLookup: [String: ArchiveRouteSummary] = [:]
     private var routeScanTask: Task<Void, Never>?
@@ -39,15 +40,26 @@ final class ArchiveStore: ObservableObject {
     private let detailMapPointLimit = 900
 
     func configureCache(_ context: ModelContext) {
-        if cache == nil { cache = HealthArchiveCache(context: context) }
+        guard cache == nil else { return }
+        let cache = HealthArchiveCache(context: context)
+        self.cache = cache
+        if activities.isEmpty, let snapshot = try? cache.overview() {
+            activities = snapshot.activities
+            summary = snapshot.summary
+        }
+        let ids = Set(activities.map(\.id))
+        setRoutes(orderedRoutes(((try? cache.allRouteSummaries()) ?? []).filter { ids.contains($0.id) }))
     }
 
-    func load(force: Bool = false) async {
+    func load(force: Bool = false, authorize: Bool = true, scanRoutes: Bool = true) async {
         if isLoading || (!force && summary != nil && !activities.isEmpty) { return }
         isLoading = true
         errorMessage = nil
         do {
-            try await health.requestAuthorization()
+            if authorize && !UserDefaults.standard.bool(forKey: "healthReadAuthorization-v2") {
+                try await health.requestAuthorization(includeExportMetrics: true)
+                UserDefaults.standard.set(true, forKey: "healthReadAuthorization-v2")
+            }
             let previews = try await health.runningWorkoutPreviews()
             let marathonPB = fastest(in: previews, distance: 41...44)
             let halfPB = fastest(in: previews, distance: 20...23)
@@ -55,13 +67,14 @@ final class ArchiveStore: ObservableObject {
 
             activities = previews.map { ArchiveActivity(preview: $0, isPb: pbIDs.contains($0.id)) }
             summary = makeSummary(previews: previews, marathonPB: marathonPB, halfPB: halfPB)
+            persistOverview()
 
             if let cache {
                 let activeIDs = Set(previews.map(\.id))
                 setRoutes(orderedRoutes(try cache.allRouteSummaries().filter { activeIDs.contains($0.id) }))
             }
             isLoading = false
-            startRouteScan(for: activities)
+            if scanRoutes { startRouteScan(for: activities) }
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -88,20 +101,73 @@ final class ArchiveStore: ObservableObject {
             try cache?.save(payload: loaded)
         }
 
+        return cacheDetail(payload: payload)
+    }
+
+    func cachedActivityPresentation(id: String) -> (ArchiveRouteDetail?, WorkoutMetricPresentation?) {
+        let cutoff = presentationCutoff(id: id)
+        let metrics = metricsCache[id] ?? (try? cache?.metrics(id: id, newerThan: cutoff))
+        if let metrics { metricsCache[id] = metrics }
+        if detailCache[id] == nil,
+           let payload = try? cache?.workoutPayload(id: id, newerThan: cutoff) {
+            detailCache[id] = makeDetail(payload: payload, name: activities.first { $0.id == id }?.name ?? payload.name)
+        }
+        return (detailCache[id], metrics)
+    }
+
+    /// Read one set of native data for the map, all five charts, and running-form facts.
+    func activityPresentation(id: String) async throws -> (ArchiveRouteDetail, WorkoutMetricPresentation) {
+        let cached = cachedActivityPresentation(id: id)
+        if let route = cached.0, let metrics = cached.1 { return (route, metrics) }
+        let workout = try await exportWorkout(id: id)
+        let metrics = await Task.detached(priority: .userInitiated) { WorkoutMetricPresentation(workout: workout) }.value
+        try Task.checkCancellation()
+        let activity = activities.first { $0.id == id }
+        func samples(_ metric: ExportMetric) -> [MetricSamplePayload] {
+            (metrics.series[metric] ?? []).map { MetricSamplePayload(elapsedSeconds: $0.seconds, value: $0.value) }
+        }
+        let payload = WorkoutPayload(id: id, name: activity?.name ?? "户外跑步", startDate: workout.start,
+            distanceKm: workout.distanceKm ?? activity?.distanceKm ?? 0, durationSeconds: workout.duration,
+            city: activity?.city ?? "", avgHeartRate: workout.heartRate.map { Int($0.rounded()) },
+            maxHeartRate: workout.maxHeartRate.map { Int($0.rounded()) }, avgCadence: workout.cadence,
+            avgPower: workout.power,
+            routePoints: workout.readIssues["gps"] != nil
+                ? ((try? cache?.workoutPayload(id: id))?.routePoints ?? workout.points) : workout.points,
+            heartRateSamples: samples(.heartRate),
+            runningSpeedSamples: samples(.speed), intervals: workout.intervals)
+        // Transient/partial HealthKit reads must be retried, rather than becoming permanent missing charts.
+        if workout.readIssues.isEmpty {
+            try? cache?.save(payload: payload)
+            try? cache?.save(metrics: metrics, id: id)
+        }
+        if workout.readIssues.isEmpty { metricsCache[id] = metrics }
+        else { metricsCache.removeValue(forKey: id) }
+        return (cacheDetail(payload: payload, persistRoute: workout.readIssues["gps"] == nil), metrics)
+    }
+
+    private func presentationCutoff(id: String) -> Date? {
+        guard let activity = activities.first(where: { $0.id == id }), activity.date > Date.now.addingTimeInterval(-7 * 86400) else { return nil }
+        return Date.now.addingTimeInterval(-6 * 3600)
+    }
+
+    private func cacheDetail(payload: WorkoutPayload, persistRoute: Bool = true) -> ArchiveRouteDetail {
+        let id = payload.id
+        let activity = activities.first { $0.id == id }
         let detail = makeDetail(payload: payload, name: activity?.name ?? payload.name)
         if let index = activities.firstIndex(where: { $0.id == id }) {
             activities[index] = ArchiveActivity(activity: activities[index], payload: payload)
+            persistOverview()
         }
         detailCache[id] = detail
-        let route = makeRouteSummary(
-            id: id,
-            name: activity?.name ?? payload.name,
-            distanceKm: payload.distanceKm,
-            points: payload.routePoints
-        )
-        try cache?.saveRoute(id: id, summary: route)
+        let route = makeRouteSummary(id: id, name: activity?.name ?? payload.name,
+            distanceKm: payload.distanceKm, points: payload.routePoints)
+        if persistRoute { try? cache?.saveRoute(id: id, summary: route) }
         if let route { upsertRoute(route) }
         return detail
+    }
+
+    private func persistOverview() {
+        if let summary { try? cache?.save(overview: ArchiveOverviewSnapshot(summary: summary, activities: activities)) }
     }
 
     func routeSummary(id: String?) -> ArchiveRouteSummary? {
@@ -131,6 +197,16 @@ final class ArchiveStore: ObservableObject {
 
     func exportWorkout(id: String) async throws -> ExportWorkout {
         try await health.exportWorkout(id: id)
+    }
+
+    func requestAIContextAccess() async throws {
+        guard !UserDefaults.standard.bool(forKey: "healthAIContextAuthorization-v1") else { return }
+        try await health.requestAuthorization(includeExportMetrics: true, includeTrainingContext: true)
+        UserDefaults.standard.set(true, forKey: "healthAIContextAuthorization-v1")
+    }
+
+    func trainingContext(now: Date, calendar: Calendar) async -> AIRecoveryContext {
+        await health.trainingContext(now: now, calendar: calendar)
     }
 
     func exportReferences(start: Date, end: Date) async throws -> ExportReferenceData {

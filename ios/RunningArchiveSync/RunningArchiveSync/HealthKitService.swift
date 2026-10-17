@@ -33,7 +33,7 @@ final class HealthKitService {
         }
     }
 
-    func requestAuthorization(includeExportMetrics: Bool = false) async throws {
+    func requestAuthorization(includeExportMetrics: Bool = false, includeTrainingContext: Bool = false) async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw HealthSyncError.unavailable }
         var readTypes: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
         readTypes.insert(try heartRateType)
@@ -46,6 +46,12 @@ final class HealthKitService {
                 .runningVerticalOscillation, .vo2Max, .heartRateRecoveryOneMinute] {
                 if let type = HKQuantityType.quantityType(forIdentifier: identifier) { readTypes.insert(type) }
             }
+        }
+        if includeTrainingContext {
+            for identifier: HKQuantityTypeIdentifier in [.restingHeartRate, .heartRateVariabilitySDNN, .bodyMass] {
+                if let type = HKQuantityType.quantityType(forIdentifier: identifier) { readTypes.insert(type) }
+            }
+            if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { readTypes.insert(sleep) }
         }
         try await store.requestAuthorization(toShare: [], read: readTypes)
     }
@@ -74,7 +80,10 @@ final class HealthKitService {
                 duration: workout.duration,
                 avgHeartRate: heart?.averageQuantity().map { Int($0.doubleValue(for: heartUnit).rounded()) },
                 maxHeartRate: heart?.maximumQuantity().map { Int($0.doubleValue(for: heartUnit).rounded()) },
-                avgPower: power?.averageQuantity()?.doubleValue(for: .watt())
+                avgPower: power?.averageQuantity()?.doubleValue(for: .watt()),
+                avgCadence: HKQuantityType.quantityType(forIdentifier: .stepCount)
+                    .flatMap { workout.statistics(for: $0)?.sumQuantity()?.doubleValue(for: .count()) }
+                    .flatMap { workout.duration > 0 ? $0 / (workout.duration / 60) : nil }
             )
         }
     }
@@ -155,27 +164,38 @@ final class HealthKitService {
             (.runningGroundContactTime, .contact, .secondUnit(with: .milli), "ms"),
             (.runningVerticalOscillation, .oscillation, .meterUnit(with: .centi), "cm")
         ]
-        for (identifier, metric, unit, symbol) in metrics {
-            try Task.checkCancellation()
-            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
-            do {
-                let raw = try await quantitySeriesPoints(type: type, workout: workout, forExport: true)
-                samples += raw.filter { $0.dateInterval.end >= workout.startDate && $0.dateInterval.start < workout.endDate }.map { point in
-                    let sample = point.sample
-                    let bundle = sample?.sourceRevision.source.bundleIdentifier ?? ""
-                    let sameSource = bundle == workout.sourceRevision.source.bundleIdentifier
-                    let sameDevice = sample?.device?.localIdentifier != nil && sample?.device?.localIdentifier == workout.device?.localIdentifier
-                    return ExportRawSample(metric: metric.rawValue, start: point.dateInterval.start,
-                        end: point.dateInterval.end, value: point.quantity.doubleValue(for: unit), unit: symbol,
-                        source: sample?.sourceRevision.source.name ?? "未知来源", sourceBundle: bundle,
-                        device: [sample?.device?.manufacturer, sample?.device?.model, sample?.device?.name].compactMap { $0 }.joined(separator: " / "),
-                        deviceKey: sample?.device?.localIdentifier ?? "", sourcePriority: sameDevice ? 2 : (sameSource ? 1 : 0))
+        async let locations = routeLocations(for: workout)
+        // Run independent quantity queries together instead of a seven-query waterfall.
+        try await withThrowingTaskGroup(of: (ExportMetric, [ExportRawSample], String?).self) { group in
+            for (identifier, metric, unit, symbol) in metrics {
+                guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
+                group.addTask {
+                    try Task.checkCancellation()
+                    do {
+                        let raw = try await self.quantitySeriesPoints(type: type, workout: workout, forExport: true)
+                        let samples = raw.filter { $0.dateInterval.end >= workout.startDate && $0.dateInterval.start < workout.endDate }.map { point in
+                            let sample = point.sample
+                            let bundle = sample?.sourceRevision.source.bundleIdentifier ?? ""
+                            let sameSource = bundle == workout.sourceRevision.source.bundleIdentifier
+                            let sameDevice = sample?.device?.localIdentifier != nil && sample?.device?.localIdentifier == workout.device?.localIdentifier
+                            return ExportRawSample(metric: metric.rawValue, start: point.dateInterval.start,
+                                end: point.dateInterval.end, value: point.quantity.doubleValue(for: unit), unit: symbol,
+                                source: sample?.sourceRevision.source.name ?? "未知来源", sourceBundle: bundle,
+                                device: [sample?.device?.manufacturer, sample?.device?.model, sample?.device?.name].compactMap { $0 }.joined(separator: " / "),
+                                deviceKey: sample?.device?.localIdentifier ?? "", sourcePriority: sameDevice ? 2 : (sameSource ? 1 : 0))
+                        }
+                        return (metric, samples, nil)
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { return (metric, [], error.localizedDescription) }
                 }
-            } catch is CancellationError { throw CancellationError() }
-            catch { issues[metric.rawValue] = error.localizedDescription }
+            }
+            for try await (metric, values, issue) in group {
+                samples += values
+                if let issue { issues[metric.rawValue] = issue }
+            }
         }
         do {
-            points = try await routeLocations(for: workout).map {
+            points = (try await locations).map {
                 RoutePointPayload(timestamp: $0.timestamp, latitude: $0.coordinate.latitude,
                     longitude: $0.coordinate.longitude, altitude: $0.altitude, speedMps: $0.speed >= 0 ? $0.speed : nil)
             }
@@ -228,6 +248,81 @@ final class HealthKitService {
             catch { result.issues[label] = error.localizedDescription }
         }
         return result
+    }
+
+    func trainingContext(now: Date, calendar: Calendar) async -> AIRecoveryContext {
+        let since = calendar.date(byAdding: .day, value: -28, to: calendar.startOfDay(for: now))!
+        var result = AIRecoveryContext()
+        for (identifier, metric, unit, symbol): (HKQuantityTypeIdentifier, String, HKUnit, String) in [
+            (.restingHeartRate, "resting_heart_rate", .count().unitDivided(by: .minute()), "bpm"),
+            (.heartRateVariabilitySDNN, "hrv_sdnn", .secondUnit(with: .milli), "ms")
+        ] {
+            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
+            do {
+                let samples = try await contextSamples(type: type, start: since, end: now) as? [HKQuantitySample] ?? []
+                let points = samples.map { AIBackgroundPoint(date: $0.startDate, value: $0.quantity.doubleValue(for: unit), source: $0.sourceRevision.source.bundleIdentifier) }
+                let daily = AIRecoveryContext.daily(points, metric: metric, unit: symbol, calendar: calendar)
+                result.daily_metrics += daily
+                if daily.isEmpty { result.notes.append("\(metric)：未获得记录，可能未记录或未授权。") }
+            } catch { result.notes.append("\(metric)：暂时不可读取。") }
+        }
+        if let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            do {
+                let samples = try await contextSamples(type: type, start: since, end: now) as? [HKCategorySample] ?? []
+                let asleep = Set([HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue, HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue, HKCategoryValueSleepAnalysis.asleepREM.rawValue])
+                let intervals = samples.filter { asleep.contains($0.value) }.map {
+                    AISleepInterval(start: $0.startDate, end: $0.endDate, source: $0.sourceRevision.source.bundleIdentifier)
+                }
+                result.sleep_windows = AIRecoveryContext.sleep(intervals, start: since, end: now, calendar: calendar)
+                if result.sleep_windows.isEmpty { result.notes.append("sleep：未获得入睡记录，不能将卧床时间当作睡眠。") }
+            } catch { result.notes.append("sleep：暂时不可读取。") }
+        }
+        if let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) {
+            do {
+                let start = calendar.date(byAdding: .day, value: -180, to: now)!
+                let values = try await contextSamples(type: type, start: start, end: now) as? [HKQuantitySample] ?? []
+                if let latest = values.filter({ $0.quantity.doubleValue(for: .gramUnit(with: .kilo)).isFinite && $0.quantity.doubleValue(for: .gramUnit(with: .kilo)) > 0 }).max(by: { $0.startDate < $1.startDate }) {
+                    result.latest_body_mass = AIBodyMeasurement(date: latest.startDate, kilograms: latest.quantity.doubleValue(for: .gramUnit(with: .kilo)))
+                }
+            } catch { result.notes.append("body_mass：暂时不可读取。") }
+        }
+        do {
+            let start = calendar.date(byAdding: .day, value: -42, to: calendar.startOfDay(for: now))!
+            let workouts = try await contextSamples(type: .workoutType(), start: start, end: now) as? [HKWorkout] ?? []
+            let energy = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)
+            var seen = Set<String>()
+            result.other_workouts = workouts.filter {
+                $0.workoutActivityType != .running && $0.endDate <= now &&
+                    seen.insert("\($0.workoutActivityType.rawValue):\($0.startDate.timeIntervalSince1970):\($0.duration)").inserted
+            }
+                .sorted { $0.startDate < $1.startDate }.suffix(100).map { workout in
+                    let kind: String
+                    switch workout.workoutActivityType {
+                    case .walking: kind = "walking"
+                    case .cycling: kind = "cycling"
+                    case .swimming: kind = "swimming"
+                    case .hiking: kind = "hiking"
+                    case .traditionalStrengthTraining, .functionalStrengthTraining: kind = "strength_training"
+                    case .yoga: kind = "yoga"
+                    default: kind = "other_\(workout.workoutActivityType.rawValue)"
+                    }
+                    return AIOtherWorkout(date: workout.startDate, kind: kind, active_seconds: workout.duration,
+                        energy_kcal: energy.flatMap { workout.statistics(for: $0)?.sumQuantity()?.doubleValue(for: .kilocalorie()) })
+                }
+        } catch { result.notes.append("other_workouts：暂时不可读取。") }
+        return result
+    }
+
+    private func contextSamples(type: HKSampleType, start: Date, end: Date) async throws -> [HKSample] {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForSamples(withStart: start, end: end, options: []),
+                limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
+                if let error, !Self.isNoData(error) { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: (samples ?? []).filter { $0.startDate <= end && $0.endDate >= start }) }
+            }
+            store.execute(query)
+        }
     }
 
     private func exportPauses(_ workout: HKWorkout) -> [DateInterval] {
