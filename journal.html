@@ -35,19 +35,19 @@
   </nav>
   <header class="document-heading">
     <p class="document-kicker">RUN LOG / DEVELOPMENT JOURNAL</p>
-    <h1>从一张跑步地图，<br>到一个自己的 App。</h1>
-    <p class="document-deck">我想给自己的跑步留个记录，<br class="desktop-break">没想到后来还做了一个 App。</p>
+    <h1>从一张跑步地图，到一个自己的 App。</h1>
+    <!-- <p class="document-deck">我想给自己的跑步留个记录，没想到后来还做了一个 App。</p> -->
     <div class="document-meta"><span>个人开发手记</span><time datetime="2026-10-19">2026.10.19</time><span>8 个章节 · 图文记录</span><button type="button" id="printJournal">打印 / 保存为 PDF ↗</button></div>
   </header>
   <div class="document-layout">
     <aside class="document-toc" aria-label="文章目录"><p>这一路，怎么走过来</p><ol><li><a href="#beginning"><span>01</span>先给跑过的路，找一个地方</a></li><li><a href="#export"><span>02</span>一次更新，要经过太多步骤</a></li><li><a href="#iphone"><span>03</span>那就自己做一个 App</a></li><li><a href="#sharing"><span>04</span>跑完步，也想好好晒一下</a></li><li><a href="#ai"><span>05</span>让 AI 帮忙复盘，也为比赛做准备</a></li><li><a href="#training"><span>06</span>除了跑量，我还想看懂训练</a></li><li><a href="#watch"><span>07</span>让计划真正走到手腕上</a></li><li><a href="#iteration"><span>08</span>功能之外，继续把它用顺手</a></li></ol><a class="toc-back" href="#main">回到开头 ↑</a></aside>
     <article id="article" class="document-article">
-      <p class="article-lead">我喜欢跑马拉松，平时也一直在跑。最开始做这个网站，只是想找个地方放自己的跑步数据，看看跑过哪些路、参加过哪些比赛。</p>
+      <p class="article-lead">我自认为是一个马拉松爱好者，平时也一直在跑，但是Apple中的运动查看跑步数据的形式我一直觉得不好用。最开始做这个网站，只是想找个地方放自己的跑步数据，看看跑过哪些路、参加过哪些比赛。</p>
       <p>后来觉得更新数据太麻烦，就想自己做个 App。做到能同步以后，又忍不住加了查看记录、分享图片、分析训练这些功能。这里记一下它是怎么变成现在这样的。</p>
 
       <section id="beginning"><p class="chapter-index">01 / 起点</p><h2>先给跑过的路，找一个地方</h2>
-        <p>每次跑完步，记录都留在苹果健康里。但我想把这些数据放到一个自己的网站上：地图上能看到跑过的路线，也能翻到以前的比赛成绩。</p>
-        <p>这个想法没多复杂，就是给自己的跑步做个档案。网站先做起来，数据怎么更新，后面再想办法。</p>
+        <p>每次跑完步，记录都留在苹果运动里。但我想把这些数据放到一个自己的网站上：地图上能看到跑过的路线，也能翻到以前的比赛成绩。</p>
+        <!-- <p>这个想法没多复杂，就是给自己的跑步做个档案。网站先做起来，数据怎么更新，后面再想办法。</p> -->
         <figure class="document-figure figure-wide"><button type="button" data-journal-image aria-label="放大查看跑步网站截图"><img src="/journal/real-web-archive-v2.png" alt="Run Log 网页：左侧是跑步记录，右侧地图展示跑过的城市，上方汇总里程和比赛成绩" width="1280" height="800" fetchpriority="high"></button><figcaption><b>图 01</b> 网站现在的首页，路线和比赛记录都在这里。</figcaption></figure>
       </section>
 
@@ -55,7 +55,7 @@
         <p>一开始，我直接从苹果健康导出数据。文件特别大，每次导出都要等十几分钟。等完还得跑脚本，把里面的跑步记录和轨迹解析出来，再更新数据、重新部署网站。</p>
         <p>做一次还行，每次跑完都来这么一遍，实在太麻烦了。结果就是，跑步没停，网站上的数据却经常来不及更新。</p>
         <div class="document-flow" aria-label="早期网站更新流程"><span>Apple 健康<br><strong>完整导出</strong></span><i aria-hidden="true">→</i><span>本地脚本<br><strong>解析与整理</strong></span><i aria-hidden="true">→</i><span>静态网站<br><strong>更新并部署</strong></span></div>
-        <p>我也找过不少能导出轨迹的软件，想着拿到轨迹文件后自己解析就好。但试了一圈，想用的导出功能基本都要付费。我就开始琢磨：能不能自己做个 App，直接把苹果健康里的数据读出来？</p>
+        <p>我也找过不少能导出轨迹的软件，想着拿到轨迹文件后自己解析之后更新数据就好。但试了一圈，想用的导出功能基本都要付费。那就想为啥不能自己做个 App，直接把苹果健康里的数据读出来？</p>
       </section>
 
       <section id="iphone"><p class="chapter-index">03 / 从同步开始</p><h2>那就自己做一个 App</h2>
@@ -66,16 +66,16 @@
       </section>
 
       <section id="sharing"><p class="chapter-index">04 / 一点跑者的小虚荣</p><h2>跑完步，也想好好晒一下</h2>
-        <p>跑完一趟满意的训练，总会想发出来晒一下。说白了，就是想装个逼。既然都跑了，配张好看的图也挺有必要。</p>
+        <p>跑完一趟满意的训练，总会想发出来晒一下。跑完比赛不发出来，那我不白跑了。</p>
         <p>以前用苹果自带的运动 App，我分享记录主要靠截图。但页面怎么排就只能怎么截，想把路线、配速和自己写的一句话放在一起，不太方便。那就自己做一个分享功能：选记录、挑版式、改标题，再保存图片。</p>
-        <p>单次跑步做完了，我又想分享一个月、一整年的跑量。苹果的运动 App 里，这些数据不太好集中查看和分享，所以也一起做了。现在跑了多少次、累计多少公里，打开月报或年报就能看到，也能直接出图。</p>
+        <p>单次跑步做完了，看到了有人分享高驰统计的月度，年度跑量数据，但是苹果的运动 App 里，没有这些统计数据，我之前想计算我一年跑了多少，就是打开 App 中的跑步，然后一条一条自己加起来算，太麻烦了。现在跑了多少次、累计多少公里，打开月报或年报就能看到，也能直接出图。</p>
         <figure class="document-figure"><div class="figure-pair"><button type="button" data-journal-image aria-label="放大查看分享设置"><img src="/app-showcase/real-share.jpg" alt="App 的分享图片设置，可选择版式和主题" loading="lazy" width="700" height="1522"></button><button type="button" data-journal-image aria-label="放大查看月度分享海报"><img src="/app-showcase/real-poster-light.jpg" alt="App 实际导出的浅色月度跑步海报，展示累计里程和路线" loading="lazy" width="700" height="1522"></button></div><figcaption><b>图 03</b> 分享设置和十月月报，选好样式就能保存图片。</figcaption></figure>
       </section>
 
       <section id="ai"><p class="chapter-index">05 / 从手动复盘到 App 内分析</p><h2>让 AI 帮忙复盘，也为比赛做准备</h2>
         <p>我之前经常在跑完后把数据导出来，发给 GPT，让它看看这次跑得怎么样，再聊聊接下来怎么练。每次都要重复整理数据，还得交代最近跑了多少、自己的目标是什么。</p>
         <p>这些信息 App 里已经有了，我就把这件事也做了进去。配置好自己用的模型服务后，App 会整理近六周的训练摘要、最近三次跑步的详细数据，以及能读取到的恢复信息，让模型点评本次跑步，再给出接下来一周的安排。</p>
-        <p>不过，对我这种会参加比赛的人来说，只看最近跑得怎么样还不够，还得知道在为哪场比赛做准备。于是我加了“目标赛事”：记下比赛名称、日期和距离，也可以填上想跑到的成绩，看看还剩多少天、目标配速是多少。</p>
+        <p>而且到了临近比赛的时候 ，只看最近跑得怎么样还不够，还得知道在为哪场比赛做准备。于是我加了“目标赛事”：记下比赛名称、日期和距离，也可以填上想跑到的成绩，看看还剩多少天、目标配速是多少。</p>
 
         <p>在 AI 训练设置里选“使用已有赛事目标”，就能把这场比赛的日期、距离和目标成绩带进去。再告诉它一周哪几天能跑、每次有多少时间、长距离想放在哪天。生成计划时，这些会和近期训练一起作为参考，不用每次重新解释自己在备战什么比赛。</p>
         <figure class="document-figure"><div class="figure-pair"><button type="button" data-journal-image aria-label="放大查看数据导出"><img src="/app-showcase/real-export.jpg" alt="App 中的跑步分析文件导出界面" loading="lazy" width="700" height="1522"></button><button type="button" data-journal-image aria-label="放大查看训练分析首页"><img src="/app-showcase/real-analysis.jpg" alt="训练分析首页，包含近期跑量、建议和训练负荷入口" loading="lazy" width="700" height="1522"></button></div><figcaption><b>图 04</b> 数据导出和训练分析。想自己拿文件去分析，也仍然可以导出。</figcaption></figure>
