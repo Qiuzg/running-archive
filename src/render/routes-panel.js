@@ -1,47 +1,8 @@
-import { store, setRouteFilter, toggleRouteHeat, loadMoreRoutes } from "../state.js";
-import { formatKm, formatShortDate, escapeAttr, renderRouteSvg } from "../utils.js";
-import { updateHeroRoute, showAllRoutesOnMap, hideAllRoutesFromMap, showCityLayer } from "../map.js";
-
-const ROUTE_FILTERS = [
-  { key: "all", label: "全部" },
-  { key: "middle", label: "日常" },
-  { key: "long", label: "长距离" },
-  { key: "race", label: "比赛" },
-];
-
-function getFilterBucket(activity, route) {
-  const dist = route?.distance_km || activity.distance_km || 0;
-  if (activity.source === "race") return "race";
-  if (dist < 8) return "short";
-  if (dist >= 16) return "long";
-  return "middle";
-}
-
-function getFilteredEntries() {
-  const routeMap = new Map();
-  store.routes.forEach(r => routeMap.set(r.id, r));
-  return store.routeEntries.filter((item) => {
-    const route = routeMap.get(item.route_id);
-    if (!route) return false;
-    return store.routeDistanceFilter === "all" || getFilterBucket(item, route) === store.routeDistanceFilter;
-  });
-}
-
-function renderFilterBar(filteredCount, totalCount) {
-  return `
-    <div class="route-tools">
-      <div class="route-tools__filters" aria-label="路线距离筛选">
-        ${ROUTE_FILTERS.map(f => `
-          <button class="${store.routeDistanceFilter === f.key ? "is-active" : ""}" type="button" data-route-filter="${f.key}">
-            ${f.label}
-          </button>`).join("")}
-      </div>
-      <button class="route-heat-toggle ${store.routeHeatMode ? "is-active" : ""}" type="button" data-route-heat aria-pressed="${store.routeHeatMode}">
-        筛选叠图
-      </button>
-      <small>${filteredCount} / ${totalCount} 条</small>
-    </div>`;
-}
+import { ensureThumbnails, renderThumbnail, thumbnailFailed } from "../thumbnail-loader.js";
+import { routeCity, escapeHtml } from "../analytics.js";
+import { store, loadMoreRoutes } from "../state.js";
+import { formatKm, formatShortDate, escapeAttr } from "../utils.js";
+import { updateHeroRoute, hideAllRoutesFromMap, showCityLayer } from "../map.js";
 
 export function renderRoutesPanel(container) {
   if (!store.routeEntries.length) {
@@ -52,56 +13,42 @@ export function renderRoutesPanel(container) {
   const routeMap = new Map();
   store.routes.forEach(r => routeMap.set(r.id, r));
 
-  const filtered = getFilteredEntries();
+  const filtered = store.routeEntries;
   const visibleLimit = store.panelCollapsed ? 3 : store.routeVisibleCount;
   const visible = filtered.slice(0, visibleLimit);
 
-  const routeList = visible.map((item) => {
+  ensureThumbnails();
+
+  const routeList = visible.map((item, index) => {
     const route = routeMap.get(item.route_id);
     if (!route) return "";
     const dateStr = item.date ? formatShortDate(item.date) : null;
     const title = item.name || route.name || "未知路线";
     const dist = formatKm(route.distance_km || item.distance_km || 0);
     const isActive = item.route_id === store.heroActiveRouteId;
-    const coords = route.preview_coordinates || route.coordinates;
-    const svg = coords?.length ? renderRouteSvg({ ...route, coordinates: coords }, "mini") : '<div class="route-empty">--</div>';
+    const svg = renderThumbnail(route, index);
     return `
       <button class="hero-route-item ${isActive ? "is-active" : ""}" type="button" data-hero-route="${escapeAttr(item.route_id)}">
         <span class="hero-route-item__thumb">${svg}</span>
         <span class="hero-route-item__info">
-          <strong>${title}</strong>
-          <span>${dateStr ? `${dateStr.year}/${dateStr.monthDay}` : "--"} · ${dist}</span>
+          <strong>${escapeHtml(title)}</strong>
+          <span>${dateStr ? `${dateStr.year}/${dateStr.monthDay}` : "--"} · ${dist}${routeCity(item, route) ? ` · ${escapeHtml(routeCity(item, route))}` : ""}</span>
         </span>
       </button>`;
   }).join("");
 
   container.innerHTML = `
-    ${renderFilterBar(filtered.length, store.routeEntries.length)}
-    ${routeList || '<p class="empty">当前筛选下没有路线。</p>'}
+    ${thumbnailFailed() ? '<button class="panel-load-more" type="button" data-retry-thumbnails>缩略图加载失败，点击重试</button>' : ""}
+    ${routeList || '<p class="empty">暂无路线。</p>'}
     ${store.panelCollapsed && filtered.length > 3 ? `<p class="panel-collapsed-hint">还有 ${filtered.length - 3} 条路线 · 点击 ▲ 展开</p>` : ""}
-    ${!store.panelCollapsed && filtered.length > visible.length ? `<button class="panel-load-more" type="button" data-route-load-more>再显示 ${Math.min(80, filtered.length - visible.length)} 条</button>` : ""}
+    ${!store.panelCollapsed && filtered.length > visible.length ? `<button class="panel-load-more" type="button" data-route-load-more>再显示 ${Math.min(20, filtered.length - visible.length)} 条</button>` : ""}
   `;
 
-  bindEvents(container, filtered.length);
+  bindEvents(container);
 }
 
-function bindEvents(container, filteredCount) {
-  container.querySelectorAll("[data-route-filter]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      setRouteFilter(btn.dataset.routeFilter);
-      syncHeatOverlay();
-      renderRoutesPanel(container);
-    });
-  });
-
-  const heatBtn = container.querySelector("[data-route-heat]");
-  if (heatBtn) {
-    heatBtn.addEventListener("click", () => {
-      toggleRouteHeat();
-      syncHeatOverlay();
-      renderRoutesPanel(container);
-    });
-  }
+function bindEvents(container) {
+  container.querySelector('[data-retry-thumbnails]')?.addEventListener('click', () => ensureThumbnails({ retry: true }));
 
   const loadMore = container.querySelector("[data-route-load-more]");
   if (loadMore) {
@@ -119,15 +66,7 @@ function bindEvents(container, filteredCount) {
   });
 }
 
-function syncHeatOverlay() {
-  if (store.activePanelTab !== "routes" || !store.routeHeatMode) {
-    hideAllRoutesFromMap();
-    showCityLayer();
-    return;
-  }
-  const routeMap = new Map();
-  store.routes.forEach(r => routeMap.set(r.id, r));
-  const routeObjs = getFilteredEntries().map(item => routeMap.get(item.route_id)).filter(Boolean);
-  showAllRoutesOnMap(routeObjs, "heat");
-  import("../map.js").then(m => m.hideCityLayer());
+export function syncHeatOverlay() {
+  hideAllRoutesFromMap();
+  showCityLayer();
 }

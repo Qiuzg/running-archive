@@ -1,0 +1,12 @@
+[Unit]
+Description=Build Running Archive route snapshots
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/running-archive
+ExecStart=/opt/running-archive/venv/bin/python -m server.snapshot_refresh
+Restart=on-failure
+RestartSec=60
+Nice=10
+UMask=0022

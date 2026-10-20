@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .database import engine, Base
+from .database import engine, Base, DB_PATH
 from .routers import routes, races, runs, stats, cities, admin, config, apple_sync
 
 # Create tables on startup if they don't exist
@@ -39,7 +39,15 @@ app.include_router(apple_sync.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "2.0.0"}
+    # Includes WAL changes and replacements; no database scan or write per poll.
+    stamps = []
+    for path in (DB_PATH, Path(str(DB_PATH) + "-wal")):
+        try:
+            stat = path.stat()
+            stamps.append(f"{stat.st_ino}:{stat.st_mtime_ns}:{stat.st_size}")
+        except FileNotFoundError:
+            stamps.append("absent")
+    return {"status": "ok", "version": "2.0.0", "data_version": "|".join(stamps)}
 
 
 # In production, Nginx serves static files. In dev, FastAPI can serve them.

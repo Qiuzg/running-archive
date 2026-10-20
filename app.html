@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f3ee" />
+    <meta name="description" content="Running Archive for iPhone：从跑步记录、训练分析到 Apple Watch 训练计划。看看 App 的真实界面，以及它如何在一次次跑步中逐渐完善。" />
+    <title>App 功能与界面 · Run Log</title>
+    <script>try { document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light'; } catch { document.documentElement.dataset.theme = 'light'; }</script>
+    <link rel="stylesheet" href="./src/app-showcase.css" />
+    <link rel="stylesheet" href="./src/site-navigation.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到正文</a>
+    <header class="site-navigation-slot">
+      <nav class="topbar site-navigation" aria-label="主导航">
+        <a class="brand" href="./" aria-label="Run Log首页">
+          <span class="brand__mark brand__mark--photo"><img src="/app-showcase/profile.jpg" alt="" /></span>
+          <span>Run Log</span>
+        </a>
+        <div class="topbar__links">
+          <a href="./#/routes">路线</a>
+          <a href="./#/atlas">路线集</a>
+          <a href="./#/races">比赛</a>
+          <a href="./#/stats">统计</a>
+          <a href="./journal.html" class="is-active" aria-current="location">App</a>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换亮暗模式" title="切换亮暗模式"><span class="theme-toggle__icon">☀️</span></button>
+        </div>
+      </nav>
+    </header>
+    <main id="main">
+      <nav class="app-section-navigation app-section-navigation--showcase" aria-label="App 内容">
+        <a href="./journal.html">开发历程</a>
+        <a href="./app.html" aria-current="page">功能与界面</a>
+      </nav>
+      <section class="intro wrap" aria-labelledby="intro-title">
+        <div class="intro-copy">
+          <p class="eyebrow"><span class="status-dot"></span> RUNNING ARCHIVE / FOR IPHONE</p>
+          <h1 id="intro-title">跑过的路，<br />都成为<span>自己的故事。</span></h1>
+          <p class="intro-description">从一张跑步地图开始，慢慢做成随身的跑步档案。记录每次出发，看懂训练变化，再为下一次跑步做准备。</p>
+          <div class="intro-actions"><a class="button button-primary" href="#features">看看 App <span aria-hidden="true">↘</span></a><a class="text-link" href="./journal.html">它是怎样做出来的 <span aria-hidden="true">→</span></a></div>
+          <div class="intro-meta"><span>原生 iPhone App</span><span>Apple 健康数据</span><span>个人项目 · 持续迭代</span></div>
+        </div>
+        <div class="intro-visual">
+          <div class="orbit orbit-one" aria-hidden="true"></div><div class="orbit orbit-two" aria-hidden="true"></div>
+          <span class="visual-label">每次出发，都值得被记住。</span>
+          <button type="button" class="phone phone-back" data-preview="home" aria-label="放大查看跑步地图截图"><span class="phone-screen"><img src="/app-showcase/real-home.jpg" alt="App 跑步地图与个人档案" width="700" height="1522" fetchpriority="high" /><span class="phone-island" aria-hidden="true"></span><span class="phone-home-indicator" aria-hidden="true"></span></span><span class="phone-buttons" aria-hidden="true"></span></button>
+          <button type="button" class="phone phone-front" data-preview="analysis" aria-label="放大查看训练分析截图"><span class="phone-screen"><img src="/app-showcase/real-analysis.jpg" alt="训练分析：近七天跑量、下一次训练和负荷解读" width="700" height="1522" fetchpriority="high" /><span class="phone-island" aria-hidden="true"></span><span class="phone-home-indicator" aria-hidden="true"></span></span><span class="phone-buttons" aria-hidden="true"></span></button>
+          <span class="screenshot-note">iPhone 界面 · 点击查看大图</span>
+        </div>
+      </section>
+
+      <section class="journey wrap" aria-label="App 使用流程">
+        <div><span>01</span><strong>留下记录</strong><p>路线、分段与每一次跑步</p></div>
+        <div><span>02</span><strong>看懂变化</strong><p>跑量、表现与个人训练负荷</p></div>
+        <div><span>03</span><strong>准备出发</strong><p>目标赛事、AI 计划与手表训练</p></div>
+        <div><span>04</span><strong>分享故事</strong><p>把一次跑步，装进一张图</p></div>
+      </section>
+
+      <section id="features" class="features wrap section-space" aria-labelledby="features-title">
+        <div class="section-heading"><div><p class="eyebrow">INSIDE THE APP</p><h2 id="features-title">为自己的跑步，<br />做一点刚刚好的工具。</h2></div><p>从记录到下一次训练，<br />每一处功能都来自实际使用。</p></div>
+        <div class="feature-switcher" role="group" aria-label="选择 App 功能">
+          <button type="button" data-feature="records" aria-pressed="true">跑步档案</button>
+          <button type="button" data-feature="analysis" aria-pressed="false">训练分析</button>
+          <button type="button" data-feature="plan" aria-pressed="false">备赛与 AI 计划</button>
+          <button type="button" data-feature="month" aria-pressed="false">月度回顾</button>
+          <button type="button" data-feature="share" aria-pressed="false">图片分享</button>
+          <button type="button" data-feature="export" aria-pressed="false">数据导出</button>
+        </div>
+        <div class="feature-stage" id="featureStage">
+          <div class="feature-image-area"><span class="stage-word" aria-hidden="true">ARCHIVE</span><button type="button" class="phone feature-phone" id="featurePreview" data-preview="records" aria-label="放大查看跑步档案截图"><span class="phone-screen"><img id="featureImage" src="/app-showcase/real-records.jpg" alt="按年份和月份整理的跑步记录" width="700" height="1522" loading="lazy" /><span class="phone-island" aria-hidden="true"></span><span class="phone-home-indicator" aria-hidden="true"></span></span><span class="phone-buttons" aria-hidden="true"></span></button><span class="image-hint">点击截图，查看完整界面 <span aria-hidden="true">↗</span></span></div>
+          <div class="feature-copy" aria-live="polite" aria-atomic="true">
+            <span class="feature-index" id="featureIndex">01 / 跑步档案</span>
+            <h3 id="featureTitle">记得跑了多远，<br />也记得跑过哪里。</h3>
+            <p id="featureDescription">直接读取 Apple 健康中的跑步记录。用地图重访路线，按年月翻看训练，再进入某一次跑步的完整细节。</p>
+            <ul id="featureDetails"><li><strong>一份随身档案</strong><span>地图足迹、逐次记录和个人纪录放在一起。</span></li><li><strong>从总览走进细节</strong><span>查看配速、心率、海拔、步频和功率变化。</span></li><li><strong>打开就接着看</strong><span>本地缓存优先显示，健康数据在后台更新。</span></li></ul>
+            <p class="feature-footnote" id="featureFootnote">档案、详情和分享可直接在手机使用，无需连接网页数据库。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="sharing-band" aria-labelledby="sharing-title">
+        <div class="sharing-content wrap">
+          <div class="sharing-copy"><p class="eyebrow">A RUN, A MEMORY</p><h2 id="sharing-title">数据之外，<br />还有跑步的心情。</h2><p>单次跑步、一个月的坚持，或一整年的路线。选一个标题和喜欢的配色，把它们变成可以留存、可以分享的图片。</p><a class="text-link" href="#features" data-select-feature="share">查看分享功能 <span aria-hidden="true">→</span></a></div>
+          <div class="poster-pair"><button type="button" class="poster poster-light" data-preview="poster-light" aria-label="放大查看浅色月报分享图"><img src="/app-showcase/real-poster-light.jpg" alt="浅色月度跑步分享海报，包含跑量、每日分布和配速" width="700" height="933" loading="lazy" /></button><button type="button" class="poster poster-dark" data-preview="poster-dark" aria-label="放大查看深色月报分享图"><img src="/app-showcase/real-poster-dark.jpg" alt="深色月度跑步分享海报" width="700" height="933" loading="lazy" /></button></div>
+        </div>
+      </section>
+
+      <section id="journal" class="journal wrap section-space" aria-labelledby="journal-title">
+        <div class="section-heading"><div><p class="eyebrow">THE STORY BEHIND IT</p><h2 id="journal-title">本来，只想存下跑过的路。</h2></div><p>从一个跑步网站，到一个自己的 App。<br>用一篇图文手记，把这段过程慢慢讲清楚。</p></div>
+        <a class="journal-document-link" href="./journal.html"><div><span class="eyebrow">开发手记 / 8 个章节</span><h3>从一张跑步地图，<br>到一个自己的 App。</h3><p>导出数据太麻烦，就做同步；跑完想晒一下，就做分享；习惯问 GPT，就把分析和计划也接进来。它的每一步，都来自一次真实的使用。</p><span class="text-link">阅读全文与配图 <span aria-hidden="true">↗</span></span></div><img src="/journal/real-web-archive-v2.png" alt="从网站上的跑步地图开始的开发故事" loading="lazy" width="1280" height="800"></a>
+      </section>
+
+      <section id="current" class="current-section wrap" aria-labelledby="current-title"><div><p class="eyebrow">STILL IN PROGRESS</p><h2 id="current-title">一个一直在用，<br />也一直在完善的个人项目。</h2><p>网页记录跑过的路，手机陪伴每次训练。接下来，继续用真实跑步验证它的每一点改进。</p><a class="button button-primary" href="./#/routes">回到跑步档案 <span aria-hidden="true">↗</span></a></div><div class="faq"><details><summary>现在可以下载 App 吗？</summary><p>目前是个人开发与使用的 iPhone App，尚未提供 App Store 或公开测试下载。此页面用于展示实际功能与开发过程。</p></details><details><summary>手机和网页的数据是什么关系？</summary><p>手机直接读取 Apple 健康并在本地缓存，档案与分析不依赖网页数据库。需要时，可以通过同步功能把选定的跑步记录上传到个人网站。</p></details><details><summary>AI 会收到什么数据？</summary><p>配置并启用 AI 后，会把用于分析的近期跑步、可读取的恢复背景与个人目标发送给所配置的模型服务。App 内可以预览完整提示词和待发送数据；API Key 保存在手机钥匙串。</p></details><details><summary>这里的图片来自哪里？</summary><p>界面来自当前版本的 iPhone App，截图时使用了我同步到网站的跑步记录。月报图片也是在 App 里生成的。</p></details></div></section>
+    </main>
+    <footer class="site-footer wrap"><a href="./">Run Log <span>/ 每一步，都算数。</span></a><span>记录更新 · 2026.10.19</span><a href="#main">回到顶部 ↑</a></footer>
+    <dialog class="image-dialog" id="imageDialog" aria-labelledby="dialogTitle"><div class="dialog-bar"><div><h2 id="dialogTitle">App 界面</h2><p id="dialogNote">iPhone 界面 · 点击查看大图</p></div><button class="icon-button" type="button" id="closePreview" aria-label="关闭截图预览" autofocus>×</button></div><div class="dialog-image"><img id="dialogImage" alt="" /></div><div class="dialog-controls"><button type="button" id="previousPreview" aria-label="上一张截图">← 上一张</button><span id="dialogCount"></span><button type="button" id="nextPreview" aria-label="下一张截图">下一张 →</button></div></dialog>
+    <script type="module" src="./src/app-showcase.js"></script>
+  </body>
+</html>

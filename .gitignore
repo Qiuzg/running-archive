@@ -10,3 +10,9 @@ share-output/
 share/
 ios/**/*.xcodeproj/project.xcworkspace/
 ios/**/*.xcodeproj/xcuserdata/
+
+.env.local
+
+assets/generated/
+
+server/snapshot-queue/

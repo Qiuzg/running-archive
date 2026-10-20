@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from ..snapshot_refresh import request_refresh
 from ..database import get_db
 from ..models import Race, Route, RunRecord
 from ..schemas import (
@@ -241,4 +242,8 @@ def sync_apple_workouts(
         db.rollback()
         logger.exception("Apple Health sync failed")
         raise
+    try:
+        request_refresh()
+    except OSError:
+        logger.exception("Could not queue route snapshot refresh; daily timer will retry")
     return AppleWorkoutSyncResponse(synced=results)

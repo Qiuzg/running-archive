@@ -1,96 +1,51 @@
-/**
- * Client-side URL routing via hash.
- * Supports:
- *   /#/routes              → routes tab
- *   /#/atlas               → long-distance route atlas
- *   /#/races               → races tab
- *   /#/stats/2025          → stats tab, year 2025
- *   /#/stats/2025/3        → stats tab, year 2025, month 3
- *   /#/route/<routeId>     → selects a specific route
- */
-import { store, setActiveTab, setStatsYear, setStatsMonth } from "../state.js";
-import { updateHeroRoute } from "../map.js";
-
+import { store, setActiveTab } from '../state.js';
+import { updateHeroRoute } from '../map.js';
+import { validDate } from '../analytics.js';
 const SHARE_LAB_PATTERN = /^\/share-lab-7k3m9x2p\/?$/;
-
-// Match patterns: /routes, /atlas, /races, /stats/2025, /stats/2025/3, /route/apple-20230409-080438
-const ROUTE_PATTERNS = [
-  { pattern: SHARE_LAB_PATTERN, handler: () => {} },
-  { pattern: /^\/routes\/?$/, handler: () => { setActiveTab("routes"); } },
-  { pattern: /^\/atlas\/?$/, handler: () => { setActiveTab("atlas"); } },
-  { pattern: /^\/races\/?$/, handler: () => { setActiveTab("races"); } },
-  { pattern: /^\/stats\/(\d{4})\/(\d{1,2})\/?$/, handler: (m) => {
-    setActiveTab("stats");
-    setStatsYear(Number(m[1]));
-    setStatsMonth(Number(m[2]) - 1);
-  }},
-  { pattern: /^\/stats\/(\d{4})\/?$/, handler: (m) => {
-    setActiveTab("stats");
-    setStatsYear(Number(m[1]));
-    store.selectedStatsMonth = null;
-  }},
-  { pattern: /^\/stats\/?$/, handler: () => { setActiveTab("stats"); } },
-  { pattern: /^\/route\/(.+)$/, handler: (m) => {
-    const routeId = m[1];
-    store.heroActiveRouteId = routeId;
-    store.activeRouteSource = "route";
-    if (store.activePanelTab === "stats") setActiveTab("routes");
-    updateHeroRoute(routeId, true, "route");
-    // Do NOT call clearStatsOverlay() — overlay lifecycle is managed by the "route" subscriber
-  }},
-];
-
-function parseHash() {
-  const hash = window.location.hash.replace(/^#/, "") || "/routes";
-  return hash;
-}
-
+const pathNow = () => window.location.hash.replace(/^#/, '') || '/routes';
 export function handleRoute() {
-  const path = parseHash();
-  for (const { pattern, handler } of ROUTE_PATTERNS) {
-    const match = path.match(pattern);
-    if (match) {
-      handler(match);
-      return;
+  const path = pathNow();
+  if (SHARE_LAB_PATTERN.test(path)) return;
+  const stats = path.match(/^\/stats(?:\/(\d{4})(?:\/(\d{1,2})(?:\/(\d{1,2}))?)?)?\/?$/);
+  if (stats) {
+    const year = Number(stats[1]) || store.selectedStatsYear || new Date().getFullYear();
+    const month = stats[2] ? Number(stats[2]) : null;
+    const day = stats[3] ? Number(stats[3]) : null;
+    if (year < 1900 || (month !== null && (month < 1 || month > 12)) ||
+      (day !== null && !validDate(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`))) {
+      navigate('/stats'); return;
     }
+    store.selectedStatsYear = year;
+    store.selectedStatsMonth = month === null ? null : month - 1;
+    store.selectedStatsDay = day;
+    setActiveTab('stats');
+    return;
   }
-  // Default: routes tab
-  setActiveTab("routes");
+  const route = path.match(/^\/route\/(.+)$/);
+  if (route) {
+    let id;
+    try { id = decodeURIComponent(route[1]); } catch { navigate('/routes'); return; }
+    if (store.activePanelTab !== 'routes') setActiveTab('routes');
+    updateHeroRoute(id, true, 'route');
+    return;
+  }
+  const tab = path.match(/^\/(routes|atlas|races)\/?$/);
+  setActiveTab(tab ? tab[1] : 'routes');
 }
-
 export function navigate(path) {
-  const current = window.location.hash.replace(/^#/, "");
-  // Don't trigger hashchange if already at the target path
-  if (current === path) return;
-  window.location.hash = "#" + path;
+  if (pathNow() !== path) window.location.hash = '#' + path;
 }
-
 export function syncUrlFromState() {
-  if (SHARE_LAB_PATTERN.test(parseHash())) return;
-  const { activePanelTab, selectedStatsYear, selectedStatsMonth } = store;
-  let path;
-  if (activePanelTab === "stats") {
-    if (selectedStatsMonth !== null) {
-      path = `/stats/${selectedStatsYear}/${selectedStatsMonth + 1}`;
-    } else {
-      path = `/stats/${selectedStatsYear}`;
-    }
-  } else {
-    path = `/${activePanelTab}`;
+  if (SHARE_LAB_PATTERN.test(pathNow()) || pathNow().startsWith('/route/')) return;
+  let path = `/${store.activePanelTab}`;
+  if (store.activePanelTab === 'stats') {
+    path += `/${store.selectedStatsYear || new Date().getFullYear()}`;
+    if (store.selectedStatsMonth !== null) path += `/${store.selectedStatsMonth+1}`;
+    if (store.selectedStatsDay !== null) path += `/${store.selectedStatsDay}`;
   }
-  const current = window.location.hash.replace(/^#/, "");
-  if (current !== path) {
-    window.history.replaceState(null, "", "#" + path);
-  }
+  if (pathNow() !== path) window.history.replaceState(null, '', '#'+path);
 }
-
 export function initRouter() {
-  window.addEventListener("hashchange", () => {
-    handleRoute();
-    syncUrlFromState();
-  });
-  // Initial route
-  if (window.location.hash) {
-    handleRoute();
-  }
+  window.addEventListener('hashchange', () => { handleRoute(); syncUrlFromState(); });
+  // Resolve initial links after the first data request, so the correct default year is available.
 }

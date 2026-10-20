@@ -1,0 +1,127 @@
+/* Desktop search and review, scoped to preserve the map and native app showcase. */
+.review-year select { min-width: 0; width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 10px; font: inherit; color-scheme: inherit; }
+.review-month button[data-clear-day], .data-status button { color: var(--ink); border: 1px solid var(--line-strong); background: var(--overlay-dim); border-radius: 8px; padding: 8px 12px; cursor: pointer; font: inherit; }
+.data-status { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding: 16px; border: 1px solid var(--accent); border-radius: 12px; background: var(--bg); margin-bottom: 12px; font-size: 13px; }
+.data-status p { margin: 6px 0 0; color: var(--ink-dim); line-height: 1.6; }
+.data-status button { flex-shrink: 0; }
+.hero--stats-full .summary-strip, .hero--stats-full .map-engine-toggle, .hero--stats-full .panel-resize-handle, .hero--stats-full .hero__panel-header { display: none !important; }
+.hero.hero--stats-full { display: block; min-height: 100vh; height: auto; padding-bottom: 48px; }
+.hero--stats-full .topbar { width: min(1280px, calc(100% - 64px)); }
+.hero--stats-full .hero__panel { width: min(1280px, calc(100% - 64px)); max-width: none; max-height: none !important; margin: 18px auto 0; border: 0; background: transparent; backdrop-filter: none; overflow: visible; box-shadow: none; }
+.hero--stats-full .hero__panel-body { display: block; padding: 0; overflow: visible; contain: none; max-height: none; }
+.hero--stats-full .panel-content { display: grid; gap: 22px; }
+.review-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 0 12px; }
+.review-kicker { color: var(--accent); font-size: 10px; letter-spacing: 2px; font-weight: 700; margin: 0 0 12px; }
+.review-heading h2 { font-size: clamp(25px, 3vw, 40px); letter-spacing: -1px; margin: 0; }
+.review-heading p:not(.review-kicker) { color: var(--ink-dim); font-size: 14px; margin: 12px 0 0; }
+.review-year { display: grid; gap: 8px; width: 130px; flex-shrink: 0; font-size: 11px; color: var(--ink-dim); }
+.review-year select { font-size: 16px; font-weight: 700; }
+.review-card { background: var(--bg-card); border: 1px solid var(--line-strong); border-radius: 16px; padding: 26px; }
+.review-kpis { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; gap: 16px; }
+.review-kpi { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+.review-kpi > span { font-size: 12px; color: var(--ink-dim); }
+.review-kpi > strong { font-size: clamp(22px, 2.7vw, 36px); font-variant-numeric: tabular-nums; letter-spacing: -1px; line-height: 1.25; }
+.review-kpi strong small { font-size: 14px; font-weight: 500; letter-spacing: 0; }
+.review-kpi p { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.6; }
+.review-kpi--primary { background: var(--accent); color: #fff; border-color: transparent; }
+.review-kpi--primary > span, .review-kpi--primary p { color: #fff; }
+.review-section-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 22px; }
+.review-section-head h3 { margin: 0; font-size: 21px; }
+.review-section-head h3 small { font-size: 12px; font-weight: 400; color: var(--ink-dim); margin-left: 12px; white-space: nowrap; }
+.review-legend { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--ink-dim); margin: 0; }
+.review-legend i { width: 8px; height: 8px; background: var(--blue); border-radius: 2px; }
+.review-legend i:nth-of-type(2) { background: var(--overlay-strong); }
+.review-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+.review-bars button { color: var(--ink-dim); border: 0; background: transparent; padding: 7px 4px; border-radius: 8px; display: grid; gap: 10px; font: inherit; font-size: 11px; cursor: pointer; }
+.review-bars button[aria-pressed="true"] { background: var(--blue-soft); color: var(--blue); }
+.review-bar-value { font-size: 11px; font-variant-numeric: tabular-nums; }
+.review-bar-track { height: 150px; display: flex; align-items: end; justify-content: center; gap: 4px; border-bottom: 1px solid var(--line-strong); background: repeating-linear-gradient(to top, transparent, transparent 49px, var(--line) 49px, var(--line) 50px); }
+.review-bar-track i, .review-bar-track b { width: 15px; border-radius: 4px 4px 0 0; background: var(--overlay-strong); }
+.review-bar-track b { background: var(--blue); }
+.review-month-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 40px; }
+.review-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.review-weekday { text-align: center; font-size: 11px; color: var(--ink-dim); padding: 4px 0 10px; }
+.review-calendar button { display: grid; gap: 5px; min-height: 55px; padding: 8px 3px; border: 1px solid transparent; border-radius: 8px; color: var(--ink-dim); background: var(--overlay-dim); font: inherit; font-size: 12px; cursor: pointer; }
+.review-calendar button small { font-size: 10px; }
+.review-calendar button.has-run { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+.review-calendar button[aria-pressed="true"] { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.review-calendar button:disabled { opacity: .3; cursor: default; }
+.review-records { min-width: 0; }
+.review-records h4 { display: flex; justify-content: space-between; margin: 4px 0 14px; font-size: 14px; }
+.review-records h4 span, .review-note { font-size: 11px; font-weight: 400; color: var(--ink-dim); line-height: 1.7; }
+.review-record-list { max-height: 340px; overflow: auto; padding-right: 8px; scrollbar-width: thin; }
+.review-record-list article { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.review-record-list article > div { display: grid; gap: 7px; min-width: 0; }
+.review-record-list article > div:last-child { text-align: right; flex-shrink: 0; }
+.review-record-list strong { font-size: 13px; overflow-wrap: anywhere; }
+.review-record-list small { font-size: 11px; color: var(--ink-dim); font-weight: 400; }
+.review-record-list a:hover, .review-milestones a:hover { color: var(--blue); }
+.review-empty { text-align: center; padding: 64px 20px; color: var(--ink-dim); font-size: 13px; }
+.review-pb-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.review-pb-grid button { display: grid; gap: 12px; text-align: left; padding: 20px; border: 1px solid var(--line-strong); border-radius: 10px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.review-pb-grid button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.review-pb-grid span, .review-pb-grid small { font-size: 11px; color: var(--ink-dim); }
+.review-pb-grid strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.review-milestones { padding: 0; list-style: none; margin: 22px 0; }
+.review-milestones li { display: grid; grid-template-columns: 100px 1fr auto; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.review-milestones time, .review-milestones span { color: var(--ink-dim); font-size: 11px; }
+.review-milestones div { display: flex; align-items: center; gap: 20px; }
+.review-milestones li > small { color: var(--green); }
+.review-method { font-size: 11px; line-height: 1.9; color: var(--ink-dim); }
+.review-method summary { cursor: pointer; }
+.review-footnote { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.9; }
+.review-card :focus-visible, .review-year :focus-visible, .data-status :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+/* Keep the route list compact while leaving a useful map area on smaller desktops. */
+@media (min-width: 761px) {
+  .hero:not(.hero--atlas):not(.hero--stats-full) { --route-panel-width: clamp(280px, 25vw, 360px); }
+  .hero:not(.hero--atlas):not(.hero--stats-full) .hero__panel { width: var(--route-panel-width); }
+  .hero:not(.hero--atlas):not(.hero--stats-full) .summary-strip { left: var(--route-panel-width); padding-inline: 16px; }
+  .hero:not(.hero--atlas):not(.hero--stats-full) .summary-strip .metric { padding-inline: clamp(8px, 1.1vw, 16px); }
+  .hero-route-item { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 8px 6px; }
+  .hero-route-item__thumb { width: 72px; height: 56px; }
+  .hero-route-item__info strong { font-size: .85rem; line-height: 1.4; }
+  .hero-route-item__info span { font-size: .7rem; line-height: 1.5; }
+  .route-tools { grid-template-columns: 1fr auto; row-gap: 8px; padding-bottom: 10px; }
+  .route-tools__filters { grid-column: 1 / -1; }
+  .route-heat-toggle { justify-self: start; }
+  .route-tools small { text-align: right; }
+}
+@media (min-width: 761px) and (max-width: 1099px) {
+  .hero:not(.hero--atlas):not(.hero--stats-full) .summary-strip .metric strong { font-size: clamp(13px, 1.75vw, 19px); white-space: nowrap; }
+  .hero:not(.hero--atlas):not(.hero--stats-full) .summary-strip .metric__label { font-size: 10px; }
+  .hero:not(.hero--atlas):not(.hero--stats-full) .summary-strip .metric small { display: none; }
+}
+@media (max-width: 900px) {
+  .review-kpis { grid-template-columns: repeat(2, 1fr); }
+  .review-legend span { display: none; }
+  .review-month-grid { gap: 24px; }
+  .review-card { padding: 20px; }
+  .review-bars { gap: 4px; }
+}
+@media (max-width: 600px) {
+  .hero--stats-full .hero__panel, .hero--stats-full .topbar { width: calc(100% - 28px); }
+  .hero--stats-full .hero__panel { margin-top: 0; }
+  .hero--stats-full .panel-content { gap: 14px; }
+  .review-heading { align-items: start; }
+  .review-heading h2 { font-size: 23px; letter-spacing: -.7px; }
+  .review-heading p:not(.review-kicker) { font-size: 12px; }
+  .review-year { width: 83px; }
+  .review-kpis { gap: 10px; }
+  .review-card { padding: 16px; border-radius: 12px; }
+  .review-kpi { gap: 14px; }
+  .review-kpi > strong { font-size: 24px; }
+  .review-section-head { flex-wrap: wrap; gap: 14px; }
+  .review-section-head h3 { font-size: 18px; }
+  .review-section-head h3 small { display: block; margin: 10px 0 0; }
+  .review-bars { gap: 1px; }
+  .review-bars button { padding: 6px 1px; font-size: 9px; }
+  .review-bar-value { font-size: 8px; }
+  .review-bar-track { height: 120px; gap: 2px; }
+  .review-bar-track i, .review-bar-track b { width: 7px; }
+  .review-month-grid { grid-template-columns: 1fr; gap: 20px; }
+  .review-pb-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .review-pb-grid button { padding: 14px; }
+  .review-pb-grid strong { font-size: 22px; }
+  .review-milestones li { grid-template-columns: 75px 1fr auto; gap: 10px; }
+  .review-milestones div { display: grid; gap: 6px; }
+}

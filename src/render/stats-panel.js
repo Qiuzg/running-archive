@@ -1,204 +1,57 @@
-import { store, setStatsYear, setStatsMonth } from "../state.js";
-import { formatKm, formatElapsed, escapeAttr, positionTooltip } from "../utils.js";
-import { updateHeroRoute } from "../map.js";
-import { resetPanelHeight } from "../ui/panel.js";
+import { store } from '../state.js';
+import { yearReview, monthCalendar, pbHistory, PB_DISTANCES, totals, distance, dateKey, escapeHtml as esc } from '../analytics.js';
+import { navigate } from '../ui/router.js';
+
+const km = value => value.toLocaleString('zh-CN', {maximumFractionDigits: 1});
+const duration = seconds => `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds % 3600 / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+const routeLink = (item, label) => item.route_id && store.routes.some(r => r.id === item.route_id)
+  ? `<a href="#/route/${encodeURIComponent(item.route_id)}">${esc(label)} <span aria-hidden="true">↗</span></a>` : esc(label);
 
 export function renderStatsPanel(container) {
-  const year = store.selectedStatsYear;
-  const { activityItems, races } = store;
-
-  // Monthly totals
-  const totals = Array.from({ length: 12 }, () => 0);
-  activityItems.forEach((item) => {
-    const d = String(item.date || "");
-    if (d.startsWith(`${year}-`)) {
-      totals[Number(d.slice(5, 7)) - 1] += Number(item.distance_km || 0);
-    }
-  });
-
-  const max = Math.max(...totals, 1);
-  const yearDist = totals.reduce((a, b) => a + b, 0);
-  const yearRaces = races.filter(r => String(r.date || "").startsWith(`${year}-`));
-  const marathonCount = yearRaces.filter(r => r.type === "marathon").length;
-  const halfCount = yearRaces.filter(r => r.type === "half_marathon").length;
-  const activeMonths = totals.filter(t => t > 0).length;
-  const monthlyAvg = activeMonths > 0 ? yearDist / activeMonths : 0;
-
-  const longest = activityItems
-    .filter(item => String(item.date || "").startsWith(`${year}-`))
-    .reduce((best, item) => Number(item.distance_km || 0) > Number(best.distance_km || 0) ? item : best, { distance_km: 0 });
-
-  const yearIdx = store.availableYears.indexOf(year);
-  const hasPrev = yearIdx < store.availableYears.length - 1;
-  const hasNext = yearIdx > 0;
-
-  // 100km reference lines
-  const step = 100;
-  const refLines = [];
-  for (let v = step; v <= Math.ceil(max / step) * step; v += step) {
-    const pct = (v / max) * 100;
-    if (pct <= 100) refLines.push({ value: v, pct });
-  }
-
-  const bars = totals.map((t, i) => {
-    const h = Math.max((t / max) * 100, t > 0 ? 6 : 2);
-    return `<button class="bar ${store.selectedStatsMonth === i ? "is-active" : ""}" type="button"
-      data-stats-month="${i}" data-bar-value="${t ? t.toFixed(0) : "0"}"
-      aria-label="${year}年${i + 1}月跑量${formatKm(t)}" style="--bar-height: ${h}%">
-      <i></i><small>${i + 1}月</small></button>`;
-  }).join("");
-
-  container.innerHTML = `
-    <div class="stats-year-header">
-      <div class="stats-hero-number">
-        <strong>${formatKm(yearDist)}</strong>
-        <span>年度总跑量</span>
-      </div>
-      <div class="stats-year-nav">
-        <button class="stats-year-arrow" type="button" data-stats-year-prev ${hasPrev ? "" : "disabled"}>←</button>
-        <strong>${year}</strong>
-        <button class="stats-year-arrow" type="button" data-stats-year-next ${hasNext ? "" : "disabled"}>→</button>
-      </div>
+  const year = store.selectedStatsYear || new Date().getFullYear();
+  const today = dateKey();
+  const review = yearReview(store.activityItems, year, today);
+  const {summary, baseline, change} = review;
+  const currentYear = Number(today.slice(0,4));
+  const years = [...new Set([currentYear, year, ...store.availableYears])].sort((a,b) => b-a);
+  const latest = review.current[0];
+  const month = store.selectedStatsMonth ?? (year === currentYear ? new Date().getMonth() : latest ? Number(latest.date.slice(5,7))-1 : 0);
+  const calendar = monthCalendar(review.current, year, month);
+  const monthTotals = totals(calendar.records);
+  const records = calendar.records.filter(i => !store.selectedStatsDay || Number(i.date.slice(8)) === store.selectedStatsDay).sort((a,b) => b.date.localeCompare(a.date));
+  const max = Math.max(1, ...review.monthly, ...review.previousMonthly);
+  const histories = PB_DISTANCES.map(pb => pbHistory(store.activityItems, pb.km, today));
+  const history = histories[store.selectedPB];
+  const changeText = change === null ? '暂无可比基线' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+  const period = year === currentYear ? `截至 ${Number(today.slice(5,7))} 月 ${Number(today.slice(8))} 日` : '全年';
+  container.innerHTML = `<div class="review-heading"><div><p class="review-kicker">YOUR YEAR, IN MOTION</p><h2>${year}，每一步都算数。</h2><p>从全年节奏，到每一次出发。</p></div><label class="review-year">回顾年份<select aria-label="回顾年份">${years.map(y => `<option ${year === y ? 'selected' : ''}>${y}</option>`).join('')}</select></label></div>
+    <div class="review-kpis">
+      <article class="review-card review-kpi review-kpi--primary"><span>${year} 年累计里程</span><strong>${km(summary.km)} <small>km</small></strong><p>${period} · ${summary.count} 次跑步</p></article>
+      <article class="review-card review-kpi"><span>较 ${year-1} 年${year === currentYear ? '同期' : '全年'}</span><strong>${changeText}</strong><p>${year > currentYear ? '所选年份尚未开始' : `${year-1} 年 ${baseline.count ? km(baseline.km)+' km' : '没有已导入记录'} · ${period}`}</p></article>
+      <article class="review-card review-kpi"><span>跑步天数</span><strong>${summary.days} <small>天</small></strong><p>同一天多次跑步计为一天</p></article>
+      <article class="review-card review-kpi"><span>最长的一次</span><strong>${km(summary.longest)} <small>km</small></strong><p>本年度已记录的单次距离</p></article>
     </div>
-    <div class="chart-block">
-      <div class="chart-block__header"><h3>月度跑量</h3></div>
-      <div class="bar-chart">
-        ${refLines.map(l => `<span class="bar-ref-line" data-ref-pct="${l.pct}" style="bottom:${l.pct}%"><small>${l.value}</small></span>`).join("")}
-        ${bars}
-      </div>
-      <div class="bar-tooltip" id="barTooltip" hidden></div>
-    </div>
-    <div class="stats-meta-row">
-      <div class="stats-meta-item"><span>比赛</span><strong>${yearRaces.length} 场</strong><small>全马 ${marathonCount} · 半马 ${halfCount}</small></div>
-      <div class="stats-meta-item"><span>月均跑量</span><strong>${formatKm(monthlyAvg)}</strong><small>${activeMonths} 个月有记录</small></div>
-      <div class="stats-meta-item"><span>最长距离</span><strong>${formatKm(longest.distance_km || 0)}</strong><small>${longest.name || "--"}</small></div>
-    </div>
-    <div class="month-records" id="monthRecords"></div>
-  `;
-
-  bindStatsEvents(container, yearIdx, hasPrev, hasNext);
-  renderMonthRecords();
-  alignBarRefLines(container);
-}
-
-function bindStatsEvents(container, yearIdx, hasPrev, hasNext) {
-  const prevBtn = container.querySelector("[data-stats-year-prev]");
-  const nextBtn = container.querySelector("[data-stats-year-next]");
-
-  if (hasPrev) prevBtn?.addEventListener("click", () => {
-    setStatsYear(store.availableYears[yearIdx + 1]);
-    store.selectedStatsMonth = null;
+    <section class="review-card review-chart" aria-labelledby="month-chart-title"><div class="review-section-head"><div><p class="review-kicker">01 / THE RHYTHM</p><h3 id="month-chart-title">一年里的跑步节奏</h3></div><p class="review-legend"><i></i>${year}<i></i>${year-1}${year === currentYear ? ' 同期' : ''} <span>· 点击月份查看明细</span></p></div>
+      <div class="review-bars">${review.monthly.map((value, i) => `<button type="button" data-month="${i}" aria-pressed="${i === month}" aria-label="${i+1} 月，${year} 年 ${km(value)} 公里，${year-1} 年 ${km(review.previousMonthly[i])} 公里" title="${year}: ${km(value)} km / ${year-1}: ${km(review.previousMonthly[i])} km"><span class="review-bar-value">${value ? km(value) : '—'}</span><span class="review-bar-track"><i style="height:${review.previousMonthly[i]/max*100}%"></i><b style="height:${value/max*100}%"></b></span><span>${i+1} 月</span></button>`).join('')}</div>
+    </section>
+    <section class="review-card review-month" aria-labelledby="month-review-title"><div class="review-section-head"><div><p class="review-kicker">02 / THE EVERYDAY</p><h3 id="month-review-title">${month+1} 月回顾 <small>${km(monthTotals.km)} km · ${monthTotals.count} 次 · ${monthTotals.days} 天</small></h3></div><button type="button" data-clear-day ${store.selectedStatsDay ? '' : 'hidden'}>查看整月</button></div>
+      <div class="review-month-grid"><div><div class="review-calendar" aria-label="${year} 年 ${month+1} 月跑步日历">${['一','二','三','四','五','六','日'].map(d=>`<span class="review-weekday">${d}</span>`).join('')}${'<span></span>'.repeat(calendar.offset)}${calendar.days.map((day,i) => `<button type="button" data-day="${i+1}" ${day.date > today ? 'disabled' : ''} class="${day.count ? 'has-run' : ''}" aria-pressed="${store.selectedStatsDay === i+1}" aria-label="${month+1} 月 ${i+1} 日，${day.count} 次跑步，${km(day.km)} 公里"><span>${i+1}</span><small>${day.count ? km(day.km) : '·'}</small></button>`).join('')}</div><p class="review-note">日历显示每日累计公里数，点击日期查看记录。</p></div>
+      <div class="review-records"><h4>${store.selectedStatsDay ? `${month+1} 月 ${store.selectedStatsDay} 日` : '本月跑步'} <span>${records.length} 条记录</span></h4>${records.length ? `<div class="review-record-list">${records.map(item => `<article><div><small>${esc(item.date)}${item.source === 'race' ? ' · 比赛' : ''}</small><strong>${routeLink(item,item.name || '跑步')}</strong></div><div><strong>${km(distance(item))} <small>km</small></strong><small>${esc(item.finish_time || item.duration || '用时未记录')}</small></div></article>`).join('')}</div>` : '<p class="review-empty">这个时间范围还没有跑步记录。</p>'}</div></div>
+    </section>
+    <section class="review-card review-pb" aria-labelledby="pb-title"><div class="review-section-head"><div><p class="review-kicker">03 / PERSONAL MILESTONES</p><h3 id="pb-title">那些更快的时刻</h3></div><span class="review-note">全部年份 · 整次活动 PB</span></div>
+      <div class="review-pb-grid">${PB_DISTANCES.map((pb,i) => {const best = histories[i].at(-1); return `<button type="button" data-pb="${i}" aria-pressed="${store.selectedPB===i}"><span>${pb.label}</span><strong>${best ? duration(best.seconds) : '—'}</strong><small>${best ? esc(best.date) : '暂无符合范围的记录'}</small></button>`;}).join('')}</div>
+      <ol class="review-milestones">${[...history].reverse().map(item => `<li><time>${esc(item.date)}</time><div><strong>${duration(item.seconds)}</strong><span>${routeLink(item,item.name || '跑步')} · ${km(distance(item))} km</span></div><small>${item.improvement === null ? '首次记录' : `快了 ${duration(item.improvement)}`}</small></li>`).join('') || '<li>这个距离还没有可展示的里程碑。</li>'}</ol>
+      <details class="review-method"><summary>PB 是如何计算的？</summary><p>筛选距离达到目标、且不超过目标 3% 的活动（5–5.15、10–10.3、21.0975–21.7304、42.195–43.4609 km），比较整次活动的原始用时。只展示严格变快的记录；无有效用时的活动不参与。相同日期按用时从快到慢排列。它不等同于赛会官方 PB，也不代表跑步中某一段的最快成绩，不进行距离折算。</p></details>
+    </section>
+    <p class="review-footnote">统计基于已导入的比赛与训练，排除未来日期。${year === currentYear ? `同期比较范围为两年的 1 月 1 日至 ${today.slice(5).replace('-', ' 月 ')} 日（闰日按去年月底对齐）。` : '历史年份按全年比较。'}未同步的日期不代表没有跑步。</p>`;
+  const goMonth = (nextMonth, day) => navigate(`/stats/${year}/${nextMonth+1}${day ? '/'+day : ''}`);
+  container.querySelector('.review-year select').addEventListener('change', event => navigate(`/stats/${event.target.value}`));
+  container.querySelectorAll('[data-month]').forEach(button => button.addEventListener('click', () => goMonth(Number(button.dataset.month))));
+  container.querySelectorAll('[data-day]').forEach(button => button.addEventListener('click', () => goMonth(month, Number(button.dataset.day))));
+  container.querySelector('[data-clear-day]').addEventListener('click', () => goMonth(month));
+  container.querySelectorAll('[data-pb]').forEach(button => button.addEventListener('click', () => {
+    store.selectedPB = Number(button.dataset.pb);
     renderStatsPanel(container);
-  });
-
-  if (hasNext) nextBtn?.addEventListener("click", () => {
-    setStatsYear(store.availableYears[yearIdx - 1]);
-    store.selectedStatsMonth = null;
-    renderStatsPanel(container);
-  });
-
-  const tooltip = container.querySelector("#barTooltip");
-  container.querySelectorAll("[data-stats-month]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const m = Number(btn.dataset.statsMonth);
-      store.selectedStatsMonth = store.selectedStatsMonth === m ? null : m;
-      renderStatsPanel(container);
-    });
-    btn.addEventListener("mouseenter", (e) => {
-      if (!tooltip) return;
-      tooltip.textContent = `${Number(btn.dataset.statsMonth) + 1}月 · ${btn.dataset.barValue} km`;
-      tooltip.hidden = false;
-      positionTooltip(tooltip, e);
-    });
-    btn.addEventListener("mousemove", (e) => {
-      if (tooltip && !tooltip.hidden) positionTooltip(tooltip, e);
-    });
-    btn.addEventListener("mouseleave", () => { if (tooltip) tooltip.hidden = true; });
-    btn.addEventListener("touchstart", (e) => {
-      if (!tooltip) return;
-      tooltip.textContent = `${Number(btn.dataset.statsMonth) + 1}月 · ${btn.dataset.barValue} km`;
-      tooltip.hidden = false;
-      positionTooltip(tooltip, e);
-      clearTimeout(btn._tooltipTimer);
-      btn._tooltipTimer = setTimeout(() => { if (tooltip) tooltip.hidden = true; }, 1500);
-    }, { passive: true });
-  });
-}
-
-function renderMonthRecords() {
-  const container = document.getElementById("monthRecords");
-  if (!container) return;
-
-  const month = store.selectedStatsMonth;
-  const year = store.selectedStatsYear;
-
-  if (month === null) {
-    container.innerHTML = `
-      <div class="month-records__header">
-        <div><span>${year}</span><strong>选择月份查看记录</strong></div>
-      </div>
-      <p class="empty empty--compact">点击上方月份柱查看当月跑步和比赛记录。</p>`;
-    return;
-  }
-
-  const records = store.activityItems
-    .filter(item => {
-      const d = String(item.date || "");
-      return d.startsWith(`${year}-`) && Number(d.slice(5, 7)) - 1 === month;
-    })
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  const monthTotal = records.reduce((sum, item) => sum + Number(item.distance_km || 0), 0);
-  const maxDist = Math.max(...records.map(item => Number(item.distance_km || 0)), 1);
-  const longest = [...records].sort((a, b) => Number(b.distance_km || 0) - Number(a.distance_km || 0))[0];
-
-  container.innerHTML = `
-    <div class="month-records__header">
-      <div>
-        <span>${year}</span>
-        <strong>${month + 1} 月训练分布</strong>
-      </div>
-      <small>${records.length} 次 · ${formatKm(monthTotal)}${longest ? ` · 最长 ${formatKm(longest.distance_km)}` : ""}</small>
-    </div>
-    ${records.length ? `<div class="month-detail-chart ${records.length <= 8 ? "is-sparse" : ""}">${records.map(item => {
-      const distance = Number(item.distance_km || 0);
-      const height = Math.max((distance / maxDist) * 100, distance > 0 ? 8 : 2);
-      const day = Number(String(item.date || "").slice(8, 10));
-      const title = item.name || item.title || "";
-      const tooltipText = `${title} · ${formatKm(distance)} · ${item.pace}/km`;
-      const content = `<i style="--activity-height: ${height}%"></i><small>${day}</small>`;
-      return item.route_id
-        ? `<button class="month-activity-bar" type="button" data-route-target="${escapeAttr(item.route_id)}" title="${escapeAttr(tooltipText)}">${content}</button>`
-        : `<div class="month-activity-bar" title="${escapeAttr(tooltipText)}">${content}</div>`;
-    }).join("")}</div>` : '<p class="empty empty--compact">这个月没有记录。</p>'}
-  `;
-
-  // Bind route links
-  container.querySelectorAll("[data-route-target]").forEach(el => {
-    el.onclick = () => {
-      if (el.dataset.routeTarget === store.heroActiveRouteId) return;
-      if (store.activePanelTab === "stats") resetPanelHeight();
-      updateHeroRoute(el.dataset.routeTarget, true, "route");
-    };
-  });
-}
-
-function alignBarRefLines(scope) {
-  requestAnimationFrame(() => {
-    const chart = scope.querySelector(".bar-chart");
-    if (!chart) return;
-    const sampleBar = chart.querySelector(".bar");
-    const sampleTrack = chart.querySelector(".bar i");
-    if (!sampleBar || !sampleTrack) return;
-    const chartRect = chart.getBoundingClientRect();
-    const barRect = sampleBar.getBoundingClientRect();
-    const trackRect = sampleTrack.getBoundingClientRect();
-    const plotTop = barRect.top, plotBottom = trackRect.bottom;
-    const plotHeight = plotBottom - plotTop;
-    if (plotHeight <= 0) return;
-    chart.querySelectorAll(".bar-ref-line[data-ref-pct]").forEach(line => {
-      const pct = Number(line.dataset.refPct || 0);
-      line.style.bottom = chartRect.bottom - (plotBottom - (plotHeight * pct) / 100) + "px";
-    });
-  });
+    container.querySelector(`[data-pb="${store.selectedPB}"]`).focus({preventScroll: true});
+  }));
 }

@@ -11,6 +11,8 @@ export const store = {
   routes: [],
   cityBoundaries: [],
   profile: {},
+  dataStatus: {},
+  dataLoading: true,
 
   // Derived
   marathonTimeline: [],
@@ -23,10 +25,12 @@ export const store = {
   heroActiveRouteId: null,
   activeRouteSource: "route", // "route" | "race"
   routeDistanceFilter: "all",
-  routeVisibleCount: 80,
+  routeVisibleCount: 20,
   routeHeatMode: false,
   selectedStatsYear: null,
   selectedStatsMonth: null,
+  selectedStatsDay: null,
+  selectedPB: 0,
   panelCollapsed: false,
 
   // Route detail cache (full coordinates + timeSeries)
@@ -75,7 +79,7 @@ export function setStatsMonth(month) {
 
 export function setRouteFilter(filter) {
   store.routeDistanceFilter = filter;
-  store.routeVisibleCount = 80;
+  store.routeVisibleCount = 20;
   notify("routes");
 }
 
@@ -85,7 +89,7 @@ export function toggleRouteHeat() {
 }
 
 export function loadMoreRoutes() {
-  store.routeVisibleCount += 80;
+  store.routeVisibleCount += 20;
   notify("routes");
 }
 
@@ -119,11 +123,12 @@ export function rebuildDerivedData() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   // Activity items: races + non-race runs
-  const raceSourceIds = new Set(races.map((r) => r.id).filter(Boolean));
+  const raceSourceIds = new Set(races.flatMap(r => [r.id, r.source_run_id]).filter(Boolean));
+  const raceRouteIds = new Set(races.map(r => r.route_id).filter(Boolean));
   store.activityItems = [
     ...races.map((item) => ({ ...item, source: "race" })),
     ...runs
-      .filter((item) => !raceSourceIds.has(item.id))
+      .filter((item) => !raceSourceIds.has(item.id) && !(item.route_id && raceRouteIds.has(item.route_id)))
       .map((item) => ({ ...item, source: "run" })),
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -141,11 +146,11 @@ export function rebuildDerivedData() {
       store.activityItems.map((item) => Number(String(item.date || "").slice(0, 4)))
     ),
   ]
-    .filter((y) => Number.isFinite(y))
+    .filter((y) => Number.isInteger(y) && y >= 1900 && y <= 9999)
     .sort((a, b) => b - a);
 
   const currentYear = new Date().getFullYear();
-  if (!store.selectedStatsYear || !store.availableYears.includes(store.selectedStatsYear)) {
+  if (!store.selectedStatsYear) {
     store.selectedStatsYear = store.availableYears.includes(currentYear)
       ? currentYear
       : store.availableYears[0] || currentYear;

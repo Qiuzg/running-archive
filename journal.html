@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="一个马拉松爱好者的开发手记：从跑步记录网站，到读取 Apple 健康、分享跑步、AI 分析和 Apple Watch 训练计划的个人 App。" />
+  <title>从一张跑步地图，到一个自己的 App · Run Log 开发手记</title>
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light'; } catch { document.documentElement.dataset.theme = 'light'; }</script>
+  <link rel="stylesheet" href="./src/journal.css" />
+  <link rel="stylesheet" href="./src/site-navigation.css" />
+</head>
+<body>
+  <a class="skip-link" href="#article">跳到正文</a>
+    <header class="site-navigation-slot">
+      <nav class="topbar site-navigation" aria-label="主导航">
+        <a class="brand" href="./" aria-label="Run Log首页">
+          <span class="brand__mark brand__mark--photo"><img src="/app-showcase/profile.jpg" alt="" /></span>
+          <span>Run Log</span>
+        </a>
+        <div class="topbar__links">
+          <a href="./#/routes">路线</a>
+          <a href="./#/atlas">路线集</a>
+          <a href="./#/races">比赛</a>
+          <a href="./#/stats">统计</a>
+          <a href="./journal.html" class="is-active" aria-current="location">App</a>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换亮暗模式" title="切换亮暗模式"><span class="theme-toggle__icon">☀️</span></button>
+        </div>
+      </nav>
+    </header>
+
+<main class="journal-document" id="main">
+  <nav class="app-section-navigation" aria-label="App 内容">
+    <a href="./journal.html" aria-current="page">开发历程</a>
+    <a href="./app.html">功能与界面 <span aria-hidden="true">↗</span></a>
+  </nav>
+  <header class="document-heading">
+    <p class="document-kicker">RUN LOG / DEVELOPMENT JOURNAL</p>
+    <h1>从一张跑步地图，<br>到一个自己的 App。</h1>
+    <p class="document-deck">我想给自己的跑步留个记录，<br class="desktop-break">没想到后来还做了一个 App。</p>
+    <div class="document-meta"><span>个人开发手记</span><time datetime="2026-10-19">2026.10.19</time><span>8 个章节 · 图文记录</span><button type="button" id="printJournal">打印 / 保存为 PDF ↗</button></div>
+  </header>
+  <div class="document-layout">
+    <aside class="document-toc" aria-label="文章目录"><p>这一路，怎么走过来</p><ol><li><a href="#beginning"><span>01</span>先给跑过的路，找一个地方</a></li><li><a href="#export"><span>02</span>一次更新，要经过太多步骤</a></li><li><a href="#iphone"><span>03</span>那就自己做一个 App</a></li><li><a href="#sharing"><span>04</span>跑完步，也想好好晒一下</a></li><li><a href="#ai"><span>05</span>让 AI 帮忙复盘，也为比赛做准备</a></li><li><a href="#training"><span>06</span>除了跑量，我还想看懂训练</a></li><li><a href="#watch"><span>07</span>让计划真正走到手腕上</a></li><li><a href="#iteration"><span>08</span>功能之外，继续把它用顺手</a></li></ol><a class="toc-back" href="#main">回到开头 ↑</a></aside>
+    <article id="article" class="document-article">
+      <p class="article-lead">我喜欢跑马拉松，平时也一直在跑。最开始做这个网站，只是想找个地方放自己的跑步数据，看看跑过哪些路、参加过哪些比赛。</p>
+      <p>后来觉得更新数据太麻烦，就想自己做个 App。做到能同步以后，又忍不住加了查看记录、分享图片、分析训练这些功能。这里记一下它是怎么变成现在这样的。</p>
+
+      <section id="beginning"><p class="chapter-index">01 / 起点</p><h2>先给跑过的路，找一个地方</h2>
+        <p>每次跑完步，记录都留在苹果健康里。但我想把这些数据放到一个自己的网站上：地图上能看到跑过的路线，也能翻到以前的比赛成绩。</p>
+        <p>这个想法没多复杂，就是给自己的跑步做个档案。网站先做起来，数据怎么更新，后面再想办法。</p>
+        <figure class="document-figure figure-wide"><button type="button" data-journal-image aria-label="放大查看跑步网站截图"><img src="/journal/real-web-archive-v2.png" alt="Run Log 网页：左侧是跑步记录，右侧地图展示跑过的城市，上方汇总里程和比赛成绩" width="1280" height="800" fetchpriority="high"></button><figcaption><b>图 01</b> 网站现在的首页，路线和比赛记录都在这里。</figcaption></figure>
+      </section>
+
+      <section id="export"><p class="chapter-index">02 / 第一个麻烦</p><h2>一次更新，要经过太多步骤</h2>
+        <p>一开始，我直接从苹果健康导出数据。文件特别大，每次导出都要等十几分钟。等完还得跑脚本，把里面的跑步记录和轨迹解析出来，再更新数据、重新部署网站。</p>
+        <p>做一次还行，每次跑完都来这么一遍，实在太麻烦了。结果就是，跑步没停，网站上的数据却经常来不及更新。</p>
+        <div class="document-flow" aria-label="早期网站更新流程"><span>Apple 健康<br><strong>完整导出</strong></span><i aria-hidden="true">→</i><span>本地脚本<br><strong>解析与整理</strong></span><i aria-hidden="true">→</i><span>静态网站<br><strong>更新并部署</strong></span></div>
+        <p>我也找过不少能导出轨迹的软件，想着拿到轨迹文件后自己解析就好。但试了一圈，想用的导出功能基本都要付费。我就开始琢磨：能不能自己做个 App，直接把苹果健康里的数据读出来？</p>
+      </section>
+
+      <section id="iphone"><p class="chapter-index">03 / 从同步开始</p><h2>那就自己做一个 App</h2>
+        <p>最初只想做一个同步工具：读取 Apple 健康，选中要上传的跑步记录，同步到网站。这样更新网站就不用再折腾那一大包导出文件了。</p>
+        <p>等数据能读出来了，我又觉得，只放一个同步按钮有点简陋。记录都在手机里了，为什么不能直接看？于是又做了地图、按年月整理的记录、单次跑步详情和统计。</p>
+        <p>现在，想翻一条跑步记录，在手机上就能看。想看看这些年去了哪些地方跑步，就打开网站看地图。App 直接读取健康数据，平时查看记录也不用先连上网站。</p>
+        <figure class="document-figure"><div class="figure-pair"><button type="button" data-journal-image aria-label="放大查看 App 地图档案"><img src="/app-showcase/real-home.jpg" alt="App 的地图档案首页" loading="lazy" width="700" height="1522"></button><button type="button" data-journal-image aria-label="放大查看按月整理的跑步记录"><img src="/app-showcase/real-records.jpg" alt="按年月整理的跑步记录列表" loading="lazy" width="700" height="1522"></button></div><figcaption><b>图 02</b> 地图和记录列表。跑过的路线可以按年月慢慢翻。</figcaption></figure>
+      </section>
+
+      <section id="sharing"><p class="chapter-index">04 / 一点跑者的小虚荣</p><h2>跑完步，也想好好晒一下</h2>
+        <p>跑完一趟满意的训练，总会想发出来晒一下。说白了，就是想装个逼。既然都跑了，配张好看的图也挺有必要。</p>
+        <p>以前用苹果自带的运动 App，我分享记录主要靠截图。但页面怎么排就只能怎么截，想把路线、配速和自己写的一句话放在一起，不太方便。那就自己做一个分享功能：选记录、挑版式、改标题，再保存图片。</p>
+        <p>单次跑步做完了，我又想分享一个月、一整年的跑量。苹果的运动 App 里，这些数据不太好集中查看和分享，所以也一起做了。现在跑了多少次、累计多少公里，打开月报或年报就能看到，也能直接出图。</p>
+        <figure class="document-figure"><div class="figure-pair"><button type="button" data-journal-image aria-label="放大查看分享设置"><img src="/app-showcase/real-share.jpg" alt="App 的分享图片设置，可选择版式和主题" loading="lazy" width="700" height="1522"></button><button type="button" data-journal-image aria-label="放大查看月度分享海报"><img src="/app-showcase/real-poster-light.jpg" alt="App 实际导出的浅色月度跑步海报，展示累计里程和路线" loading="lazy" width="700" height="1522"></button></div><figcaption><b>图 03</b> 分享设置和十月月报，选好样式就能保存图片。</figcaption></figure>
+      </section>
+
+      <section id="ai"><p class="chapter-index">05 / 从手动复盘到 App 内分析</p><h2>让 AI 帮忙复盘，也为比赛做准备</h2>
+        <p>我之前经常在跑完后把数据导出来，发给 GPT，让它看看这次跑得怎么样，再聊聊接下来怎么练。每次都要重复整理数据，还得交代最近跑了多少、自己的目标是什么。</p>
+        <p>这些信息 App 里已经有了，我就把这件事也做了进去。配置好自己用的模型服务后，App 会整理近六周的训练摘要、最近三次跑步的详细数据，以及能读取到的恢复信息，让模型点评本次跑步，再给出接下来一周的安排。</p>
+        <p>不过，对我这种会参加比赛的人来说，只看最近跑得怎么样还不够，还得知道在为哪场比赛做准备。于是我加了“目标赛事”：记下比赛名称、日期和距离，也可以填上想跑到的成绩，看看还剩多少天、目标配速是多少。</p>
+
+        <p>在 AI 训练设置里选“使用已有赛事目标”，就能把这场比赛的日期、距离和目标成绩带进去。再告诉它一周哪几天能跑、每次有多少时间、长距离想放在哪天。生成计划时，这些会和近期训练一起作为参考，不用每次重新解释自己在备战什么比赛。</p>
+        <figure class="document-figure"><div class="figure-pair"><button type="button" data-journal-image aria-label="放大查看数据导出"><img src="/app-showcase/real-export.jpg" alt="App 中的跑步分析文件导出界面" loading="lazy" width="700" height="1522"></button><button type="button" data-journal-image aria-label="放大查看训练分析首页"><img src="/app-showcase/real-analysis.jpg" alt="训练分析首页，包含近期跑量、建议和训练负荷入口" loading="lazy" width="700" height="1522"></button></div><figcaption><b>图 04</b> 数据导出和训练分析。想自己拿文件去分析，也仍然可以导出。</figcaption></figure>
+      </section>
+
+      <section id="training"><p class="chapter-index">06 / 从展示数据到解释变化</p><h2>除了跑量，我还想看懂训练</h2>
+        <p>做训练分析的时候，我也看了高驰等 App 的功能。除了公里数和配速，训练负荷、疲劳和恢复这些信息也挺有用：这周是不是一下跑多了？最近练得怎么样？下一次还要不要继续加量？</p>
+        <p>我先加了训练负荷，用跑步时长和心率强度估算每次训练的刺激，再比较近期和较长一段时间的变化。另外也做了有氧趋势，把相近条件下的速度和心率放在一起看；能读取到的静息心率、HRV 和睡眠，也会作为恢复的参考。</p>
+        <div class="figure-with-notes"><figure class="document-figure"><button type="button" data-journal-image aria-label="放大查看跑量与频率"><img src="/app-showcase/real-structure.jpg" alt="最新版跑量与频率页，展示真实周跑量" loading="lazy" width="1206" height="2622"></button><figcaption><b>图 05</b> 按周看跑量和次数，比只盯着某一天更方便。</figcaption></figure><dl class="metric-explanations"><div><dt>训练负荷</dt><dd>结合运动时长与心率强度，比较短期和长期的跑步刺激变化。</dd></div><div><dt>有氧趋势</dt><dd>在可比较的跑步片段里，观察速度与心率的关系，以及前后半程的变化。</dd></div><div><dt>恢复背景</dt><dd>把可读取的静息心率、HRV、睡眠等记录放回个人历史趋势中查看。</dd></div></dl></div>
+        <p>这些数字我主要拿来和自己平时比较。比如最近跑量涨得很快，就多留意一下身体的感觉。数据不够时先不算，算出来的结果也只是参考，毕竟累不累，自己跑的时候最有感受。</p>
+      </section>
+
+      <section id="watch"><p class="chapter-index">07 / 从建议到执行</p><h2>让计划真正走到手腕上</h2>
+        <p>AI 给的计划也不一定每次都合适。有时当天没那么多时间，有时就是想换个练法。所以计划生成以后，我还可以自己改日期、训练内容，以及热身、快跑、恢复和重复次数。</p>
+        <p>改完还要解决一个问题：出门跑的时候，总不能一直掏手机看。既然戴着 Apple Watch，就把计划发到手表自带的“体能训练”里，让它按段带着练。</p>
+        <p>为了能发到手表，间歇跑就不能只写一句“跑几组”了。每组跑多远或多久、中间恢复多久，都要拆清楚。我也加了修改后的更新，避免同一天的课程在手表上越堆越多。</p>
+        <figure class="document-figure figure-single"><button type="button" data-journal-image aria-label="放大查看七天训练计划"><img src="/app-showcase/real-plan.jpg" alt="最新版训练计划入口，尚未配置模型和生成计划" loading="lazy" width="700" height="1522"></button><figcaption><b>图 06</b> 训练计划的入口，先配置模型、目标和可训练时间。</figcaption></figure>
+        <p class="document-status">手表这部分还在继续测试。计划编辑和同步已经接上，实际戴着手表跑起来，接收课程和分段提醒还需要再验证。</p>
+      </section>
+
+      <section id="iteration"><p class="chapter-index">08 / 还在继续</p><h2>功能之外，继续把它用顺手</h2>
+        <p>功能多了以后，我又开始改那些用起来不舒服的地方。比如打开 App 等得久不久，详情里的配速和心率好不好找，从月报点进记录后能不能方便地返回，分享时改标题会不会被键盘挡住。</p>
+        <p>这些问题单看截图不一定能发现，自己多用几次就知道了。后来我花了不少时间改缓存、调页面顺序、整理图表，也把记录、详情、月报和分享之间的跳转重新顺了一遍。</p>
+        <figure class="document-figure"><div class="figure-pair figure-comparison"><div><span>最新详情 / 10.18 跑步</span><button type="button" data-journal-image aria-label="放大查看最新跑步详情"><img src="/app-showcase/real-detail.jpg" alt="最新详情界面：10 月 18 日的真实跑步" loading="lazy" width="700" height="1522"></button></div><div><span>最新月报 / 2026.10</span><button type="button" data-journal-image aria-label="放大查看最新月报"><img src="/app-showcase/real-month.jpg" alt="最新版 2026 年 10 月月报" loading="lazy" width="700" height="1522"></button></div></div><figcaption><b>图 07</b> 单次跑步详情和月报，是我平时最常翻的两个页面。</figcaption></figure>
+        <p>现在回头看，App 的功能比最初想的多了不少。但每次加东西，理由都很简单：我自己跑步时想用，现有的操作又不太顺手。</p>
+        <p>接下来还是边跑边改。毕竟这个东西做出来，首先得让我自己愿意每天打开。</p>
+      </section>
+      <footer class="article-footer"><a href="./app.html">查看 App 功能与界面 →</a><a href="#main">回到开头 ↑</a></footer>
+    </article>
+  </div>
+</main>
+<dialog id="journalImageDialog" class="journal-image-dialog" aria-labelledby="previewTitle"><div class="image-dialog-heading"><h2 id="previewTitle">查看配图</h2><button type="button" id="closeJournalImage" aria-label="关闭配图" autofocus>×</button></div><div class="image-dialog-body"><img id="journalPreviewImage" alt=""></div></dialog>
+<script type="module" src="./src/journal.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh static routes after HealthKit sync
+
+[Path]
+DirectoryNotEmpty=/opt/running-archive/server/snapshot-queue
+Unit=running-archive-atlas.service
+
+[Install]
+WantedBy=multi-user.target

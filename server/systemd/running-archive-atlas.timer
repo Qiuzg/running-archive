@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh route collection daily at 04:00 China time
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Asia/Shanghai
+Persistent=true
+Unit=running-archive-atlas.service
+
+[Install]
+WantedBy=timers.target

@@ -22,7 +22,7 @@ if [ -n "$ECS_HOST" ]; then
     echo "=== 2. Deploy to ECS ($ECS_HOST) ==="
 
     # Upload built files
-    rsync -avz --delete \
+    rsync -avz --delete --exclude=generated/ \
         "$PROJECT_DIR/dist/" \
         "$ECS_HOST:$DEPLOY_DIR/dist/"
 
@@ -35,7 +35,8 @@ if [ -n "$ECS_HOST" ]; then
         --exclude '__pycache__' \
         --exclude '*.db' \
         --exclude '*.db.backup.*' \
-        --exclude 'venv'
+        --exclude 'venv' \
+        --exclude 'snapshot-queue/'
 
     # Upload data files (for migration)
     rsync -avz \
@@ -106,6 +107,14 @@ if [ -n "$ECS_HOST" ]; then
         sudo systemctl daemon-reload
         sudo systemctl enable running-archive
         sudo systemctl restart running-archive
+
+        # Keep daily atlas snapshots independent from local/stale build data.
+        sudo cp server/systemd/running-archive-atlas.* /etc/systemd/system/
+        sudo systemctl daemon-reload
+        sudo install -d -o www-data -g www-data -m 2775 server/snapshot-queue
+        sudo systemctl enable --now running-archive-atlas.path
+        sudo systemctl start running-archive-atlas.service
+        sudo systemctl enable --now running-archive-atlas.timer
 
         echo "=== Deployment complete ==="
         sudo systemctl status running-archive --no-pager

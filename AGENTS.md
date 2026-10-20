@@ -67,6 +67,12 @@ The Xcode project is versioned in Git but is not uploaded by the web deployment.
 
 If no host argument is supplied, `server/deploy.sh` only performs a local build and prints local run instructions.
 
+## Live web updates and snapshots
+
+Visible pages poll `/api/health` every 15 seconds and refresh record lists atomically when the SQLite/WAL version changes. Static atlas and thumbnail manifests are checked every minute. HealthKit commits enqueue durable notifications in `server/snapshot-queue/`; the systemd path/service coalesces requests and generates snapshots, with a daily 04:00 Asia/Shanghai timer as fallback. See `docs/live-updates.md` for operation and recovery.
+
+Preserve `dist/generated/` and `server/snapshot-queue/` during deployment; never upload local generated snapshots over production data. `assets/generated/`, runtime queues, and `.env.local` must remain untracked.
+
 ## Race Classification
 
 `sync/apple-health-import.py` classifies races by:

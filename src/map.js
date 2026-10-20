@@ -3,6 +3,8 @@
  * AMap keys fetched from /api/config/amap — never hardcoded in frontend bundle.
  */
 import { store, notify } from "./state.js";
+import { fetchRoute } from "./api.js";
+import { raceCityAreas } from "./city-areas.js";
 import { isMobileViewport } from "./utils.js";
 
 export let heroMap = null;
@@ -132,17 +134,26 @@ function toAmapPoint(p) { return wgs84ToGcj02(Number(p[0]), Number(p[1])); }
 const CITY_RADIUS = { 南京:38,杭州:42,宿迁:42,眉山:40,合肥:42,上海:36,北京:48,苏州:36,无锡:34,常州:36 };
 
 function buildCityAreas() {
-  const areas = new Map();
-  const routeMap = new Map(); store.routes.forEach(r => routeMap.set(r.id, r));
-  for (const race of store.races) {
-    if (race.type !== "marathon" && race.type !== "half_marathon") continue;
-    const route = routeMap.get(race.route_id);
-    if (!route?.preview_coordinates?.length) continue;
-    const key = race.city || race.name;
-    const a = areas.get(key) || { city: race.city, names: [], coordinates: [] };
-    a.names.push(race.name); a.coordinates.push(...route.preview_coordinates); areas.set(key, a);
-  }
-  return areas;
+  return raceCityAreas(store.races, store.routes, store.cityBoundaries);
+}
+
+// Fit the visible map area rather than placing western routes beneath the sidebar.
+function mapPadding() {
+  if (isMobileViewport()) return [80, 120, 80, 120];
+  const panel = document.querySelector('.hero__panel')?.getBoundingClientRect();
+  const summary = document.getElementById('summaryStrip')?.getBoundingClientRect();
+  return [Math.max(160, (summary?.bottom || 0) + 24), 32, 40, (panel?.right || 0) + 24];
+}
+// AMap expects top/bottom/left/right, unlike CSS and Leaflet.
+function amapPadding() {
+  if (isMobileViewport()) return [80, 120, 80, 120];
+  const [top, right, bottom, left] = mapPadding();
+  return [top, bottom, left, right];
+}
+function leafletPadding() {
+  if (isMobileViewport()) return { padding: [80, 120] };
+  const [top, right, bottom, left] = mapPadding();
+  return { paddingTopLeft: [left, top], paddingBottomRight: [right, bottom], animate: false };
 }
 
 function getCityCenter(coords) {
@@ -235,7 +246,7 @@ async function initAmap(el, cityAreas) {
   heroCityLayer = [];
   let bounds = null;
   for (const area of cityAreas.values()) {
-    const boundary = store.cityBoundaries.find(b => b.city === area.city);
+    const boundary = area.boundary;
     if (boundary) {
       const rings = extractGeoJsonRings(boundary.geojson);
       rings.forEach(ring => {
@@ -258,7 +269,7 @@ async function initAmap(el, cityAreas) {
   }
 
   if (heroCityLayer.length) {
-    heroMap.setFitView(heroCityLayer, false, [80, 120, 80, 120]);
+    heroMap.setFitView(heroCityLayer, true, amapPadding());
     defaultMapBounds = heroCityLayer;
     const c = heroMap.getCenter(); defaultMapCenter = [c.lng, c.lat]; defaultMapZoom = heroMap.getZoom();
   }
@@ -311,7 +322,7 @@ async function initLeaflet(el, cityAreas) {
   heroCityLayer = window.L.featureGroup().addTo(heroMap);
   let cityBounds = null;
   for (const area of cityAreas.values()) {
-    const boundary = store.cityBoundaries.find(b => b.city === area.city);
+    const boundary = area.boundary;
     if (boundary) {
       const lyr = window.L.geoJSON(boundary.geojson, {
         style: { color: "#ff8a6e", fillColor: "#ff5e3a", fillOpacity: 0.12, opacity: 0.32, weight: 1 },
@@ -330,7 +341,7 @@ async function initLeaflet(el, cityAreas) {
     }
   }
   if (cityBounds) {
-    heroMap.fitBounds(cityBounds, { padding: [80, 120] });
+    heroMap.fitBounds(cityBounds, leafletPadding());
     defaultMapBounds = cityBounds;
     defaultMapCenter = [cityBounds.getCenter().lat, cityBounds.getCenter().lng];
     defaultMapZoom = heroMap.getZoom();
@@ -355,7 +366,6 @@ export async function initHeroMap() {
   const el = document.getElementById("heroMap");
   if (!el) return;
 
-  const cityAreas = buildCityAreas();
 
   // Wait briefly for city boundaries
   if (!store.cityBoundaries.length) await new Promise(r => setTimeout(r, 300));
@@ -364,7 +374,7 @@ export async function initHeroMap() {
   try {
     await loadAmap();
     if (window.AMap) {
-      await initAmap(el, cityAreas);
+      await initAmap(el, buildCityAreas());
       store.mapReady = true; notify("map-ready"); addMapToggle(); return;
     }
   } catch (e) { console.warn("AMap load failed:", e.message); }
@@ -373,7 +383,7 @@ export async function initHeroMap() {
   try {
     await loadLeaflet();
     if (window.L) {
-      await initLeaflet(el, cityAreas);
+      await initLeaflet(el, buildCityAreas());
       store.mapReady = true; notify("map-ready"); addMapToggle(); return;
     }
   } catch (e) { console.warn("Leaflet load failed:", e.message); }
@@ -427,15 +437,47 @@ function updateToggleLabel(btn) {
 
 function resetMapState() {
   if (heroMap?.destroy) { try { heroMap.destroy(); } catch (_) {} }
+  else if (heroMap?.remove) { try { heroMap.remove(); } catch (_) {} }
   heroMap = null; heroTileLayer = null; heroRouteLine = null;
   heroCityLayer = null; heroAllRoutesLayer = null;
   defaultMapBounds = null; defaultMapCenter = null; defaultMapZoom = null;
 }
 
+// Rebuild city layers after a failed initial request is successfully retried.
+export async function refreshMapData() {
+  if (!store.mapReady) return;
+  const el = document.getElementById('heroMap');
+  const engine = heroMapEngine;
+  resetMapState();
+  store.mapReady = false;
+  el.innerHTML = '';
+  try {
+    if (engine === 'amap') await initAmap(el, buildCityAreas());
+    else await initLeaflet(el, buildCityAreas());
+    store.mapReady = true;
+    notify('map-ready');
+  } catch (error) { console.warn('Map refresh failed:', error); }
+}
+
 // ---- Public API ----
 export function invalidateMapSize() {
   if (heroMapEngine === "amap") heroMap?.resize?.();
-  else if (heroMap?.invalidateSize) heroMap.invalidateSize();
+  else if (heroMap?.invalidateSize) heroMap.invalidateSize({ pan: false });
+}
+
+// A hidden map has stale/zero dimensions. Restore layout before fitting its camera.
+let viewFrame = null;
+export function syncMapView() {
+  if (viewFrame !== null) cancelAnimationFrame(viewFrame);
+  viewFrame = requestAnimationFrame(() => {
+    viewFrame = null;
+    const el = document.getElementById('heroMap');
+    if (!heroMap || !el?.clientWidth || !el?.clientHeight ||
+        !['routes', 'races'].includes(store.activePanelTab)) return;
+    invalidateMapSize();
+    if (store.heroActiveRouteId) updateHeroRoute(store.heroActiveRouteId, true, store.activeRouteSource);
+    else restoreDefaultView();
+  });
 }
 
 export function hideCityLayer() {
@@ -476,9 +518,9 @@ export function fitRoutesView(routesToFit = store.routes) {
     const sw = toAmapPoint([minLon, minLat]);
     const ne = toAmapPoint([maxLon, maxLat]);
     const bounds = new window.AMap.Bounds(sw, ne);
-    heroMap?.setFitView?.([{ getBounds: () => bounds }], false, [80, 120, 80, 120]);
+    heroMap?.setFitView?.([{ getBounds: () => bounds }], true, amapPadding());
   } else if (window.L) {
-    heroMap?.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [80, 120] });
+    heroMap?.fitBounds([[minLat, minLon], [maxLat, maxLon]], leafletPadding());
   }
 }
 
@@ -489,17 +531,17 @@ export function setStatsView() {
 export function restoreDefaultView() {
   if (!heroMap) return;
   if (heroMapEngine === "amap") {
-    if (defaultMapBounds?.length) heroMap.setFitView(defaultMapBounds, false, [80, 120, 80, 120]);
+    if (defaultMapBounds?.length) heroMap.setFitView(defaultMapBounds, true, amapPadding());
     else if (defaultMapCenter && defaultMapZoom) heroMap.setZoomAndCenter(defaultMapZoom, defaultMapCenter);
   } else {
-    if (defaultMapBounds) heroMap.fitBounds(defaultMapBounds, { padding: [80, 120] });
+    if (defaultMapBounds) heroMap.fitBounds(defaultMapBounds, leafletPadding());
     else if (defaultMapCenter && defaultMapZoom) heroMap.setView(defaultMapCenter, defaultMapZoom);
   }
 }
 
 export function updateHeroRoute(routeId, fit = true, source = "route") {
-  if (!heroMap) return;
   store.heroActiveRouteId = routeId; store.activeRouteSource = source;
+  if (!heroMap) { notify("route"); return; }
 
   if (heroRouteLine) {
     if (heroMapEngine === "amap") heroMap.remove(heroRouteLine);
@@ -509,8 +551,17 @@ export function updateHeroRoute(routeId, fit = true, source = "route") {
   hideCityLayer();
 
   const route = store.routes.find(r => r.id === routeId);
-  const coords = route?.preview_coordinates || route?.coordinates;
-  if (!coords?.length) { notify("route"); return; }
+  const coords = route?.detail_preview_coordinates || route?.preview_coordinates || route?.coordinates;
+  if (!coords?.length) {
+    notify("route");
+    fetchRoute(routeId).then(detail => {
+      const points = detail?.coordinates?.length ? detail.coordinates : detail?.preview_coordinates;
+      if (!route || !points?.length) return;
+      route.detail_preview_coordinates = points;
+      if (store.heroActiveRouteId === routeId) updateHeroRoute(routeId, fit, source);
+    }).catch(error => console.warn('Route detail unavailable:', error));
+    return;
+  }
 
   if (heroMapEngine === "amap") {
     heroRouteLine = new window.AMap.Polyline({
@@ -518,21 +569,35 @@ export function updateHeroRoute(routeId, fit = true, source = "route") {
       strokeOpacity: 0.92, lineJoin: "round", lineCap: "round", zIndex: 30,
     });
     heroMap.add(heroRouteLine);
-    if (fit) heroMap.setFitView([heroRouteLine], false, [80, 120, 80, 120]);
+    if (fit) heroMap.setFitView([heroRouteLine], true, amapPadding());
   } else if (window.L) {
     const latlngs = coords.map(([lon, lat]) => [lat, lon]);
     heroRouteLine = window.L.polyline(latlngs, {
       color: "#3b8bff", weight: 5, opacity: 0.92, lineJoin: "round", lineCap: "round",
     }).addTo(heroMap);
-    if (fit) heroMap.fitBounds(heroRouteLine.getBounds(), { padding: [80, 120] });
+    if (fit) heroMap.fitBounds(heroRouteLine.getBounds(), leafletPadding());
   }
   notify("route");
+  // Lists use compact previews. Restore the original preview on selection;
+  // share the detail request with charts and never move the camera on completion.
+  if (route && !route.detail_preview_coordinates) {
+    const line = heroRouteLine;
+    const engine = heroMapEngine;
+    fetchRoute(routeId).then(detail => {
+      const points = detail?.coordinates?.length ? detail.coordinates : detail?.preview_coordinates;
+      if (!points?.length) return;
+      route.detail_preview_coordinates = points;
+      if (heroRouteLine !== line || store.heroActiveRouteId !== routeId) return;
+      if (engine === 'amap') line.setPath(points.map(toAmapPoint));
+      else line.setLatLngs(points.map(([lon, lat]) => [lat, lon]));
+    }).catch(error => console.warn('Route detail unavailable:', error));
+  }
 }
 
 export function showAllRoutesOnMap(routesToShow = store.routes, overlayMode = "stats") {
   if (!heroMap) return;
   const overlayRoutes = routesToShow.filter(r => (r.preview_coordinates || r.coordinates)?.length >= 2);
-  const nextKey = `${heroMapEngine}:${overlayMode}:${overlayRoutes.map(r => r.id).join("|")}`;
+  const nextKey = `${heroMapEngine}:${overlayMode}:${overlayRoutes.map(r => `${r.id}:${(r.preview_coordinates || r.coordinates).length}`).join("|")}`;
 
   if (heroAllRoutesLayer && routeOverlayKey !== nextKey) { hideAllRoutesFromMap(); heroAllRoutesLayer = null; }
   routeOverlayKey = nextKey;

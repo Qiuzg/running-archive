@@ -78,9 +78,9 @@ export function projectRoutePoints(coordinates, width = 420, height = 240, paddi
   const maxX = Math.max(...mercator.map((p) => p.x));
   const minY = Math.min(...mercator.map((p) => p.y));
   const maxY = Math.max(...mercator.map((p) => p.y));
-  const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
-  const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const scale = spanX || spanY ? Math.min(spanX ? (width - padding * 2) / spanX : Infinity, spanY ? (height - padding * 2) / spanY : Infinity) : 1;
   const drawnWidth = spanX * scale;
   const drawnHeight = spanY * scale;
   const offsetX = (width - drawnWidth) / 2;
@@ -126,7 +126,10 @@ export function renderRouteSvg(route, variant = "large") {
     return routeSvgCache.get(cacheKey);
   }
   const coords = route.coordinates || route.preview_coordinates || [];
-  const projected = projectRoutePoints(coords, 420, 240, variant === "mini" ? 12 : 28);
+  const isMini = variant === "mini";
+  const width = isMini ? 180 : 420;
+  const height = isMini ? 140 : 240;
+  const projected = projectRoutePoints(coords, width, height, isMini ? 14 : 28);
   if (!projected.length) {
     return '<div class="route-empty">路线加载中</div>';
   }
@@ -134,10 +137,8 @@ export function renderRouteSvg(route, variant = "large") {
   const points = projected.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const startPoint = projected[0];
   const endPoint = projected[projected.length - 1];
-  const isMini = variant === "mini";
-
   const svg = `
-    <svg class="route-svg route-svg--${variant}" viewBox="0 0 420 240" role="img" aria-label="${escapeAttr(route.name)}路线图">
+    <svg class="route-svg route-svg--${variant}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeAttr(route.name)}路线图">
       <defs>
         <linearGradient id="rp-${escapeAttr(route.id)}" x1="0" x2="1" y1="0" y2="1">
           <stop offset="0%" stop-color="${c.bg1}" />
@@ -155,8 +156,8 @@ export function renderRouteSvg(route, variant = "large") {
       <polyline points="${points}" fill="none" stroke="${c.routeGlow}" stroke-width="${isMini ? 5 : 6}" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />
       <polyline points="${points}" fill="none" stroke="${c.route}" stroke-width="${isMini ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round" />
       <polyline points="${points}" fill="none" stroke="${c.routeAccent}" stroke-width="${isMini ? 1.5 : 2}" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${isMini ? 6 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="4" />
-      <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${isMini ? 6 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="4" />
+      <circle cx="${startPoint.x.toFixed(1)}" cy="${startPoint.y.toFixed(1)}" r="${isMini ? 3.5 : 8}" fill="${c.startFill}" stroke="${c.startStroke}" stroke-width="${isMini ? 2 : 4}" />
+      <circle cx="${endPoint.x.toFixed(1)}" cy="${endPoint.y.toFixed(1)}" r="${isMini ? 3.5 : 8}" fill="${c.endFill}" stroke="${c.endStroke}" stroke-width="${isMini ? 2 : 4}" />
     </svg>
   `;
   if (cacheKey) routeSvgCache.set(cacheKey, svg);
