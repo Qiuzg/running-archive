@@ -17,7 +17,7 @@ struct TrainingHubLinks: View {
                 NavigationLink { PersonalRecordsView() } label: { entry("个人纪录", "成绩与进步", "chart.line.uptrend.xyaxis") }
                 NavigationLink { RouteLibraryView() } label: { entry("路线收藏", "常跑路线 · GPX", "map") }
                 NavigationLink { RaceGoalsView() } label: { entry("目标赛事", "倒计时与配速", "flag.checkered") }
-                NavigationLink { AITrainingView() } label: { entry("训练计划", "本周安排与完成情况", "calendar") }
+                NavigationLink { AITrainingView() } label: { entry("阶段训练", "比赛目标、七天计划与实际执行", "calendar") }
             }.buttonStyle(.plain)
             NavigationLink { AnalysisExportView() } label: {
                 HStack(spacing: 12) {
@@ -70,7 +70,7 @@ struct ActivityJournalSection: View {
             }
             HStack(spacing: 12) {
                 if annotation.kind != .unspecified { Text(annotation.kind.rawValue).font(.subheadline.weight(.medium)) }
-                if let effort = annotation.effort { Text("体感 \(effort)/10").font(.subheadline).foregroundStyle(.secondary) }
+                if annotation.hasRatings { Text(annotation.feedbackSummary).font(.subheadline).foregroundStyle(.secondary) }
             }
             Text(annotation.note.isEmpty ? "备注为可选项。路线收藏、历史对比及 GPX 导出可在下方使用。" : annotation.note)
                 .font(.subheadline).foregroundStyle(annotation.note.isEmpty ? .secondary : .primary)
@@ -132,10 +132,27 @@ struct AnnotationEditor: View {
         NavigationStack {
             Form {
                 if let error = journal.errorMessage { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }
+                RunFeedbackFields(value: $value)
                 Section {
                     TextEditor(text: $value.note).frame(minHeight: 130)
                         .onChange(of: value.note) { _, text in if text.count > 2000 { value.note = String(text.prefix(2000)) } }
-                } header: { Text("跑后备注") } footer: { Text("\(value.note.count)/2000 · 仅保存在本机") }
+                } header: { Text("跑后备注") } footer: { Text("\(value.note.count)/2000 · " + (value.sharing == .ratingsAndNote ? "这条备注可用于云端 AI 建议" : "备注仅保存在本机")) }
+                Section {
+                    Picker("这条反馈的使用范围", selection: Binding(get: { value.sharing }, set: { value.feedbackSharing = $0 })) {
+                        ForEach(FeedbackSharing.allCases) { Text($0.title).tag($0) }
+                    }
+                    Text("选择 AI 可用后，近六周内这次跑步的相应反馈会随分析发送至你配置的模型服务，供复盘和后续计划参考。其他记录不受影响。")
+                        .font(.caption).foregroundStyle(.secondary)
+                } header: { Text("用于后续建议") } footer: {
+                    Text("更改范围在保存后生效。撤回后不再用于新请求；已经生成的计划和当时依据仍保留在本机。")
+                }
+                if value.hasFeedback {
+                    Section {
+                        Button("清除这次主观反馈", role: .destructive) {
+                            value.effort = nil; value.feeling = nil; value.fatigue = nil; value.note = ""; value.feedbackSharing = .localOnly
+                        }
+                    } footer: { Text("点击保存后清除评分和备注；路线设置及原始跑步不受影响。") }
+                }
                 Section("路线名称") {
                     TextField("例如：滨江晨跑环线", text: $value.routeName)
                         .onChange(of: value.routeName) { _, text in if text.count > 60 { value.routeName = String(text.prefix(60)) } }
@@ -144,7 +161,7 @@ struct AnnotationEditor: View {
                     Toggle("不计入个人纪录", isOn: $value.excludeFromRecords)
                 } footer: { Text("用于排除误记录或异常 GPS；原始跑步记录仍保留。") }
             }
-            .navigationTitle("跑后手记").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("跑后感受与手记").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("保存") { if journal.saveAnnotation(value, id: activity.id) { dismiss() } } }
@@ -493,7 +510,7 @@ struct RaceGoalsView: View {
                             goalMetric("目标配速", goal.targetSeconds == nil ? "—" : "\(goal.targetPace)/km")
                         }
                         if !goal.note.isEmpty { Text(goal.note).font(.subheadline).foregroundStyle(.secondary) }
-                        NavigationLink { AITrainingView() } label: { Label("安排备赛训练", systemImage: "calendar.badge.plus") }.font(.subheadline)
+                        NavigationLink { AITrainingView(raceGoal: goal.daysRemaining() >= 0 ? goal : nil) } label: { Label("安排备赛训练", systemImage: "calendar.badge.plus") }.font(.subheadline)
                     }.journalCard()
                 }
             }.padding(18)

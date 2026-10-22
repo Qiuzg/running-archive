@@ -18,6 +18,8 @@ struct ShareHubView: View {
             case .year: YearlyReviewView()
             }
         }
+        .navigationDestination(for: ArchiveActivity.self) { ActivityDetailView(activity: $0) }
+        .navigationDestination(for: ArchiveMonthRoute.self) { MonthlyReviewView(month: $0.month) }
         .safeAreaInset(edge: .top, spacing: 0) {
             Picker("分享范围", selection: $navigation.shareScope) {
                 ForEach(ArchiveShareScope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -31,7 +33,6 @@ struct YearlyReviewView: View {
     @EnvironmentObject private var store: ArchiveStore
     @State var year = Calendar.current.component(.year, from: .now)
     @State private var sharing = false
-    @State private var openedMonth: Date?
     private var report: YearlyReport { YearlyReport(year: year, activities: store.activities) }
     private var years: [Int] { Array(Set(store.activities.map { Calendar.current.component(.year, from: $0.date) })).sorted(by: >) }
 
@@ -61,7 +62,7 @@ struct YearlyReviewView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("月跑量").font(.headline)
                     ForEach(report.months, id: \.key) { month in
-                        Button { openedMonth = month.start } label: {
+                        NavigationLink(value: ArchiveMonthRoute(month: month.start)) {
                             HStack(spacing: 14) {
                                 Text("\(month.monthNumber) 月").frame(width: 40, alignment: .leading).foregroundStyle(.primary)
                                 GeometryReader { geometry in
@@ -85,7 +86,6 @@ struct YearlyReviewView: View {
             Button { sharing = true } label: { Image(systemName: "square.and.arrow.up") }.disabled(report.activities.isEmpty)
         } }
         .onAppear { if !years.contains(year) { year = years.first ?? year } }
-        .navigationDestination(item: $openedMonth) { MonthlyReviewView(month: $0) }
         .sheet(isPresented: $sharing) { YearlyShareView(report: report) }
     }
 }

@@ -11,8 +11,9 @@ struct ExportRawSample {
     var device = ""
     var deviceKey = ""
     var sourcePriority = 0
-    var sourceKey: String { sourceBundle + "|" + deviceKey + "|" + device }
-    var sourceLabel: String { [source, sourceBundle, device].filter { !$0.isEmpty }.joined(separator: " / ") }
+    var sourceVersion = ""
+    var sourceKey: String { sourceBundle + "|" + deviceKey + "|" + device + "|" + sourceVersion }
+    var sourceLabel: String { [source, sourceBundle, device, sourceVersion.isEmpty ? "" : "版本 " + sourceVersion].filter { !$0.isEmpty }.joined(separator: " / ") }
 }
 
 struct ExportReferenceSample {
@@ -54,6 +55,8 @@ struct ExportWorkout {
     var steps: Double? = nil
     var pauses: [DateInterval] = []
     var readIssues: [String: String] = [:]
+    var appleHeartRateZones: AnalysisAppleHeartRateZones? = nil
+    var preferredAppleHeartRateZones: AnalysisAppleHeartRateZones? = nil
 }
 
 struct AnalysisExportOptions {
@@ -62,6 +65,8 @@ struct AnalysisExportOptions {
     let full: Bool
     let includePlanning: Bool
     let timeZone: TimeZone
+    var calibration = AnalysisCalibration()
+    var preferredAppleHeartRateZones: AnalysisAppleHeartRateZones? = nil
     var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone; calendar.firstWeekday = 2; calendar.minimumDaysInFirstWeek = 4
@@ -131,6 +136,8 @@ actor AnalysisExportBuilder {
     private var files: [(name: String, url: URL)] = []
     private var rows: [[ExportCell]] = [], splitRows: [[ExportCell]] = [], processRows: [[ExportCell]] = []
     private var heartRows: [[ExportCell]] = [], qualityRows: [[ExportCell]] = [], intervalRows: [[ExportCell]] = []
+    private var trainingRows: [[ExportCell]] = []
+    private var appleZoneRows: [[ExportCell]] = []
     private var failures = 0, partialIssues = 0
     private let generated = Date.now
     private static let bucketSeconds = 30.0
@@ -152,7 +159,23 @@ actor AnalysisExportBuilder {
         let stats = analysis.map { $0.statistics(start: 0, end: $0.elapsed) } ?? [:]
         var rawPath = "", routePath = "", gpxStatus = "完整版可导出"
         if workout == nil { failures += 1; gpxStatus = "读取失败" }
-        if let workout, let analysis {
+        if var workout, let analysis {
+            workout.preferredAppleHeartRateZones = options.preferredAppleHeartRateZones ?? workout.preferredAppleHeartRateZones
+            let derived = TrainingAnalysisMath.calculate(workout, activity: activity, calibration: options.calibration, now: generated, calendar: options.calendar)
+            let metrics = [("心率负荷", derived.load), ("速度/心率效率", derived.efficiency), ("前后半程漂移", derived.drift), ("候选片段速度变异", derived.speedVariation)]
+                + derived.form.map { (ExportMetric(rawValue: $0.metric)?.name ?? $0.metric, $0.value) }
+            for (name, value) in metrics {
+                trainingRows.append([.text(activity.id), .text(name), .optional(value.value), .text(value.unit), .number(value.coverage),
+                    .text(value.complete ? "条件满足" : "条件不足或部分数据"), .text(value.reason ?? ""), .text(value.method), .text(derived.version),
+                    .optional(derived.heartRateReference?.bpm), .text(derived.heartRateReference?.explanation ?? ""), .text(derived.structure),
+                    .text(value.estimated == true ? "是" : "否")])
+            }
+            if let zones = derived.appleHeartRateZones {
+                for (order, zone) in zones.zones.enumerated() {
+                    appleZoneRows.append([.text(activity.id), .number(Double(order + 1)), .optional(zone.lowerBPM), .optional(zone.upperBPM),
+                        .optional(zone.seconds), .text(zones.source), .text(zones.scope), .optional(zones.coverage), .text(zones.reason ?? "")])
+                }
+            }
             partialIssues += workout.readIssues.count
             for metric in ExportMetric.allCases {
                 let series = analysis.series[metric]!, stat = stats[metric]!
@@ -267,6 +290,8 @@ actor AnalysisExportBuilder {
             qualityRows.append([.text("全局"), .text(name), .text(""), .text("读取失败：\(issue)"), .blank, .blank, .blank, .blank, .blank, .blank])
         }
         sheets.append(ExportSheet(name: "指标可用性", headers: ["记录 ID", "指标", "分析单位", "读取状态", "采用来源采样数", "无效采样数", "有效支持时长（s，估算）", "覆盖比例（0–1，估算）", "瞬时值延展数量", "采用来源"], rows: qualityRows, widths: [28,28,20,65,25,22,35,33,26,80]))
+        sheets.append(ExportSheet(name: "训练指标", headers: ["记录 ID", "指标", "数值", "单位", "有效覆盖比例", "适用状态", "原因与限制", "计算方法", "算法版本", "参考最大心率", "最大心率依据", "过程结构候选", "是否采用估算依据"], rows: trainingRows))
+        sheets.append(ExportSheet(name: "Apple心率区间", headers: ["记录 ID", "区间序号", "心率下界（bpm）", "心率上界（bpm）", "区间时长（s）", "配置来源", "使用口径", "覆盖比例", "说明"], rows: appleZoneRows))
         if options.includePlanning { sheets += planningSheets() }
         let instructions = documentation
         sheets.append(ExportSheet(name: "导出说明", headers: ["项目 / 字段", "含义 / 来源 / 单位"], rows: instructions.map { [.text($0.0), .text($0.1)] }, widths: [32,115]))
@@ -329,6 +354,8 @@ actor AnalysisExportBuilder {
             ("GPS 质量", "间隔>30秒、非递增时间、坐标无效或点间速度>12m/s时整次不计算公里分段；无路线的室内跑仍保留过程指标。"),
             ("Apple原有分段", "仅在原记录存在活动段或圈/事件时添加；不将缺失距离推算成正式公里分段。"),
             ("体能参考", "按测量时间列出导出范围内的 VO2 max 与系统 1 分钟心率恢复，未强行绑定某次跑步。VO2 max 来源可能是设备估算，需结合来源理解；无数据时表为空。"),
+            ("训练指标", "与App详情及AI采用相同的版本化计算。最大心率优先采用手动覆盖，否则为Tanaka成人年龄估计208−0.7×年龄；估计与有效采样矛盾时不计算Edwards负荷。标注估算依据，不将估计视为实测。"),
+            ("Apple心率区间", "优先使用每次运动保存的Apple区间和系统原始时长（recorded_workout，保留系统计时口径）；历史缺少时，按当前Apple设置重新分类已知有效运动心率（current_preference_reclassified）。开区间端点留空，覆盖不足不外推。当前区间重分类采用左闭右开边界，系统原始时长保持不变。来源system/user/app分别为系统、用户、运动应用。不同配置不合并，不用于Edwards区间权重，不由区间边界反推最大心率。"),
             ("使用方式", "模型先检查来源、覆盖率、暂停与缺失值，再比较分段和趋势；本文件不输出恢复评分、乳酸阈值或保证性的马拉松预测。"),
             ("目标与计划", options.includePlanning ? "按用户选项附带全部已保存目标/计划（含未来），仅保留客观目标与完成数值，不含训练备注或 RPE。" : "本次未附带目标与计划。"),
             ("完整数据包", "附同一份分析 Excel、各分析表 CSV、原始采样 CSV、完整路线 CSV/GPX、README、manifest；分析版无需附加文件即可读取全部分析表。"),

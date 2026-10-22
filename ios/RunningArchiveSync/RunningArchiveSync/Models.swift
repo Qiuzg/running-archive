@@ -6,6 +6,8 @@ struct RoutePointPayload: Codable {
     let longitude: Double
     let altitude: Double
     let speedMps: Double?
+    var verticalAccuracy: Double? = nil
+    var horizontalAccuracy: Double? = nil
 }
 
 struct MetricSamplePayload: Codable {
@@ -71,6 +73,7 @@ struct WorkoutPreview: Identifiable {
     let maxHeartRate: Int?
     let avgPower: Double?
     var avgCadence: Double? = nil
+    var endDate: Date? = nil
 }
 
 enum RunningArchiveConfiguration {

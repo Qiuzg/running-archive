@@ -5,7 +5,7 @@ TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/running-monthly-tests.XXXXXX")"
 trap 'rm -rf "$TEST_DIR"' EXIT
 NATIVE_SOURCE="$PROJECT_ROOT/ios/RunningArchiveSync/RunningArchiveSync"
 xcrun swiftc -module-cache-path "$TEST_DIR/cache" \
-  "$NATIVE_SOURCE/Models.swift" \
+  "$NATIVE_SOURCE/RuntimeSupport.swift" "$NATIVE_SOURCE/Models.swift" \
   "$NATIVE_SOURCE/ArchiveModels.swift" \
   "$NATIVE_SOURCE/MonthlyReport.swift" \
   "$PROJECT_ROOT/ios/RunningArchiveSync/Tests/MonthlyReportTests.swift" \

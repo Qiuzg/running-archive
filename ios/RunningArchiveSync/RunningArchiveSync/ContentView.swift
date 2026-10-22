@@ -2,126 +2,16 @@ import SwiftUI
 import SwiftData
 
 @MainActor
-final class HealthSyncViewModel: ObservableObject {
-    @Published var previews: [WorkoutPreview] = []
-    @Published var selectedIDs: Set<String> = []
-    @Published var status = "先授权健康数据，再检查新增跑步。"
-    @Published var errorDetails: String?
-    @Published var isWorking = false
-    @Published var hasCheckedHealth = false
-    @Published var syncProgress: Double?
-    @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? RunningArchiveConfiguration.defaultServerURL
-    @Published var token = KeychainStore.read("syncToken")
-
-    private let health = HealthKitService()
-    private let api = SyncAPI()
-    private let heartRateResyncMigrationKey = "heartRateCondensedSeriesResyncV2"
-
-    func authorizeAndRefresh() async {
-        await work("正在请求健康数据权限…") {
-            try await health.requestAuthorization()
-            let all = try await health.runningWorkoutPreviews()
-            hasCheckedHealth = true
-            var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
-            var retryCount = 0
-            if !UserDefaults.standard.bool(forKey: heartRateResyncMigrationKey) {
-                let cutoff = Calendar.current.date(
-                    from: DateComponents(year: 2026, month: 4, day: 26)
-                ) ?? .distantPast
-                let retryIDs = Set(all.filter { $0.date < cutoff }.map(\.id))
-                retryCount = synced.intersection(retryIDs).count
-                synced.subtract(retryIDs)
-                UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
-                UserDefaults.standard.set(true, forKey: heartRateResyncMigrationKey)
-            }
-            previews = all.filter { !synced.contains($0.id) }
-            selectedIDs = Set(previews.prefix(30).map(\.id))
-            if previews.isEmpty {
-                status = "没有发现未同步的跑步。"
-            } else if retryCount > 0 {
-                status = "已将 \(retryCount) 条 2026-04-25 及以前的记录列为待重传，已预选最近 \(selectedIDs.count) 条。"
-            } else {
-                status = "发现 \(previews.count) 条未同步跑步，已预选最近 \(selectedIDs.count) 条。"
-            }
-        }
-    }
-
-    func selectAll() {
-        selectedIDs = Set(previews.map(\.id))
-    }
-
-    func clearSelection() {
-        selectedIDs.removeAll()
-    }
-
-    func syncSelected() async {
-        errorDetails = nil
-        guard !serverURL.isEmpty, !token.isEmpty else { status = "请先填写服务器地址和同步令牌。"; return }
-        let selected = previews.filter { selectedIDs.contains($0.id) }
-        guard !selected.isEmpty else { status = "请至少选择一条跑步。"; return }
-        UserDefaults.standard.set(serverURL, forKey: "serverURL")
-        KeychainStore.write(token, account: "syncToken")
-        await work("正在读取路线和心率…") {
-            syncProgress = 0
-            var synced = Set(UserDefaults.standard.stringArray(forKey: "syncedWorkoutIDs") ?? [])
-            var completed = 0
-            var created = 0
-            var updated = 0
-            var skipped = 0
-            var heartRatePoints = 0
-            var failures: [String] = []
-
-            for (index, workout) in selected.enumerated() {
-                defer { syncProgress = Double(index + 1) / Double(selected.count) }
-                do {
-                    status = "正在准备第 \(index + 1)/\(selected.count) 条跑步…"
-                    guard let payload = try await health.payload(forWorkoutID: workout.id) else {
-                        skipped += 1
-                        continue
-                    }
-                    heartRatePoints += payload.heartRateSamples.count
-                    status = "正在上传第 \(index + 1)/\(selected.count) 条跑步（心率 \(payload.heartRateSamples.count) 点）…"
-                    let response = try await api.upload([payload], baseURL: serverURL, token: token)
-                    let uploadedIDs = Set(response.synced.map(\.id))
-                    uploadedIDs.forEach { synced.insert($0) }
-                    UserDefaults.standard.set(Array(synced), forKey: "syncedWorkoutIDs")
-                    previews.removeAll { uploadedIDs.contains($0.id) }
-                    selectedIDs.subtract(uploadedIDs)
-                    completed += response.synced.count
-                    created += response.synced.filter { $0.status == "created" }.count
-                    updated += response.synced.filter { $0.status == "updated" }.count
-                } catch {
-                    let date = workout.date.formatted(date: .numeric, time: .omitted)
-                    failures.append("\(date)：\(error.localizedDescription)")
-                }
-            }
-            let result = "同步完成：\(completed) 条（覆盖 \(updated)，新增 \(created)），读取心率 \(heartRatePoints) 点"
-            if let firstFailure = failures.first {
-                status = "\(result)，失败 \(failures.count) 条；首个错误：\(firstFailure)"
-                errorDetails = failures.joined(separator: "\n\n")
-            } else if skipped > 0 {
-                status = "\(result)，跳过 \(skipped) 条无法读取的记录。"
-            } else {
-                status = result
-            }
-            syncProgress = nil
-        }
-    }
-
-    private func work(_ initialStatus: String, operation: () async throws -> Void) async {
-        guard !isWorking else { return }
-        isWorking = true
-        errorDetails = nil
-        status = initialStatus
-        do {
-            try await operation()
-        } catch {
-            let message = error.localizedDescription
-            status = "失败：\(message)"
-            errorDetails = message
-        }
-        syncProgress = nil
-        isWorking = false
+extension HealthSyncViewModel {
+    convenience init(archive: ArchiveStore) {
+        let api = SyncAPI()
+        self.init(defaults: .standard, token: KeychainStore.read("syncToken"), dependencies: HealthSyncDependencies(
+            authorize: { try await archive.requestSyncAuthorization() },
+            previews: { try await archive.syncWorkoutPreviews() },
+            payload: { try await archive.syncWorkoutPayload(id: $0) },
+            upload: { try await api.upload([$0], baseURL: $1, token: $2) },
+            saveToken: { try KeychainStore.writeChecked($0, account: "syncToken") }
+        ))
     }
 }
 
@@ -134,69 +24,62 @@ struct ContentView: View {
     @StateObject private var journal = RunningArchiveRuntime.shared.journal
     @StateObject private var training = RunningArchiveRuntime.shared.training
 
-    private var showsBottomBar: Bool { navigation.presentedDetailIDs.isEmpty }
+    private var showsBottomBar: Bool { navigation.presentedDetailIDs.isEmpty && !navigation.isEditingShareTitle }
 
     var body: some View {
-        // Bound the whole NavigationStack, including pushed destinations, above the bar.
-        // An inset outside NavigationStack can be ignored by its scroll views on iOS.
-        VStack(spacing: 0) {
-            currentScreen
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if showsBottomBar && navigation.selectedTab != .archive {
-                bottomBar
-            }
+        TabView(selection: $navigation.selectedTab) {
+            Tab("档案", systemImage: "map", value: ArchiveTab.archive) { tabScreen(.archive) }
+            Tab("汇总", systemImage: "chart.bar", value: ArchiveTab.summary) { tabScreen(.summary) }
+            Tab("记录", systemImage: "figure.run", value: ArchiveTab.log) { tabScreen(.log) }
+            Tab("分享", systemImage: "square.and.arrow.up", value: ArchiveTab.share) { tabScreen(.share) }
+            Tab("同步", systemImage: "arrow.triangle.2.circlepath", value: ArchiveTab.sync) { tabScreen(.sync) }
         }
-        .overlay(alignment: .bottom) {
-            // The map home deliberately extends behind its floating navigation.
-            if showsBottomBar && navigation.selectedTab == .archive {
-                bottomBar
-            }
-        }
+        .tabBarMinimizeBehavior(.onScrollDown)
         .background(RunTheme.page)
         .environmentObject(archiveStore)
         .environmentObject(appearance)
         .environmentObject(navigation)
         .environmentObject(journal)
         .environmentObject(training)
+        .environmentObject(RunningArchiveRuntime.shared.analytics)
+        .environmentObject(RunningArchiveRuntime.shared.watch)
         .alert("跑步手记", isPresented: Binding(get: { journal.errorMessage != nil }, set: { if !$0 { journal.errorMessage = nil } })) {
             Button("好") { journal.errorMessage = nil }
         } message: { Text(journal.errorMessage ?? "") }
         .preferredColorScheme(appearance.preferredColorScheme)
         .tint(RunTheme.accent)
         .task {
-            archiveStore.configureCache(modelContext)
+            await archiveStore.configureCache(modelContext)
             RunningArchiveRuntime.shared.startObserving()
             await RunningArchiveRuntime.shared.refresh(authorize: true)
+            RunningArchiveRuntime.shared.sync.setForeground(scenePhase == .active)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await RunningArchiveRuntime.shared.refresh(authorize: false) }
+                Task {
+                    await RunningArchiveRuntime.shared.refresh(authorize: false)
+                    RunningArchiveRuntime.shared.sync.setForeground(scenePhase == .active)
+                }
+            } else {
+                RunningArchiveRuntime.shared.sync.setForeground(false)
+                if phase == .background { Task { await RunningArchiveRuntime.shared.analytics.waitForPersistence() } }
             }
         }
     }
 
-    private var bottomBar: some View {
-        ArchiveTabBar(selection: $navigation.selectedTab)
-            .padding(.horizontal, 10)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+    private func tabScreen(_ tab: ArchiveTab) -> some View {
+        Group {
+            switch tab {
+            case .archive: DashboardView()
+            case .summary: SummaryCollectionView()
+            case .log: NavigationStack { ActivityListView() }
+            case .share: NavigationStack { ShareHubView() }
+            case .sync: NavigationStack { HealthSyncView() }
+            }
+        }
+        .toolbarVisibility(showsBottomBar ? .automatic : .hidden, for: .tabBar)
     }
 
-    @ViewBuilder
-    private var currentScreen: some View {
-        switch navigation.selectedTab {
-        case .archive:
-            DashboardView()
-        case .summary:
-            SummaryCollectionView()
-        case .log:
-            NavigationStack { ActivityListView() }
-        case .share:
-            NavigationStack { ShareHubView() }
-        case .sync:
-            NavigationStack { HealthSyncView() }
-        }
-    }
 }
 
 @MainActor
@@ -204,6 +87,7 @@ final class ArchiveNavigationStore: ObservableObject {
     @Published var selectedTab: ArchiveTab = .archive
     @Published var shareActivity: ArchiveActivity?
     @Published var shareScope: ArchiveShareScope = .run
+    @Published var isEditingShareTitle = false
     @Published var presentedDetailIDs: Set<String> = []
 
     func openShare(for activity: ArchiveActivity) {
@@ -233,24 +117,22 @@ final class AppearanceStore: ObservableObject {
         }
     }
 
-    func toggle() {
-        mode = mode == .dark ? .light : .dark
+    func toggle(using colorScheme: ColorScheme) {
+        mode = colorScheme == .dark ? .light : .dark
         UserDefaults.standard.set(mode.rawValue, forKey: "appearanceMode")
     }
 }
 
 struct ThemeToggleButton: View {
     @EnvironmentObject private var appearance: AppearanceStore
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Button { appearance.toggle() } label: {
-            Image(systemName: appearance.mode == .dark ? "sun.max.fill" : "moon.fill")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(RunTheme.accent)
-                .frame(width: 32, height: 32)
-                .background(RunTheme.accent.opacity(0.11), in: Circle())
+        Button { appearance.toggle(using: colorScheme) } label: {
+            Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.fill")
+                .foregroundStyle(.primary)
         }
-        .accessibilityLabel(appearance.mode == .dark ? "切换到日间模式" : "切换到夜间模式")
+        .accessibilityLabel(colorScheme == .dark ? "切换到日间模式" : "切换到夜间模式")
     }
 }
 
@@ -278,39 +160,8 @@ enum ArchiveTab: Int, CaseIterable, Identifiable {
     }
 }
 
-private struct ArchiveTabBar: View {
-    @Binding var selection: ArchiveTab
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(ArchiveTab.allCases) { tab in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { selection = tab }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 16, weight: selection == tab ? .bold : .medium))
-                        Text(tab.title)
-                            .font(.caption2.weight(selection == tab ? .bold : .medium))
-                    }
-                    .foregroundStyle(selection == tab ? RunTheme.accent : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(
-                        selection == tab ? RunTheme.accent.opacity(0.11) : .clear,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(5)
-        .glassEffect(.regular, in: .capsule)
-    }
-}
-
 struct HealthSyncView: View {
-    @StateObject private var model = HealthSyncViewModel()
+    @StateObject private var model = RunningArchiveRuntime.shared.sync
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -320,7 +171,7 @@ struct HealthSyncView: View {
                     Text("同步到网站")
                         .font(.system(size: 30, weight: .black, design: .rounded))
                         .foregroundStyle(RunTheme.ink)
-                    Text("本机档案可离线查看；这里用于把选中的跑步上传到个人网站。")
+                    Text("打开 App 后自动上传新增跑步；更早的历史记录可在这里手动补传。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -373,6 +224,16 @@ struct HealthSyncView: View {
                     in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
 
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("自动上传新增跑步", isOn: Binding(get: { model.automaticEnabled }, set: { model.setAutomaticEnabled($0) }))
+                    Text(model.configured ? "首次补传最近7天。之后离线积压的记录也会继续补传。" : "保存服务器地址和令牌后生效。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("打开 App、回到前台或收到健康数据变化时检查。刚结束的跑步会等待2分钟；退出 App 后不保证上传，失败会在前台自动重试。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let date = model.lastSuccess {
+                        Text("最近成功：" + date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }.nativeCard()
                 HStack {
                     Text("待同步记录")
                         .font(.subheadline.weight(.bold))
@@ -441,6 +302,8 @@ struct HealthSyncView: View {
                             .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .padding(.top, 10)
+                    .disabled(model.isWorking)
+                    Button("保存设置") { model.saveSettings() }.disabled(model.isWorking)
                 } label: {
                     Label("服务器设置", systemImage: "server.rack")
                         .font(.subheadline.weight(.bold))
@@ -456,10 +319,11 @@ struct HealthSyncView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)
                 .background(RunTheme.accent, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .disabled(model.selectedIDs.isEmpty)
+                .disabled(model.selectedIDs.isEmpty || model.isWorking)
                 .opacity(model.selectedIDs.isEmpty ? 0.45 : 1)
 
                 Button("授权并检查新增跑步") { Task { await model.authorizeAndRefresh() } }
+                    .disabled(model.isWorking)
                     .font(.caption.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(RunTheme.route)
@@ -472,9 +336,7 @@ struct HealthSyncView: View {
         .scrollIndicators(.hidden)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("同步")
-        .toolbarBackground(RunTheme.page, for: .navigationBar)
-        .disabled(model.isWorking)
-        .overlay { if model.isWorking { ProgressView().controlSize(.large) } }
+
     }
 
     private func duration(_ seconds: TimeInterval) -> String {

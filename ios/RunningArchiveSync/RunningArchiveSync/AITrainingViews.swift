@@ -3,25 +3,19 @@ import SwiftUI
 struct AITrainingView: View {
     @EnvironmentObject private var training: AITrainingStore
     @EnvironmentObject private var archive: ArchiveStore
+    @EnvironmentObject private var journal: TrainingJournal
     @State private var showingSettings = false
 
-    private var nextSession: AITrainingSession? {
-        let today = AIDate.key(.now, calendar: .current)
-        let completed = Set(training.state.completed.map(\.id))
-        return training.current?.plan.sessions.first { $0.date >= today && $0.kind != .rest && !completed.contains($0.id) }
+    @State private var raceToConfigure: RaceGoal?
+    init(raceGoal: RaceGoal? = nil) {
+        _raceToConfigure = State(initialValue: raceGoal)
+        _showingSettings = State(initialValue: raceGoal != nil)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Button { showingSettings = true } label: {
-                    HStack {
-                        Image(systemName: "scope").foregroundStyle(RunTheme.accent)
-                        Text(training.state.profile.goal).lineLimit(2).foregroundStyle(.primary)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                    }.nativeCard()
-                }.buttonStyle(.plain)
+                TrainingPhaseGoalCard(profile: training.state.profile) { showingSettings = true }
                 if training.isWorking {
                     HStack(spacing: 12) {
                         ProgressView()
@@ -38,56 +32,15 @@ struct AITrainingView: View {
                     }.nativeCard()
                 }
                 if let revision = training.current {
-                    if let next = nextSession {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("下一次训练").font(.subheadline).foregroundStyle(.secondary)
-                            Text(next.kind.title).font(.largeTitle.bold())
-                            Text(dateText(next.date)).font(.subheadline).foregroundStyle(.secondary)
-                            HStack(spacing: 18) {
-                                Label("\(Int(next.duration_minutes)) 分钟", systemImage: "clock")
-                                if let km = next.distance_km { Text(String(format: "%.1f km", km)) }
-                            }.font(.headline)
-                            Text(next.intensity).font(.subheadline)
-                            NavigationLink { AITrainingSessionView(session: next) } label: {
-                                Text("查看本次训练").frame(maxWidth: .infinity).padding(.vertical, 6)
-                            }.buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(RunTheme.accent)
-                        }.nativeCard()
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("本期训练已完成或结束", systemImage: "checkmark.circle")
-                            Button("生成后续安排") { RunningArchiveRuntime.shared.scheduleAnalysis(force: true) }
-                                .disabled(training.isWorking)
+                    if TrainingFeedback.stale(snapshot: revision.feedbackContext, activities: archive.activities, journal: journal.data, now: .now, calendar: AIDate.localCalendar) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("跑后反馈已变化", systemImage: "arrow.clockwise").font(.headline)
+                            Text("当前仍是上一版安排。更新后查看新建议；手动修改的课程会继续保留。").font(.subheadline)
+                            Button("用最新反馈更新") { RunningArchiveRuntime.shared.scheduleAnalysis(force: true) }
+                                .disabled(training.isWorking || !training.configured)
                         }.nativeCard()
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("本期安排").font(.headline)
-                        ForEach(revision.plan.sessions) { session in
-                            NavigationLink { AITrainingSessionView(session: session) } label: {
-                                HStack {
-                                    Text(shortDate(session.date)).foregroundStyle(.secondary).frame(width: 78, alignment: .leading)
-                                    Text(session.kind.title).foregroundStyle(.primary)
-                                    Spacer()
-                                    if training.state.completed.contains(where: { $0.id == session.id }) {
-                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(RunTheme.route)
-                                    } else if session.kind != .rest {
-                                        Text("\(Int(session.duration_minutes)) 分钟").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
-                                }.padding(.vertical, 8)
-                            }.buttonStyle(.plain)
-                            if session.id != revision.plan.sessions.last?.id { Divider() }
-                        }
-                    }.nativeCard()
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label(revision.plan.stage, systemImage: "chart.line.uptrend.xyaxis").font(.headline)
-                        Text(revision.plan.summary).font(.subheadline)
-                        if !revision.plan.run_review.isEmpty {
-                            Divider()
-                            Text("跑步分析").font(.headline)
-                            Text(revision.plan.run_review).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        NavigationLink("查看分析与历史计划") { AITrainingHistoryView() }.font(.subheadline)
-                    }.nativeCard()
+                    TrainingPhaseDashboard(revision: revision)
                     if !revision.plan.limitations.isEmpty {
                         DisclosureGroup("数据与分析说明") {
                             VStack(alignment: .leading, spacing: 8) {
@@ -119,33 +72,42 @@ struct AITrainingView: View {
                 Button("目标、可训练时间与模型设置") { showingSettings = true }.font(.subheadline)
             }.padding(16)
         }
-        .background(RunTheme.page).navigationTitle("AI 训练").navigationBarTitleDisplayMode(.inline)
+        .background(RunTheme.page).navigationTitle("阶段训练").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
             Button { showingSettings = true } label: { Image(systemName: "gearshape") }
         } }
-        .sheet(isPresented: $showingSettings) { AITrainingSettingsView() }
-        .task { RunningArchiveRuntime.shared.scheduleAnalysis() }
-    }
-
-    private func dateText(_ date: String) -> String {
-        AIDate.parse(date, calendar: .current)?.formatted(.dateTime.month().day().weekday()) ?? date
-    }
-    private func shortDate(_ date: String) -> String {
-        AIDate.parse(date, calendar: .current)?.formatted(.dateTime.month().day()) ?? date
+        .sheet(isPresented: $showingSettings, onDismiss: { raceToConfigure = nil }) { AITrainingSettingsView(initialRace: raceToConfigure) }
+        .task { if !showingSettings { RunningArchiveRuntime.shared.scheduleAnalysis() }; await training.syncWatch() }
     }
 }
 
 struct AITrainingSessionView: View {
     @EnvironmentObject private var training: AITrainingStore
     @EnvironmentObject private var archive: ArchiveStore
-    let session: AITrainingSession
+    @EnvironmentObject private var watch: WatchPlanSyncStore
+    private let initialSession: AITrainingSession
+    let editable: Bool
+    @State private var selectedDate: String
+    @State private var showingEditor = false
+    init(session: AITrainingSession, editable: Bool = false) {
+        initialSession = session
+        self.editable = editable
+        _selectedDate = State(initialValue: session.date)
+    }
+    private var session: AITrainingSession {
+        editable ? (training.current?.plan.sessions.first { $0.date == selectedDate } ?? initialSession) : initialSession
+    }
+    private var canEdit: Bool {
+        editable && session.date >= AIDate.key(.now, calendar: AIDate.localCalendar) && !training.state.completed.contains { $0.id == session.date }
+    }
     var body: some View {
         List {
             Section {
                 LabeledContent("日期", value: session.date)
                 LabeledContent("训练", value: session.kind.title)
                 if session.kind != .rest {
-                    LabeledContent("总时长", value: "\(Int(session.duration_minutes)) 分钟（含热身与放松）")
+                    LabeledContent(session.workout?.allSteps.contains(where: { $0.goal == .distance }) == true ? "预计总时长" : "总时长",
+                        value: String(format: "%g 分钟（含热身与放松）", session.duration_minutes))
                     if let km = session.distance_km { LabeledContent("参考距离", value: String(format: "%.1f km", km)) }
                     if let lower = session.pace_seconds_per_km_min, let upper = session.pace_seconds_per_km_max {
                         LabeledContent("参考配速", value: "\(TrainingFormat.pace(lower))–\(TrainingFormat.pace(upper)) /km")
@@ -153,21 +115,42 @@ struct AITrainingSessionView: View {
                 }
                 Text(session.intensity)
             }
-            Section("训练目的") { Text(session.purpose) }
-            ForEach(Array(session.steps.enumerated()), id: \.offset) { _, step in
-                Section("\(step.phase) · \(Int(step.minutes)) 分钟") { Text(step.instructions) }
+            if session.kind != .rest {
+                TrainingExecutionSection(session: session)
             }
-            if let completed = training.state.completed.first(where: { $0.id == session.id }) {
-                Section("当日实际跑步 · 自动关联") {
-                    ForEach(archive.activities.filter { completed.activityIDs.contains($0.id) }) { activity in
-                        NavigationLink(value: activity) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(String(format: "%.2f km", activity.distanceKm)).font(.headline)
-                                Text("\(activity.duration) · \(activity.pace) /km").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
+            Section("训练目的") { Text(session.purpose) }
+            if let workout = session.workout {
+                RunWorkoutSections(workout: workout)
+            } else {
+                ForEach(Array(session.steps.enumerated()), id: \.offset) { _, step in
+                    Section("\(step.phase) · \(Int(step.minutes)) 分钟") { Text(step.instructions) }
+                }
+            }
+            if canEdit {
+                Section {
+                    if training.state.manualOverrides?.contains(where: { $0.session.date == session.date }) == true {
+                        Text("已手动修改，后续 AI 新计划保留该日安排。").font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("按日期关联实际记录，不代表训练强度已经完全达标。").font(.caption).foregroundStyle(.secondary)
+                    Button("同步本期安排到 Apple Watch", systemImage: "applewatch") {
+                        Task { await training.syncWatch(requestAuthorization: true) }
+                    }.disabled(watch.isWorking || training.isWorking)
+                    if let error = watch.errorMessage { Text(error).font(.caption).foregroundStyle(.secondary) }
+                    else if !watch.status.isEmpty { Text(watch.status).font(.caption).foregroundStyle(.secondary) }
+                } footer: { Text("更新本期待跑课程，包含这次训练；已完成记录保留，不会重复添加。") }
+            }
+            if let revision = training.state.revisions.reversed().first(where: { $0.plan.sessions.contains(session) }),
+               let feedback = revision.feedbackContext,
+               !Set(session.evidence_ids).isDisjoint(with: Set(feedback.map(\.id))) {
+                Section("参考跑后自述") {
+                    NavigationLink("这次训练引用了哪些反馈") {
+                        FeedbackPlanEvidenceView(revision: revision, selectedIDs: Set(session.evidence_ids))
+                    }
+                }
+            }
+            if let context = training.state.revisions.reversed().first(where: { $0.plan.sessions.contains(session) })?.analysisContext,
+               !Set(session.evidence_ids).intersection(context.evidenceIDs).isEmpty {
+                Section("参考分析指标") {
+                    NavigationLink("查看生成时的计算快照与依据") { AIAnalysisEvidenceView(context: context, selectedIDs: Set(session.evidence_ids)) }
                 }
             }
             if !session.evidence_ids.isEmpty {
@@ -180,6 +163,12 @@ struct AITrainingSessionView: View {
                 }
             }
         }.navigationTitle(session.kind.title).navigationBarTitleDisplayMode(.inline)
+        .toolbar { if canEdit { ToolbarItem(placement: .topBarTrailing) {
+            Button("修改", systemImage: "pencil") { showingEditor = true }.accessibilityIdentifier("training.edit")
+        } } }
+        .sheet(isPresented: $showingEditor) {
+            AITrainingSessionEditor(session: session) { selectedDate = $0 }
+        }
     }
 }
 
@@ -197,6 +186,7 @@ struct AITrainingHistoryView: View {
                             Text(change.reason).font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
+                    NavigationLink("当时的跑后反馈与计划响应") { FeedbackPlanEvidenceView(revision: revision) }
                     DisclosureGroup("查看这一版安排") {
                         ForEach(revision.plan.sessions) { session in
                             NavigationLink { AITrainingSessionView(session: session) } label: {
@@ -207,8 +197,20 @@ struct AITrainingHistoryView: View {
                     Text("\(revision.model) · \(revision.promptVersion)").font(.caption2).foregroundStyle(.secondary)
                 }
             }
+            let pending = (training.state.associations ?? []).filter {
+                !$0.candidates.isEmpty || $0.activityID != nil
+            }.filter { !training.state.isCompleted($0.session) }
+            if !pending.isEmpty {
+                Section("待核对的训练") {
+                    ForEach(Array(pending.enumerated()), id: \.offset) { _, entry in
+                        NavigationLink { AITrainingSessionView(session: entry.session) } label: {
+                            Label("\(entry.session.date) · \(entry.session.kind.title)", systemImage: "questionmark.circle")
+                        }
+                    }
+                }
+            }
             if !training.state.completed.isEmpty {
-                Section("已完成训练") {
+                Section("已确认完成的训练") {
                     ForEach(training.state.completed.sorted { $0.id > $1.id }) { completed in
                         NavigationLink { AITrainingSessionView(session: completed.session) } label: {
                             Label("\(completed.id) · \(completed.session.kind.title)", systemImage: "checkmark.circle")
@@ -221,6 +223,7 @@ struct AITrainingHistoryView: View {
 }
 
 struct AITrainingSettingsView: View {
+    var initialRace: RaceGoal? = nil
     @EnvironmentObject private var training: AITrainingStore
     @EnvironmentObject private var journal: TrainingJournal
     @Environment(\.dismiss) private var dismiss
@@ -244,19 +247,15 @@ struct AITrainingSettingsView: View {
                     Toggle("启用 AI 训练", isOn: $configuration.enabled)
                     Toggle("跑后自动生成新计划", isOn: $configuration.automatic).disabled(!configuration.enabled)
                 } footer: {
-                    Text("开启后，将目标、可训练时间、近六周训练摘要、最近三次分段统计、个人纪录及可用恢复背景发送到所配置的模型服务。路线坐标留在本机。后台未完成的分析会在下次打开时补做。")
+                    Text("开启后，将目标、可训练时间、近六周训练摘要、最近三次分段统计、个人纪录、可用恢复背景及你单独授权的跑后反馈发送到所配置的模型服务。路线坐标留在本机。后台未完成的分析会在下次打开时补做。")
                 }
                 Section("目标") {
                     TextField("例如：12月半马提升成绩", text: $profile.goal, axis: .vertical).lineLimit(2...4)
                     if !journal.data.races.isEmpty {
                         Menu("使用已有赛事目标") {
-                            ForEach(journal.data.races.filter { $0.date >= Calendar.current.startOfDay(for: .now) }) { race in
+                            ForEach(journal.data.races.filter { $0.date >= AIDate.localCalendar.startOfDay(for: .now) }) { race in
                                 Button(race.name) {
-                                    profile.goal = race.name
-                                    distance = String(format: "%g", race.distanceKm)
-                                    targetTime = race.targetSeconds.map { TrainingFormat.duration($0) } ?? ""
-                                    deadline = race.date
-                                    hasDeadline = true
+                                    useRace(race)
                                 }
                             }
                         }
@@ -264,7 +263,7 @@ struct AITrainingSettingsView: View {
                     TextField("目标距离 km（可选）", text: $distance).keyboardType(.decimalPad)
                     TextField("目标用时，如 01:45:00（可选）", text: $targetTime).keyboardType(.numbersAndPunctuation)
                     Toggle("设置目标日期", isOn: $hasDeadline)
-                    if hasDeadline { DatePicker("目标日期", selection: $deadline, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date) }
+                    if hasDeadline { DatePicker("目标日期", selection: $deadline, in: AIDate.localCalendar.startOfDay(for: .now)..., displayedComponents: .date) }
                 }
                 Section("可训练时间") {
                     ForEach(1...7, id: \.self) { day in
@@ -305,7 +304,7 @@ struct AITrainingSettingsView: View {
                             do {
                                 try await training.test(configuration: configuration, key: apiKey)
                                 message = "连接成功。测试未发送运动数据。"
-                            } catch { message = error.localizedDescription }
+                            } catch { message = "测试连接失败：\(error.localizedDescription)" }
                         }
                     }.disabled(testing || apiKey.isEmpty)
                 } header: { Text("DeepSeek") } footer: { Text("密钥仅保存到这台设备的钥匙串。") }
@@ -334,6 +333,7 @@ struct AITrainingSettingsView: View {
                 targetTime = profile.targetSeconds.map { TrainingFormat.duration($0) } ?? ""
                 hasDeadline = profile.targetDate != nil
                 deadline = profile.targetDate ?? .now.addingTimeInterval(90 * 86400)
+                if let initialRace { useRace(initialRace) }
             }
             .task(id: configuration.baseURL + "|" + apiKey) {
                 models = []
@@ -363,6 +363,14 @@ struct AITrainingSettingsView: View {
         }
     }
 
+    private func useRace(_ race: RaceGoal) {
+        profile.useRaceGoal(race)
+        distance = String(format: "%g", race.distanceKm)
+        targetTime = race.targetSeconds.map(TrainingFormat.duration) ?? ""
+        deadline = race.date
+        hasDeadline = true
+    }
+
     private func dayName(_ day: Int) -> String { ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][day - 1] }
     private func save() {
         do {
@@ -382,8 +390,9 @@ struct AITrainingSettingsView: View {
 
 extension View {
     func nativeCard() -> some View {
-        self.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        self.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .containerShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
 
@@ -397,6 +406,10 @@ struct AITrainingDataGuide: View {
 
     var body: some View {
         List {
+            Section("主观反馈的使用范围") {
+                Text("subjective_feedback 只包含近六周已授权的实际跑步反馈。每条可选择仅本机、评分、评分及该条备注；旧记录默认仅本机。用力程度、感受、跑后疲劳及填写/修改时间独立提供，不用于重算心率负荷、区间或能力指标。")
+                Text("AI 需引用具体反馈，解释对七天计划的响应或未调整的原因。修改或撤回授权会使旧请求失效，历史计划保留当时的依据；私人备注与路线名称不会自动发送。")
+            }
             Section("目标与时间") {
                 Text("目标文字、目标距离（km）、目标用时（秒）、目标当地日期；每周可训练日（周一=1）、普通日时长上限、长距离日与该日时长上限。")
                 Text("当地时区、今天、计划起止日期、42 天回看窗口；任务为分析实际跑步并生成新的七天计划。今天已跑步时，从明天开始安排七天。")
@@ -418,8 +431,8 @@ struct AITrainingDataGuide: View {
                 Text("VO₂ max（ml/kg/min）与系统记录的一分钟心率恢复（bpm）；各带记录日期、数值、单位和是否标注为实验室测量的说明。只取最近 42 天，每种指标最多 30 条。静息心率、HRV 和睡眠归入下面的恢复背景。")
             }
             Section("恢复与其他运动 · 可用时") {
-                Text("近 28 天静息心率 bpm、HRV SDNN ms，按单一来源生成每日中位数和样本数；不混用 SDNN 与 RMSSD。")
-                Text("近 28 天实际入睡时长：按当地中午切分、同来源合并重叠时段，不把卧床或清醒算作入睡，不把多个 App 的相同睡眠重复相加。最新窗口标注 partial_window，可能包含午睡，不等于完整监测。")
+                Text("近 56 天静息心率 bpm、HRV SDNN ms，按单一来源与相同采样时段生成每日中位数和样本数；不混用 SDNN 与 RMSSD。")
+                Text("近 56 天实际入睡时长：按当地中午切分、同来源合并重叠时段，不把卧床或清醒算作入睡，不把多个 App 的相同睡眠重复相加。最新窗口标注 partial_window，可能包含午睡，不等于完整监测。")
                 Text("最近 180 天内最新体重 kg 及记录日期；近 42 天最多 100 条其他运动的日期、类型、运动秒数、可用活动能量 kcal。用于补充实际活动背景。")
                 Text("缺失不代表零；模型只能结合个人趋势辅助判断，不推算疲劳分数或诊断疾病。首次使用会请求对应健康读取权限。")
             }
@@ -429,7 +442,13 @@ struct AITrainingDataGuide: View {
             }
             Section("缺失与读取说明") {
                 Text("发送读取失败、缺失字段和采样限制的说明。每次依据实际跑步、PB、目标和可训练时间独立分析并生成新的七天计划。")
-                Text("未提供姓名、经纬度、设备标识、伤病诊断、真实最大心率或个人心率区间。API Key 只在请求鉴权头中使用。")
+                Text("不提供姓名、经纬度、设备标识或伤病诊断；附带当前最大心率依据（年龄公式估算或手动覆盖）与可用的近期能力标定；出生日期不发送。API Key 只在请求鉴权头中使用。")
+            }
+            Section("本机训练分析") {
+                Text("优先读取Apple运动保存的心率区间；历史缺失时按当前区间重新分类并注明来源。Apple区间与Edwards区间分别提供，不能混用权重。最大心率默认采用Tanaka成人年龄公式208−0.7×年龄，明确标为估算；可选手动覆盖。原始出生日期不保存、不发送。")
+                Text("Edwards心率负荷、7/42日指数加权趋势、稳定片段的速度/心率效率与漂移、周结构、同来源跑姿比较、经典成绩指数及恢复基线变化。逐项附单位、方法版本、覆盖、不可用原因和依据记录；过程数据未整理完成时明确缺失。")
+                Text("最大心率可按年龄公式估算，并明确标注估算依据；近期比赛/测试未经标定时，计划不返回精确训练配速。负荷仅含跑步，恢复不生成准备度分数。")
+                NavigationLink("查看公式与筛选规则") { TrainingAnalysisMethodsView() }
             }
             Section("查看实际 JSON") {
                 Text("按已保存设置在本机整理待发送数据，仅预览，不调用模型。包含你的运动数据。")
@@ -464,6 +483,7 @@ struct AITrainingDataGuide: View {
             let cutoff = calendar.date(byAdding: .day, value: -42, to: calendar.startOfDay(for: now))!
             let runs = archive.activities.filter { $0.date >= cutoff && $0.date <= now }.sorted { $0.date < $1.date }
             try await archive.requestAIContextAccess()
+            await RunningArchiveRuntime.shared.analytics.prepareHeartRateProfile(archive: archive, authorize: true)
             let input = try await training.makeInput(archive: archive, journal: journal.data, activities: runs, now: now, calendar: calendar)
             let object = try JSONSerialization.jsonObject(with: input.encoded())
             requestJSON = String(decoding: try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]), as: UTF8.self)

@@ -82,6 +82,12 @@ with zipfile.ZipFile(root / 'full/跑步分析完整数据包.zip') as bundle:
     near(next(r for r in distribution if r['心率范围（bpm）'] == '未覆盖')['支持时长（s，估算）'],40.25)
     assert len(sheets['体能参考']) == 1 and sheets['体能参考'][0]['数值'] == 52.3
     assert len(sheets['目标赛事']) == 1 and sheets['训练计划'][0]['关联记录 ID'] == 'run-1'
+    apple = [r for r in sheets['Apple心率区间'] if r['记录 ID'] == 'run-1']
+    assert len(apple) == 5 and sum(r['区间时长（s）'] for r in apple) == 540.25
+    assert all(r['使用口径'] == 'recorded_workout' and r['配置来源'] == 'user' for r in apple)
+    assert apple[0].get('心率下界（bpm）') is None and apple[-1].get('心率上界（bpm）') is None
+    load_rows = [r for r in sheets['训练指标'] if r['记录 ID'] == 'run-1' and r['指标'] == '心率负荷']
+    assert load_rows[0]['参考最大心率'] == 180 and load_rows[0]['是否采用估算依据'] == '是'
     quality = next(r for r in sheets['指标可用性'] if r['记录 ID'] == 'partial' and r['指标'] == '触地时间')
     assert '读取失败' in quality['读取状态']
     assert '覆盖比例（0–1，估算）' not in quality
@@ -98,9 +104,9 @@ with zipfile.ZipFile(root / 'full/跑步分析完整数据包.zip') as bundle:
     (root / 'sample.xlsx').write_bytes(bundle.read('跑步分析.xlsx'))
 
 analysis = read_book(root / 'analysis/跑步分析.xlsx')
-expected = {'逐次跑步','公里分段','过程数据','心率分布','体能参考','指标可用性','导出说明'}
+expected = {'逐次跑步','公里分段','过程数据','心率分布','体能参考','指标可用性','训练指标','Apple心率区间','导出说明'}
 assert set(analysis) == expected
-for sheet in ['公里分段','心率分布','体能参考']:
+for sheet in ['公里分段','心率分布','体能参考','训练指标','Apple心率区间']:
     comparable = [r for r in sheets[sheet] if r.get('记录 ID', 'run-1') == 'run-1']
     assert analysis[sheet] == comparable, f'{sheet} has the same analysis in both formats'
 assert analysis['过程数据'] == process

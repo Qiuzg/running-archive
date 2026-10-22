@@ -162,6 +162,43 @@ final class DeepSeekMockProtocol: URLProtocol {
         invalidURL.baseURL = "https://api.deepseek.com?key=secret"
         assert(invalidURL.endpoint == nil)
 
+        let evidence = AnalysisEvidence(id: "analysis:run-1:load", metric: "edwards_load",
+            value: AnalysisValue(value: 100, unit: "AU", method: "edwards-trimp-v1", coverage: 1, complete: true),
+            activity_ids: ["run-1"], start: start, end: start)
+        var context = TrainingAnalysisContext(version: AnalysisMethod.version, as_of: start,
+            maximum_heart_rate_bpm: nil, heart_rate_calibration_date: nil, calibration_method: "unavailable",
+            evidence: [evidence], weeks: [], load_days: [], recovery: [], aerobic: [], form: [], performances: [], limitations: ["test"])
+        input.training_analysis = context
+        assert(input.evidenceIDs.contains(evidence.id))
+        var numericPlan = plan()
+        numericPlan.sessions[0].pace_seconds_per_km_min = 300
+        numericPlan.sessions[0].pace_seconds_per_km_max = 360
+        do { try numericPlan.validateAnalysis(context); fatalError("uncalibrated exact pace accepted") } catch {}
+        try plan().validateAnalysis(context)
+        context.performances = [AnalysisPerformance(activityID: "run-1", date: start, distanceKm: 10, elapsedSeconds: 2400, index: 51.94, fullEffortConfirmed: true)]
+        try numericPlan.validateAnalysis(context)
+        var referenced = plan(); referenced.sessions[0].evidence_ids = [evidence.id]
+        try referenced.validate(profile: profile, start: start, evidenceIDs: input.evidenceIDs, calendar: calendar)
+        let withAnalysis = String(decoding: try input.encoded(), as: UTF8.self)
+        assert(withAnalysis.contains("training_analysis") && withAnalysis.contains("coverage"))
+        assert(!withAnalysis.contains("sourceGroups") && !withAnalysis.contains("deviceKey") && !withAnalysis.contains("latitude"))
+        let oldRevision = "{\"id\":\"old\",\"createdAt\":0,\"model\":\"legacy\",\"promptVersion\":\"v4\",\"inputFingerprint\":\"old\",\"plan\":" + String(decoding: try JSONEncoder().encode(plan()), as: UTF8.self) + "}"
+        let restoredLegacyRevision = try JSONDecoder().decode(AIPlanRevision.self, from: Data(oldRevision.utf8))
+        assert(restoredLegacyRevision.analysisContext == nil)
+        context.heart_rate_reference = AnalysisCalibration(automaticAge: 40, automaticAgeDate: start).reference(at: start)
+        context.calibration_method = context.heart_rate_reference!.method
+        context.maximum_heart_rate_bpm = context.heart_rate_reference!.bpm
+        context.preferred_apple_heart_rate_zones = AnalysisAppleHeartRateZones(source: "system", scope: "current_preference", zones: [
+            .init(index: 0, lowerBPM: nil, upperBPM: 120), .init(index: 1, lowerBPM: 120, upperBPM: 150), .init(index: 2, lowerBPM: 150, upperBPM: nil)])
+        input.training_analysis = context
+        let automaticPayload = String(decoding: try input.encoded(), as: UTF8.self)
+        assert(automaticPayload.contains("tanaka_208_minus_0_7_age") && automaticPayload.contains("preferred_apple_heart_rate_zones"))
+        assert(!automaticPayload.contains("birthDate") && !automaticPayload.contains("sourceGroups"))
+        assert(AITrainingPrompt.system.contains("不得用Apple区间序号乘Edwards权重") && AITrainingPrompt.system.contains("heart_rate_reference.estimated=true"))
+        let contextRoundTrip = try JSONDecoder().decode(TrainingAnalysisContext.self, from: JSONEncoder().encode(context))
+        assert(contextRoundTrip.heart_rate_reference?.estimated == true && contextRoundTrip.preferred_apple_heart_rate_zones?.source == "system")
+        input.training_analysis = nil
+
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [DeepSeekMockProtocol.self]
         let service = DeepSeekTrainingService(session: URLSession(configuration: config))
@@ -187,22 +224,34 @@ final class DeepSeekMockProtocol: URLProtocol {
             _ = try await service.availableModels(configuration: AITrainingConfiguration(), key: "test-key")
             fatalError("Unauthorized model listing accepted")
         } catch { assert(!error.localizedDescription.contains("do-not-echo-token")) }
-        let responsePlan = plan()
+        var responsePlan = plan()
+        responsePlan.schema_version = 2
+        for index in responsePlan.sessions.indices where responsePlan.sessions[index].kind != .rest {
+            let structure = try RunWorkoutStructure.legacy(responsePlan.sessions[index])
+            responsePlan.sessions[index].applyWorkout(structure)
+        }
+        try validate(responsePlan)
+        var nestedPace = responsePlan
+        nestedPace.sessions[0].workout!.blocks[0].steps[0].step.pace_min = 300
+        nestedPace.sessions[0].workout!.blocks[0].steps[0].step.pace_max = 360
+        do { try nestedPace.validateAnalysis(nil); fatalError("Nested uncalibrated pace accepted") } catch {}
+        var inventedHeartRate = responsePlan
+        inventedHeartRate.sessions[0].workout!.warmup.heart_rate_min = 130
+        inventedHeartRate.sessions[0].workout!.warmup.heart_rate_max = 150
+        do { try inventedHeartRate.validateAnalysis(context); fatalError("Invented heart rate target accepted") } catch {}
         var freshResponse = try JSONSerialization.jsonObject(with: JSONEncoder().encode(responsePlan)) as! [String: Any]
         freshResponse.removeValue(forKey: "adjustments")
         let planJSON = String(decoding: try JSONSerialization.data(withJSONObject: freshResponse), as: UTF8.self)
         let freshDecoded = try JSONDecoder().decode(AITrainingPlan.self, from: Data(planJSON.utf8))
         assert(freshDecoded == responsePlan && freshDecoded.adjustments.isEmpty)
-        var legacy = responsePlan
+        var legacy = plan()
         legacy.adjustments = [AITrainingAdjustment(date: "2026-10-19", change: "历史版本的调整", reason: "原先的依据", evidence_ids: ["run-1"])]
         let restoredLegacy = try JSONDecoder().decode(AITrainingPlan.self, from: JSONEncoder().encode(legacy))
         assert(restoredLegacy == legacy)
         func completion(_ text: String, finish: String = "stop") throws -> Data {
             try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": text], "finish_reason": finish]]])
         }
-        DeepSeekMockProtocol.handler = { request in
-            assert(request.url?.absoluteString == "https://api.deepseek.com/chat/completions")
-            assert(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-key")
+        func requestBody(_ request: URLRequest) throws -> [String: Any] {
             var data = request.httpBody
             if data == nil, let stream = request.httpBodyStream {
                 stream.open()
@@ -216,10 +265,17 @@ final class DeepSeekMockProtocol: URLProtocol {
                 }
                 data = result
             }
-            let body = try JSONSerialization.jsonObject(with: data!) as! [String: Any]
+            return try JSONSerialization.jsonObject(with: data!) as! [String: Any]
+        }
+        DeepSeekMockProtocol.handler = { request in
+            assert(request.url?.absoluteString == "https://api.deepseek.com/chat/completions")
+            assert(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-key")
+            let body = try requestBody(request)
             assert(body["model"] as? String == "deepseek-flash")
             assert((body["response_format"] as? [String: String])?["type"] == "json_object")
             assert(body["stream"] as? Bool == false)
+            assert(body["reasoning_effort"] as? String == "high")
+            assert((body["thinking"] as? [String: String])?["type"] == "enabled")
             let messages = body["messages"] as! [[String: String]]
             let sent = try JSONSerialization.jsonObject(with: Data(messages[1]["content"]!.utf8)) as! [String: Any]
             assert(sent["current_plan"] == nil && sent["completed"] == nil)
@@ -243,19 +299,68 @@ final class DeepSeekMockProtocol: URLProtocol {
             _ = try await service.generate(input: input, configuration: AITrainingConfiguration(), key: "test-key")
             fatalError("Unauthorized response was accepted")
         } catch { assert(!error.localizedDescription.contains("sensitive")) }
-        DeepSeekMockProtocol.handler = { _ in (200, try completion("{\"ok\":true}")) }
+        // A valid chat reply proves connectivity even when it is not the old {"ok":true} task.
+        DeepSeekMockProtocol.handler = { request in
+            let body = try requestBody(request)
+            assert(request.httpMethod == "POST")
+            assert(request.url?.absoluteString == "https://api.deepseek.com/chat/completions")
+            assert(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-key")
+            assert(request.value(forHTTPHeaderField: "Accept") == "application/json")
+            assert(body["model"] as? String == "deepseek-flash" && body["response_format"] == nil)
+            assert(body["reasoning_effort"] as? String == "none")
+            assert((body["thinking"] as? [String: String])?["type"] == "disabled")
+            assert(body["max_tokens"] as? Int == 256 && body["stream"] as? Bool == false)
+            let messages = body["messages"] as! [[String: String]]
+            assert(messages.count == 2 && messages[1]["content"] == "Reply with OK.")
+            let bodyJSON = String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self)
+            assert(!bodyJSON.contains("workouts"))
+            return (200, try completion("OK"))
+        }
         try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
-        DeepSeekMockProtocol.handler = { _ in (200, try completion("{\"ok\":false}")) }
+        DeepSeekMockProtocol.handler = { _ in
+            var bytes = Data("\n\r\n".utf8)
+            bytes.append(try completion("```json\n{\"ok\":true}\n```"))
+            bytes.append(Data("\n".utf8))
+            return (200, bytes)
+        }
+        try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
+        DeepSeekMockProtocol.handler = { _ in (200, try completion("   ")) }
         do {
             try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
-            fatalError("Failed connection test was accepted")
-        } catch {}
+            fatalError("Empty connection response was accepted")
+        } catch AITrainingError.emptyResponse {} catch { fatalError("Unexpected connection error: \(error)") }
+        for badBody in ["<html>private-upstream-body</html>", "{", "{\"error\":{\"message\":\"private-upstream-body\"}}",
+                        "{\"choices\":[{\"message\":{\"content\":42},\"finish_reason\":\"stop\"}]}"] {
+            DeepSeekMockProtocol.handler = { _ in (200, Data(badBody.utf8)) }
+            do {
+                try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
+                fatalError("Invalid chat protocol was accepted")
+            } catch AITrainingError.responseFormat {
+                assert(!AITrainingError.responseFormat.localizedDescription.contains("private-upstream-body"))
+            } catch { fatalError("System JSON error leaked: \(error)") }
+        }
+        DeepSeekMockProtocol.handler = { _ in (200, try completion("OK", finish: "length")) }
+        do {
+            try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
+            fatalError("Truncated connection reply accepted")
+        } catch AITrainingError.truncatedResponse {} catch { fatalError("Wrong truncation error") }
+        DeepSeekMockProtocol.handler = { _ in (200, try completion("OK", finish: "content_filter")) }
+        do {
+            try await service.test(configuration: AITrainingConfiguration(), key: "test-key")
+            fatalError("Filtered connection reply accepted")
+        } catch AITrainingError.filteredResponse {} catch { fatalError("Wrong filtering error") }
+        DeepSeekMockProtocol.handler = { _ in (200, Data("not-a-model-list".utf8)) }
+        do {
+            _ = try await service.availableModels(configuration: AITrainingConfiguration(), key: "test-key")
+            fatalError("Invalid model list accepted")
+        } catch AITrainingError.invalid(let message) { assert(message.contains("模型列表")) }
+          catch { fatalError("System model-list decoding error leaked") }
         var disk = AITrainingDiskState()
         disk.revisions = [AIPlanRevision(createdAt: start, model: "deepseek-flash", promptVersion: AITrainingPrompt.version,
             inputFingerprint: firstHash, plan: result)]
         disk.completed = [AICompletedSession(session: result.sessions[0], activityIDs: ["run-1"])]
         let restored = try JSONDecoder().decode(AITrainingDiskState.self, from: JSONEncoder().encode(disk))
         assert(restored.revisions[0].plan == result && restored.completed[0].activityIDs == ["run-1"])
-        print("PASS: recovery daily medians/source dedup, overlapping/multi-source sleep union, partial windows/missing values/privacy, fresh-plan payload excludes old plans/completion, new response without adjustments, legacy history decoding, PB methods/exclusions/evidence IDs, persistent overview round-trip, authenticated model listing/dedup/errors, seven-day schema, dates, schedule/time limits, steps, references, pace, missing data, annual totals, privacy payload, model/endpoint, mocked DeepSeek success/errors, plan history round-trip")
+        print("PASS: analysis evidence allowlist/privacy, calibrated pace gate, old revision compatibility; plain-text connection test/disabled thinking/no health payload, keep-alive whitespace, malformed protocol/localized errors/truncation/filtering/model-list errors, recovery daily medians/source dedup, overlapping/multi-source sleep union, partial windows/missing values/privacy, fresh-plan payload excludes old plans/completion, new response without adjustments, legacy history decoding, PB methods/exclusions/evidence IDs, persistent overview round-trip, authenticated model listing/dedup/errors, seven-day schema, dates, schedule/time limits, steps, references, pace, missing data, annual totals, privacy payload, model/endpoint, mocked DeepSeek success/errors, plan history round-trip")
     }
 }

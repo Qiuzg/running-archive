@@ -8,6 +8,31 @@ enum TrainingKind: String, Codable, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+enum RunFeeling: String, Codable, CaseIterable, Identifiable {
+    case great, good, normal, poor, veryPoor
+    var id: Self { self }
+    var title: String {
+        switch self { case .great: "很好"; case .good: "不错"; case .normal: "一般"; case .poor: "不太好"; case .veryPoor: "很差" }
+    }
+    var symbol: String {
+        switch self { case .great: "face.smiling.fill"; case .good: "face.smiling"; case .normal: "minus.circle"; case .poor: "cloud"; case .veryPoor: "cloud.rain" }
+    }
+}
+enum RunFatigue: String, Codable, CaseIterable, Identifiable {
+    case none, mild, noticeable, high
+    var id: Self { self }
+    var title: String {
+        switch self { case .none: "不疲劳"; case .mild: "轻微"; case .noticeable: "明显"; case .high: "很强" }
+    }
+}
+enum FeedbackSharing: String, Codable, CaseIterable, Identifiable {
+    case localOnly, ratings, ratingsAndNote
+    var id: Self { self }
+    var title: String {
+        switch self { case .localOnly: "仅保存在本机"; case .ratings: "AI 可用评分，不含备注"; case .ratingsAndNote: "AI 可用评分及本条备注" }
+    }
+}
+
 struct RunAnnotation: Codable, Equatable {
     var kind: TrainingKind = .unspecified
     var effort: Int?
@@ -15,6 +40,20 @@ struct RunAnnotation: Codable, Equatable {
     var favoriteRoute = false
     var routeName = ""
     var excludeFromRecords = false
+    // Optional additions keep existing journals readable; legacy feedback remains private.
+    var feeling: RunFeeling? = nil
+    var fatigue: RunFatigue? = nil
+    var feedbackSharing: FeedbackSharing? = nil
+    var feedbackRecordedAt: Date? = nil
+    var feedbackUpdatedAt: Date? = nil
+    var noteUpdatedAt: Date? = nil
+    var sharing: FeedbackSharing { feedbackSharing ?? .localOnly }
+    var hasRatings: Bool { effort != nil || feeling != nil || fatigue != nil }
+    var hasFeedback: Bool { hasRatings || !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var feedbackSummary: String {
+        [effort.map { "用力 \($0)/10" }, feeling.map { "感受·" + $0.title }, fatigue.map { "疲劳·" + $0.title }]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 struct RaceGoal: Codable, Identifiable, Equatable {
@@ -106,14 +145,36 @@ enum JournalError: LocalizedError {
 final class TrainingJournal: ObservableObject {
     @Published private(set) var data = JournalData()
     @Published var errorMessage: String?
+    var onFeedbackChange: ((JournalData, JournalData) -> Void)?
     private let fileURL: URL
     private var readable = true
+    private var restored = false
+    private var restoreTask: Task<JournalData?, Error>?
+    private let io = ArchiveFileIO()
 
-    init(fileURL: URL? = nil) {
+    init(fileURL: URL? = nil, deferLoading: Bool = false) {
         self.fileURL = fileURL ?? URL.applicationSupportDirectory
             .appending(path: "RunningArchive", directoryHint: .isDirectory)
             .appending(path: "training-journal-v1.json")
-        reload()
+        if deferLoading { readable = false } else { restored = true; reload() }
+    }
+
+    func restore() async {
+        guard !restored else { return }
+        if restoreTask == nil {
+            let io = io, file = fileURL
+            restoreTask = Task { try await io.read(JournalData.self, from: file) }
+        }
+        do {
+            let saved = try await restoreTask!.value
+            guard !restored else { return }
+            if let saved {
+                guard saved.version == 1 else { throw JournalError.unreadable }
+                data = saved
+            }
+            readable = true
+        } catch { readable = false; errorMessage = JournalError.unreadable.localizedDescription }
+        restored = true; restoreTask = nil
     }
 
     func reload() {
@@ -139,12 +200,26 @@ final class TrainingJournal: ObservableObject {
     static func pairKey(_ a: String, _ b: String) -> String { [a, b].sorted().joined(separator: "|") }
     func override(_ a: String, _ b: String) -> Bool? { data.routeOverrides[Self.pairKey(a, b)] }
 
-    @discardableResult func saveAnnotation(_ value: RunAnnotation, id: String) -> Bool {
-        guard value.effort == nil || (1...10).contains(value.effort!) else { return reject("体感请输入 1–10。") }
+    @discardableResult func saveAnnotation(_ value: RunAnnotation, id: String, now: Date = .now) -> Bool {
+        guard value.effort == nil || (1...10).contains(value.effort!) else { return reject("用力程度请输入 1–10。") }
+        let previous = data, old = annotation(id)
         var cleaned = value
         cleaned.note = String(value.note.prefix(2000))
         cleaned.routeName = String(value.routeName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
-        return commit { $0.annotations[id] = cleaned }
+        let ratingsChanged = cleaned.effort != old.effort || cleaned.feeling != old.feeling || cleaned.fatigue != old.fatigue
+        let noteChanged = cleaned.note != old.note
+        // Only the store stamps collection time. Editing route metadata cannot make an old report look fresh.
+        cleaned.feedbackRecordedAt = old.feedbackRecordedAt
+        cleaned.feedbackUpdatedAt = old.feedbackUpdatedAt
+        cleaned.noteUpdatedAt = old.noteUpdatedAt
+        if ratingsChanged {
+            cleaned.feedbackRecordedAt = cleaned.hasRatings ? (old.feedbackRecordedAt ?? now) : nil
+            cleaned.feedbackUpdatedAt = now
+        }
+        if noteChanged { cleaned.noteUpdatedAt = now }
+        guard commit({ $0.annotations[id] = cleaned }) else { return false }
+        if ratingsChanged || noteChanged || old.sharing != cleaned.sharing { onFeedbackChange?(previous, data) }
+        return true
     }
     @discardableResult func setOverride(_ value: Bool?, a: String, b: String) -> Bool {
         commit { $0.routeOverrides[Self.pairKey(a, b)] = value }

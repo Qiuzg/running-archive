@@ -43,15 +43,13 @@ final class CachedArchiveState {
     }
 }
 
-@MainActor
-final class HealthArchiveCache {
-    private let context: ModelContext
+@ModelActor
+actor HealthArchiveCache {
+    private var context: ModelContext { modelContext }
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(context: ModelContext) {
-        self.context = context
-    }
+    func configure() { modelContext.autosaveEnabled = false }
 
     func overview() throws -> ArchiveOverviewSnapshot? {
         guard let record = try stateRecord(key: "overview-v1") else { return nil }
@@ -108,6 +106,10 @@ final class HealthArchiveCache {
         guard let record = try routeRecord(id: id) else { return (false, nil) }
         guard record.hasRoute else { return (true, nil) }
         return (true, try decoder.decode(ArchiveRouteSummary.self, from: record.summaryData))
+    }
+
+    func scannedRouteIDs() throws -> Set<String> {
+        Set(try context.fetch(FetchDescriptor<CachedHealthRoute>()).map(\.workoutID))
     }
 
     func allRouteSummaries() throws -> [ArchiveRouteSummary] {

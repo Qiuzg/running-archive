@@ -77,7 +77,7 @@ struct DashboardView: View {
                 heroSummaryCard
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 85)
+            .padding(.bottom, 16)
 
             if store.isLoading && store.activities.isEmpty {
                 ProgressView("正在读取 Apple Health")
@@ -341,7 +341,7 @@ struct ArchiveStatsPanel: View {
             }
         }
         .padding(18)
-        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .onChange(of: activities.count) { _, _ in
             if !years.contains(selectedYear) { selectedYear = years.first ?? Calendar.current.component(.year, from: .now) }
             selectedMonth = nil
@@ -473,7 +473,6 @@ struct SummaryCollectionView: View {
     @EnvironmentObject private var store: ArchiveStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedYear = Calendar.current.component(.year, from: .now)
-    @State private var openedMonth: Date?
     @State private var atlasExportImage: UIImage?
     @State private var showingAtlasShare = false
     @State private var showingAtlasStyle = false
@@ -512,17 +511,7 @@ struct SummaryCollectionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     annualOverview
-                    NavigationLink { AITrainingView() } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "figure.run").font(.title2).foregroundStyle(RunTheme.accent)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("AI 训练").font(.headline).foregroundStyle(.primary)
-                                Text("近期跑步分析与七天计划").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                        }.nativeCard()
-                    }.buttonStyle(.plain)
+                    TrainingAnalysisEntry()
                     routeCollection
                     if let status = store.routeScanStatus {
                         Label(status, systemImage: "map").font(.caption).foregroundStyle(.secondary)
@@ -554,10 +543,10 @@ struct SummaryCollectionView: View {
                 }
             }
             .navigationDestination(for: ArchiveActivity.self) { ActivityDetailView(activity: $0) }
-            .navigationDestination(item: $openedMonth) { MonthlyReviewView(month: $0) }
+            .navigationDestination(for: ArchiveMonthRoute.self) { MonthlyReviewView(month: $0.month) }
             .onAppear { selectAvailableYear() }
             .onChange(of: store.activities.count) { _, _ in selectAvailableYear() }
-            .refreshable { await RunningArchiveRuntime.shared.refresh(authorize: true) }
+            .refreshable { await RunningArchiveRuntime.shared.refresh(authorize: true, force: true) }
             .confirmationDialog("长距离路线分享配色", isPresented: $showingAtlasStyle, titleVisibility: .visible) {
                 Button("浅色路线图") { exportAtlas(dark: false) }
                 Button("深色路线图") { exportAtlas(dark: true) }
@@ -590,13 +579,14 @@ struct SummaryCollectionView: View {
                 Spacer()
                 Menu {
                     ForEach(1...12, id: \.self) { month in
-                        Button("\(month) 月 · \(formatKm(report.months[month - 1].distance)) km") { openMonth(month) }
+                        NavigationLink("\(month) 月 · \(formatKm(report.months[month - 1].distance)) km",
+                            value: ArchiveMonthRoute(month: report.months[month - 1].start))
                     }
                 } label: { Label("查看月报", systemImage: "calendar").font(.caption) }
             }.padding(.top, 8)
             HStack(alignment: .bottom, spacing: 7) {
                 ForEach(report.months, id: \.key) { month in
-                    Button { openedMonth = month.start } label: {
+                    NavigationLink(value: ArchiveMonthRoute(month: month.start)) {
                         VStack(spacing: 8) {
                             Spacer(minLength: 0)
                             RoundedRectangle(cornerRadius: 4).fill(RunTheme.route.opacity(month.distance > 0 ? 1 : 0.15))
@@ -613,10 +603,6 @@ struct SummaryCollectionView: View {
                 NavigationLink("年度详情") { YearlyReviewView(year: selectedYear) }.font(.caption)
             }
         }.nativeCard()
-    }
-
-    private func openMonth(_ month: Int) {
-        openedMonth = Calendar.current.date(from: DateComponents(year: selectedYear, month: month, day: 1))
     }
 
     private var routeCollection: some View {
@@ -1001,7 +987,7 @@ struct ActivityListView: View {
         .onChange(of: years, initial: true) { _, values in
             if !initializedYear, let year = values.first { selectedYear = year; initializedYear = true }
         }
-        .refreshable { await RunningArchiveRuntime.shared.refresh(authorize: true) }
+        .refreshable { await RunningArchiveRuntime.shared.refresh(authorize: true, force: true) }
         .navigationDestination(for: ArchiveActivity.self) { ActivityDetailView(activity: $0) }
     }
 }
@@ -1053,9 +1039,13 @@ struct ActivityDetailView: View {
                     detailMap
                 }
                 overview
+                RunFeedbackCard(activity: displayActivity)
                 Divider()
                 ActivityCharts(series: route?.timeSeries, auxiliary: extraMetrics, activity: displayActivity, isLoading: detailsLoading)
                 if let extraMetrics { RunningFormMetricsView(metrics: extraMetrics) }
+                NavigationLink { RunTrainingAnalysisView(activity: displayActivity) } label: {
+                    detailAction("本次训练分析与公里分段", icon: "chart.xyaxis.line")
+                }.buttonStyle(.plain)
                 if let extraError { Text(extraError).font(.caption).foregroundStyle(.secondary) }
                 Divider()
                 VStack(spacing: 0) {
@@ -1082,6 +1072,7 @@ struct ActivityDetailView: View {
         }
         .background(Color(uiColor: .systemBackground))
         .navigationTitle(displayActivity.name).navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .onAppear { navigation.presentedDetailIDs.insert(presentationID) }
         .onDisappear { navigation.presentedDetailIDs.remove(presentationID) }
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
@@ -1089,7 +1080,7 @@ struct ActivityDetailView: View {
                 .accessibilityLabel("分享这次跑步")
         } }
         .task(id: activity.id) {
-            let cached = store.cachedActivityPresentation(id: activity.id)
+            let cached = await store.cachedActivityPresentation(id: activity.id)
             route = cached.0
             extraMetrics = cached.1
             detailsLoading = cached.0 == nil || cached.1 == nil

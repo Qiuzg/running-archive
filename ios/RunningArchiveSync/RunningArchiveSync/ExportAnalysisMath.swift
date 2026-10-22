@@ -39,6 +39,7 @@ struct ExportMetricSeries {
     let invalidCount: Int
     let pointEstimateCount: Int
     let status: String
+    var sourceIdentity = ""
 
     func statistic(start: Double, end: Double) -> ExportMetricStatistic {
         guard end > start else { return ExportMetricStatistic() }
@@ -131,7 +132,10 @@ struct ExportObjectiveAnalysis {
             else if intervals.isEmpty { status = "未获得可用数据（未记录或未授权）" }
             else { status = "已读取" + (groups.count > 1 ? "；存在多来源，仅采用一个来源" : "") }
             result[metric] = ExportMetricSeries(metric: metric, intervals: intervals, source: sources,
-                sampleCount: selected.count, invalidCount: invalid, pointEstimateCount: estimated, status: status)
+                sampleCount: selected.count, invalidCount: invalid, pointEstimateCount: estimated, status: status, sourceIdentity: selected.first.flatMap {
+                    // A version token alone cannot establish a comparable sensor source.
+                    $0.sourceBundle.isEmpty && $0.deviceKey.isEmpty && $0.device.isEmpty ? nil : $0.sourceKey
+                } ?? "")
         }
         series = result
     }

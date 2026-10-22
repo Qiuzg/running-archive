@@ -67,16 +67,23 @@ struct AnalysisExportTests {
         let pauseSpan = DateInterval(start:start.addingTimeInterval(100),end:start.addingTimeInterval(140))
         let pauseAnalysis = ExportObjectiveAnalysis(workout: workout(pauses:[pauseSpan,pauseSpan]))
         near(pauseAnalysis.activeSeconds(start:90,end:150),20,"duplicate pause intervals merged and reconciled")
-        let options = AnalysisExportOptions(start: date("2026-09-01T00:00:00Z"), endExclusive: date("2026-11-01T00:00:00Z"), full: true, includePlanning: true, timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        var options = AnalysisExportOptions(start: date("2026-09-01T00:00:00Z"), endExclusive: date("2026-11-01T00:00:00Z"), full: true, includePlanning: true, timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        options.calibration = AnalysisCalibration(automaticAge: 40, automaticAgeDate: .now)
         check(options.includes(options.start) && !options.includes(options.endExclusive), "inclusive/exclusive date bounds")
         check(options.calendar.component(.month, from:start) == 10,"local month crossing UTC boundary")
         var journal = JournalData()
         journal.annotations["run-1"] = RunAnnotation(kind: .easy, effort: 3, note: "THIS_PRIVATE_NOTE_MUST_NOT_BE_EXPORTED", favoriteRoute: false, routeName: "主观路线名", excludeFromRecords: false)
         journal.races = [RaceGoal(name: "未来半马（示例）", date: date("2027-03-20T00:00:00Z"), distanceKm: 21.0975, targetSeconds: 6600, note: "THIS_PRIVATE_NOTE_MUST_NOT_BE_EXPORTED")]
         journal.plans = [PlannedRun(date: start, distanceKm: 3, paceMin: 180, paceMax: 300, note: "THIS_PRIVATE_NOTE_MUST_NOT_BE_EXPORTED", activityID: "run-1")]
-        let detailed = workout(points: points, samples: [sample(.heartRate,0,200,140),sample(.heartRate,200,500,160),
+        var detailed = workout(points: points, samples: [sample(.heartRate,0,200,140),sample(.heartRate,200,500,160),
             sample(.heartRate,0,540.25,200,device:"other",priority:0), sample(.power,0,10,230.5), sample(.speed,0,500,5),sample(.steps,0,500,1500),
             sample(.stride,0,500,1.1),sample(.contact,0,500,250),sample(.oscillation,0,500,8)], pauses:[pauseSpan])
+        detailed.appleHeartRateZones = AnalysisAppleHeartRateZones(source: "user", scope: "recorded_workout", zones: [
+            .init(index: 0, lowerBPM: nil, upperBPM: 120, seconds: 100),
+            .init(index: 1, lowerBPM: 120, upperBPM: 140, seconds: 200),
+            .init(index: 2, lowerBPM: 140, upperBPM: 160, seconds: 100),
+            .init(index: 3, lowerBPM: 160, upperBPM: 180, seconds: 100),
+            .init(index: 4, lowerBPM: 180, upperBPM: nil, seconds: 40.25)])
         let activities = [activity("run-1"), activity("missing", date:date("2026-10-02T00:00:00Z"),km:5,seconds:1600),activity("no-distance"),activity("partial")]
         let references = ExportReferenceData(samples:[ExportReferenceSample(metric:"VO2 max",date:start,value:52.3,unit:"ml/kg/min",source:"fixture.only")])
         let builder = try AnalysisExportBuilder(options: options,journal:journal,activities:activities,folder:output.appendingPathComponent("full"))
@@ -87,7 +94,7 @@ struct AnalysisExportTests {
         try await builder.add(activity:activities[3],workout:workout(issues:[ExportMetric.contact.rawValue:"模拟指标失败"]),error:nil)
         let result = try await builder.finish()
         check(result.count == 4 && result.failed == 1 && result.partial == 1 && result.bytes > 1000,"partial failures preserve other metrics")
-        let analysis = try AnalysisExportBuilder(options:AnalysisExportOptions(start:options.start,endExclusive:options.endExclusive,full:false,includePlanning:false,timeZone:options.timeZone),journal:journal,activities:activities,folder:output.appendingPathComponent("analysis"))
+        let analysis = try AnalysisExportBuilder(options:AnalysisExportOptions(start:options.start,endExclusive:options.endExclusive,full:false,includePlanning:false,timeZone:options.timeZone,calibration:options.calibration),journal:journal,activities:activities,folder:output.appendingPathComponent("analysis"))
         await analysis.setReferences(references)
         try await analysis.add(activity:activities[0],workout:detailed,error:nil)
         _ = try await analysis.finish()

@@ -72,7 +72,8 @@ struct TrainingJournalTests {
         let url = directory.appending(path:"journal.json")
         let journal = TrainingJournal(fileURL:url)
         var annotation = RunAnnotation(); annotation.kind = .tempo; annotation.effort = 7; annotation.note = "状态很好"; annotation.favoriteRoute = true; annotation.routeName = "滨江环线"
-        check(journal.saveAnnotation(annotation,id:"a"),"annotation saved")
+        check(journal.saveAnnotation(annotation,id:"a",now:start),"annotation saved")
+        annotation.feedbackRecordedAt = start; annotation.feedbackUpdatedAt = start; annotation.noteUpdatedAt = start
         check(journal.setOverride(false,a:"a",b:"b"),"route correction saved")
         check(journal.override("b","a") == false,"route correction symmetric")
         let goal = RaceGoal(name:"春季半马",date:start,distanceKm:21.0975,targetSeconds:7200)

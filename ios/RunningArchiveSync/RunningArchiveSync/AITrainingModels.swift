@@ -11,6 +11,13 @@ struct AITrainingProfile: Codable, Equatable {
     var longRunDay = 7
     var longRunMinutes: Double = 120
 
+    mutating func useRaceGoal(_ race: RaceGoal) {
+        goal = race.name
+        targetDistanceKm = race.distanceKm
+        targetDate = race.date
+        targetSeconds = race.targetSeconds
+    }
+
     func validate(now: Date = .now) throws {
         guard !goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               goal.count <= 1000, !availableDays.isEmpty,
@@ -67,6 +74,9 @@ enum AITrainingError: LocalizedError {
     case invalid(String)
     case http(Int)
     case emptyResponse
+    case responseFormat
+    case truncatedResponse
+    case filteredResponse
     case unreadable
     var errorDescription: String? {
         switch self {
@@ -75,7 +85,10 @@ enum AITrainingError: LocalizedError {
         case .http(402): "DeepSeek 账户余额不足，请充值后重试。"
         case .http(429): "DeepSeek 请求繁忙，请稍后重试。"
         case .http(let code): "DeepSeek 请求失败（HTTP \(code)），已保留原计划。"
-        case .emptyResponse: "模型没有返回完整计划，请重试；原计划已保留。"
+        case .emptyResponse: "接口未返回完整的模型回复，请重试；原计划已保留。"
+        case .responseFormat: "接口返回的数据不符合 Chat Completions 响应格式，无法读取模型回复。请重试或检查基础地址。"
+        case .truncatedResponse: "模型回复达到输出长度上限，内容不完整，请重试；原计划已保留。"
+        case .filteredResponse: "模型回复被服务端过滤，没有生成可用内容；原计划已保留。"
         case .unreadable: "本机 AI 计划无法读取，已保留原文件，请先备份并检查。"
         }
     }
@@ -108,6 +121,7 @@ struct AITrainingSession: Codable, Identifiable, Equatable {
     var purpose: String
     var steps: [AITrainingStep]
     var evidence_ids: [String]
+    var workout: RunWorkoutStructure? = nil
     var id: String { date }
 }
 
@@ -126,9 +140,10 @@ struct AITrainingPlan: Codable, Equatable {
     var sessions: [AITrainingSession]
     var adjustments: [AITrainingAdjustment]
     var limitations: [String]
+    var feedback_review: [AITrainingFeedbackReview]? = nil
 
     func validate(profile: AITrainingProfile, start: Date, evidenceIDs: Set<String>, calendar: Calendar) throws {
-        guard schema_version == 1, !stage.isEmpty, !summary.isEmpty, sessions.count == 7 else {
+        guard (1...2).contains(schema_version), !stage.isEmpty, !summary.isEmpty, sessions.count == 7 else {
             throw AITrainingError.invalid("模型返回的计划结构不完整，原计划已保留。")
         }
         let expected = (0..<7).map { AIDate.key(calendar.date(byAdding: .day, value: $0, to: start)!, calendar: calendar) }
@@ -153,18 +168,28 @@ struct AITrainingPlan: Codable, Equatable {
             }
             if session.kind == .rest {
                 guard session.duration_minutes == 0, (session.distance_km ?? 0) == 0,
-                      session.steps.isEmpty, paces[0] == nil else {
+                      session.steps.isEmpty, session.workout == nil, paces[0] == nil else {
                     throw AITrainingError.invalid("休息日包含了训练内容，原计划已保留。")
                 }
             } else {
                 let day = AIDate.weekday(date, calendar: calendar)
                 let limit = day == profile.longRunDay ? profile.longRunMinutes : profile.minutesPerDay
                 guard profile.availableDays.contains(day), session.duration_minutes > 0,
-                      session.duration_minutes <= limit, !session.steps.isEmpty,
+                      session.duration_minutes <= limit else {
+                    throw AITrainingError.invalid("训练日期或时长不符合你的设置，原计划已保留。")
+                }
+                if schema_version == 2 || session.workout != nil {
+                    guard session.workout != nil, session.steps.isEmpty, paces[0] == nil else {
+                        throw AITrainingError.invalid("新计划必须使用明确分段，不能同时提供另一套步骤或配速。")
+                    }
+                    _ = try session.resolvedWorkout()
+                } else {
+                    guard !session.steps.isEmpty,
                       session.steps.allSatisfy({ $0.minutes.isFinite && $0.minutes > 0 && !$0.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
                       Set(["热身", "主体", "放松"]).isSubset(of: Set(session.steps.map(\.phase))),
                       abs(session.steps.reduce(0) { $0 + $1.minutes } - session.duration_minutes) <= 1 else {
                     throw AITrainingError.invalid("训练日期、时长或步骤不符合你的设置，原计划已保留。")
+                    }
                 }
             }
         }
@@ -178,7 +203,7 @@ struct AITrainingPlan: Codable, Equatable {
 // Decode saved v1/v2 revisions while accepting fresh plans without the legacy adjustments field.
 extension AITrainingPlan {
     private enum CodingKeys: String, CodingKey {
-        case schema_version, stage, summary, run_review, sessions, adjustments, limitations
+        case schema_version, stage, summary, run_review, sessions, adjustments, limitations, feedback_review
     }
 
     init(from decoder: Decoder) throws {
@@ -190,10 +215,17 @@ extension AITrainingPlan {
         sessions = try values.decode([AITrainingSession].self, forKey: .sessions)
         adjustments = try values.decodeIfPresent([AITrainingAdjustment].self, forKey: .adjustments) ?? []
         limitations = try values.decode([String].self, forKey: .limitations)
+        feedback_review = try values.decodeIfPresent([AITrainingFeedbackReview].self, forKey: .feedback_review)
     }
 }
 
 enum AIDate {
+    static var localCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        calendar.firstWeekday = 2
+        return calendar
+    }
     static func key(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
@@ -213,6 +245,7 @@ enum AIDate {
 struct AICompletedSession: Codable, Identifiable {
     var session: AITrainingSession
     var activityIDs: [String]
+    var confirmedAt: Date? = nil
     var id: String { session.date }
 }
 
@@ -223,6 +256,9 @@ struct AIPlanRevision: Codable, Identifiable {
     var promptVersion: String
     var inputFingerprint: String
     var plan: AITrainingPlan
+    var analysisContext: TrainingAnalysisContext? = nil
+    var feedbackContext: [RunSubjectiveFeedback]? = nil
+    var profileContext: AITrainingProfile? = nil
 }
 
 struct AITrainingDiskState: Codable {
@@ -235,4 +271,18 @@ struct AITrainingDiskState: Codable {
     var lastSuccess: Date? = nil
     var nextRetry: Date? = nil
     var lastError: String? = nil
+    var manualOverrides: [AITrainingSessionOverride]? = nil
+    var associations: [TrainingSessionAssociation]? = nil
+}
+
+extension AITrainingPlan {
+    func validateAnalysis(_ context: TrainingAnalysisContext?) throws {
+        if context?.hasPaceCalibration != true,
+           sessions.contains(where: { $0.pace_seconds_per_km_min != nil || $0.pace_seconds_per_km_max != nil || $0.workout?.hasPace == true }) {
+            throw AITrainingError.invalid("缺少近期能力标定，模型仍返回精确配速；原计划已保留，请重试。")
+        }
+        if sessions.contains(where: { $0.workout?.allSteps.contains(where: { $0.heart_rate_min != nil || $0.heart_rate_max != nil }) == true }) {
+            throw AITrainingError.invalid("模型返回了尚未支持自动标定的精确心率目标，原计划已保留；如有需要可手动设置提醒。")
+        }
+    }
 }

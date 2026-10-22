@@ -24,6 +24,16 @@ final class HealthKitService {
     private let store = HKHealthStore()
     private var workoutByID: [String: HKWorkout] = [:]
 
+    private func cancellableQuery<Value>(_ makeQuery: (ArchiveQueryContinuation<Value>) -> HKQuery) async throws -> Value {
+        let state = ArchiveQueryContinuation<Value>(), store = store
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let query = makeQuery(state)
+                state.start(continuation, execute: { store.execute(query) }, stop: { store.stop(query) })
+            }
+        } onCancel: { state.cancel() }
+    }
+
     private var heartRateType: HKQuantityType {
         get throws {
             guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
@@ -33,10 +43,11 @@ final class HealthKitService {
         }
     }
 
-    func requestAuthorization(includeExportMetrics: Bool = false, includeTrainingContext: Bool = false) async throws {
+    func requestAuthorization(includeExportMetrics: Bool = false, includeTrainingContext: Bool = false, includeHeartRateProfile: Bool = false) async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw HealthSyncError.unavailable }
         var readTypes: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
         readTypes.insert(try heartRateType)
+        if includeHeartRateProfile, let type = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) { readTypes.insert(type) }
         if let power = HKQuantityType.quantityType(forIdentifier: .runningPower) { readTypes.insert(power) }
         if let speed = HKQuantityType.quantityType(forIdentifier: .runningSpeed) { readTypes.insert(speed) }
         if let energy = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { readTypes.insert(energy) }
@@ -54,6 +65,53 @@ final class HealthKitService {
             if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { readTypes.insert(sleep) }
         }
         try await store.requestAuthorization(toShare: [], read: readTypes)
+    }
+
+    func heartRateProfile(now: Date = .now, calendar: Calendar = .current) async -> AnalysisHeartRateProfile {
+        var age: Int?, ageStatus = "未获得出生日期，请在健康中填写并允许读取；也可选择手动覆盖。"
+        do {
+            let components = try store.dateOfBirthComponents()
+            if let value = TrainingAnalysisMath.ageYears(healthBirth: components, now: now, timeZone: calendar.timeZone), (18...100).contains(value) {
+                age = value; ageStatus = "年龄来自Apple健康，仅在本机计算；原始出生日期不保存、不发送。"
+            } else { ageStatus = "自动公式仅用于18–100岁成人；当前没有适用的年龄信息。" }
+        } catch { /* Read denial and absent data are deliberately indistinguishable. */ }
+        var zones: AnalysisAppleHeartRateZones?, zoneStatus = "Apple区间读取需要iOS 27或更新版本。"
+        if #available(iOS 27.0, *) {
+            do {
+                if let configuration = try await store.preferredWorkoutZoneConfiguration(for: try heartRateType) {
+                    zones = appleZones(configuration, scope: "current_preference")
+                    zoneStatus = zones == nil ? "Apple区间配置无效，未使用。" : "已读取Apple当前心率区间；保留系统、用户或应用来源。"
+                } else { zoneStatus = "未获得Apple心率区间，可能尚未设置或不可读取。" }
+            } catch { zoneStatus = "Apple心率区间暂时不可读取，可稍后重试。" }
+        }
+        return AnalysisHeartRateProfile(age: age, preferredZones: zones, ageStatus: ageStatus, zoneStatus: zoneStatus, fetchedAt: now)
+    }
+
+    @available(iOS 27.0, *)
+    private func appleZones(_ configuration: HKWorkoutZoneConfiguration, scope: String) -> AnalysisAppleHeartRateZones? {
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let source: String
+        switch configuration.source {
+        case .system: source = "system"
+        case .user: source = "user"
+        case .app: source = "app"
+        @unknown default: source = "unknown"
+        }
+        let zones = configuration.zones.map { AnalysisAppleHeartRateZone(index: $0.index,
+            lowerBPM: $0.minimum?.doubleValue(for: unit), upperBPM: $0.maximum?.doubleValue(for: unit)) }
+        let value = AnalysisAppleHeartRateZones(source: source, scope: scope, zones: zones)
+        return TrainingAnalysisMath.validAppleZones(value) ? value : nil
+    }
+
+    private func recordedAppleZones(_ workout: HKWorkout) -> AnalysisAppleHeartRateZones? {
+        if #available(iOS 27.0, *), let type = try? heartRateType,
+           let group = workout.zoneGroupsByType?[type], !group.zoneDurations.isEmpty,
+           var value = appleZones(group.configuration, scope: "recorded_workout") {
+            let durations = Dictionary(group.zoneDurations.map { ($0.zone.index, $0.duration) }, uniquingKeysWith: +)
+            for i in value.zones.indices { value.zones[i].seconds = durations[value.zones[i].index] ?? 0 }
+            return value
+        }
+        return nil
     }
 
     func runningWorkoutPreviews(limit: Int = HKObjectQueryNoLimit) async throws -> [WorkoutPreview] {
@@ -83,7 +141,8 @@ final class HealthKitService {
                 avgPower: power?.averageQuantity()?.doubleValue(for: .watt()),
                 avgCadence: HKQuantityType.quantityType(forIdentifier: .stepCount)
                     .flatMap { workout.statistics(for: $0)?.sumQuantity()?.doubleValue(for: .count()) }
-                    .flatMap { workout.duration > 0 ? $0 / (workout.duration / 60) : nil }
+                    .flatMap { workout.duration > 0 ? $0 / (workout.duration / 60) : nil },
+                endDate: workout.endDate
             )
         }
     }
@@ -96,7 +155,7 @@ final class HealthKitService {
                 latitude: $0.coordinate.latitude,
                 longitude: $0.coordinate.longitude,
                 altitude: $0.altitude,
-                speedMps: $0.speed >= 0 ? $0.speed : nil
+                speedMps: $0.speed >= 0 ? $0.speed : nil, verticalAccuracy: $0.verticalAccuracy, horizontalAccuracy: $0.horizontalAccuracy
             )
         }
     }
@@ -120,7 +179,7 @@ final class HealthKitService {
         let points = route.map {
             RoutePointPayload(timestamp: $0.timestamp, latitude: $0.coordinate.latitude,
                               longitude: $0.coordinate.longitude, altitude: $0.altitude,
-                              speedMps: $0.speed >= 0 ? $0.speed : nil)
+                              speedMps: $0.speed >= 0 ? $0.speed : nil, verticalAccuracy: $0.verticalAccuracy, horizontalAccuracy: $0.horizontalAccuracy)
         }
         let avgPower = power.isEmpty ? nil : power.reduce(0, +) / Double(power.count)
         let cadence = steps.map { $0 / max(workout.duration / 60, 1) }
@@ -182,7 +241,7 @@ final class HealthKitService {
                                 end: point.dateInterval.end, value: point.quantity.doubleValue(for: unit), unit: symbol,
                                 source: sample?.sourceRevision.source.name ?? "未知来源", sourceBundle: bundle,
                                 device: [sample?.device?.manufacturer, sample?.device?.model, sample?.device?.name].compactMap { $0 }.joined(separator: " / "),
-                                deviceKey: sample?.device?.localIdentifier ?? "", sourcePriority: sameDevice ? 2 : (sameSource ? 1 : 0))
+                                deviceKey: sample?.device?.localIdentifier ?? "", sourcePriority: sameDevice ? 2 : (sameSource ? 1 : 0), sourceVersion: (sample?.sourceRevision.version ?? "") + ":" + (sample?.metadata?[HKMetadataKeyAlgorithmVersion].map(String.init(describing:)) ?? ""))
                         }
                         return (metric, samples, nil)
                     } catch is CancellationError { throw CancellationError() }
@@ -197,7 +256,7 @@ final class HealthKitService {
         do {
             points = (try await locations).map {
                 RoutePointPayload(timestamp: $0.timestamp, latitude: $0.coordinate.latitude,
-                    longitude: $0.coordinate.longitude, altitude: $0.altitude, speedMps: $0.speed >= 0 ? $0.speed : nil)
+                    longitude: $0.coordinate.longitude, altitude: $0.altitude, speedMps: $0.speed >= 0 ? $0.speed : nil, verticalAccuracy: $0.verticalAccuracy, horizontalAccuracy: $0.horizontalAccuracy)
             }
         } catch is CancellationError { throw CancellationError() }
         catch { issues["gps"] = error.localizedDescription }
@@ -218,7 +277,7 @@ final class HealthKitService {
             contact: statistics(.runningGroundContactTime)?.averageQuantity()?.doubleValue(for: .secondUnit(with: .milli)),
             oscillation: statistics(.runningVerticalOscillation)?.averageQuantity()?.doubleValue(for: .meterUnit(with: .centi)),
             elevationLoss: (workout.metadata?[HKMetadataKeyElevationDescended] as? HKQuantity)?.doubleValue(for: .meter()),
-            steps: steps, pauses: exportPauses(workout), readIssues: issues)
+            steps: steps, pauses: exportPauses(workout), readIssues: issues, appleHeartRateZones: recordedAppleZones(workout))
     }
 
     func exportReferences(start: Date, end: Date) async throws -> ExportReferenceData {
@@ -230,14 +289,14 @@ final class HealthKitService {
             try Task.checkCancellation()
             guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
             do {
-                let values: [HKQuantitySample] = try await withCheckedThrowingContinuation { continuation in
+                let values: [HKQuantitySample] = try await cancellableQuery { continuation in
                     let query = HKSampleQuery(sampleType: type,
                         predicate: HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate),
                         limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
                         if let error, !Self.isNoData(error) { continuation.resume(throwing: error) }
                         else { continuation.resume(returning: samples as? [HKQuantitySample] ?? []) }
                     }
-                    store.execute(query)
+                    return query
                 }
                 result.samples += values.filter { $0.startDate >= start && $0.startDate < end }.map {
                     ExportReferenceSample(metric: label, date: $0.startDate, value: $0.quantity.doubleValue(for: unit), unit: symbol,
@@ -250,8 +309,8 @@ final class HealthKitService {
         return result
     }
 
-    func trainingContext(now: Date, calendar: Calendar) async -> AIRecoveryContext {
-        let since = calendar.date(byAdding: .day, value: -28, to: calendar.startOfDay(for: now))!
+    func trainingContext(now: Date, calendar: Calendar, days: Int = 28) async -> AIRecoveryContext {
+        let since = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: now))!
         var result = AIRecoveryContext()
         for (identifier, metric, unit, symbol): (HKQuantityTypeIdentifier, String, HKUnit, String) in [
             (.restingHeartRate, "resting_heart_rate", .count().unitDivided(by: .minute()), "bpm"),
@@ -260,7 +319,13 @@ final class HealthKitService {
             guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
             do {
                 let samples = try await contextSamples(type: type, start: since, end: now) as? [HKQuantitySample] ?? []
-                let points = samples.map { AIBackgroundPoint(date: $0.startDate, value: $0.quantity.doubleValue(for: unit), source: $0.sourceRevision.source.bundleIdentifier) }
+                let points = samples.map { sample in
+                    let source = sample.sourceRevision.source.bundleIdentifier + "|" + (sample.device?.model ?? "")
+                        + "|" + (sample.device?.hardwareVersion ?? "") + "|" + (sample.sourceRevision.version ?? "") + "|" + (sample.metadata?[HKMetadataKeyAlgorithmVersion].map(String.init(describing:)) ?? "")
+                    let hour = calendar.component(.hour, from: sample.startDate)
+                    let context = metric == "hrv_sdnn" ? "clock_\(hour / 6 * 6)_\(hour / 6 * 6 + 6)" : "system_daily"
+                    return AIBackgroundPoint(date: sample.startDate, value: sample.quantity.doubleValue(for: unit), source: source, context: context)
+                }
                 let daily = AIRecoveryContext.daily(points, metric: metric, unit: symbol, calendar: calendar)
                 result.daily_metrics += daily
                 if daily.isEmpty { result.notes.append("\(metric)：未获得记录，可能未记录或未授权。") }
@@ -274,7 +339,7 @@ final class HealthKitService {
                 let intervals = samples.filter { asleep.contains($0.value) }.map {
                     AISleepInterval(start: $0.startDate, end: $0.endDate, source: $0.sourceRevision.source.bundleIdentifier)
                 }
-                result.sleep_windows = AIRecoveryContext.sleep(intervals, start: since, end: now, calendar: calendar)
+                result.sleep_windows = AIRecoveryContext.sleep(intervals, start: since, end: now, calendar: calendar, limit: days)
                 if result.sleep_windows.isEmpty { result.notes.append("sleep：未获得入睡记录，不能将卧床时间当作睡眠。") }
             } catch { result.notes.append("sleep：暂时不可读取。") }
         }
@@ -315,13 +380,13 @@ final class HealthKitService {
     }
 
     private func contextSamples(type: HKSampleType, start: Date, end: Date) async throws -> [HKSample] {
-        try await withCheckedThrowingContinuation { continuation in
+        try await cancellableQuery { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForSamples(withStart: start, end: end, options: []),
                 limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
                 if let error, !Self.isNoData(error) { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: (samples ?? []).filter { $0.startDate <= end && $0.endDate >= start }) }
             }
-            store.execute(query)
+            return query
         }
     }
 
@@ -425,7 +490,7 @@ final class HealthKitService {
     }
 
     private func runningWorkouts(limit: Int) async throws -> [HKWorkout] {
-        try await withCheckedThrowingContinuation { continuation in
+        try await cancellableQuery { continuation in
             let predicate = HKQuery.predicateForWorkouts(with: .running)
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: limit,
@@ -437,7 +502,7 @@ final class HealthKitService {
                 }
                 continuation.resume(returning: samples as? [HKWorkout] ?? [])
             }
-            store.execute(query)
+            return query
         }
     }
 
@@ -450,7 +515,7 @@ final class HealthKitService {
     }
 
     private func routeLocations(for workout: HKWorkout) async throws -> [CLLocation] {
-        let routes: [HKWorkoutRoute] = try await withCheckedThrowingContinuation { continuation in
+        let routes: [HKWorkoutRoute] = try await cancellableQuery { continuation in
             let predicate = HKQuery.predicateForObjects(from: workout)
             let query = HKSampleQuery(sampleType: HKSeriesType.workoutRoute(), predicate: predicate,
                                       limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
@@ -461,11 +526,11 @@ final class HealthKitService {
                 }
                 continuation.resume(returning: samples as? [HKWorkoutRoute] ?? [])
             }
-            store.execute(query)
+            return query
         }
         var all: [CLLocation] = []
         for route in routes {
-            let values: [CLLocation] = try await withCheckedThrowingContinuation { continuation in
+            let values: [CLLocation] = try await cancellableQuery { continuation in
                 var collected: [CLLocation] = []
                 var resumed = false
                 let query = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
@@ -479,7 +544,7 @@ final class HealthKitService {
                     collected.append(contentsOf: locations ?? [])
                     if done { resumed = true; continuation.resume(returning: collected) }
                 }
-                store.execute(query)
+                return query
             }
             all.append(contentsOf: values)
         }
@@ -487,7 +552,7 @@ final class HealthKitService {
     }
 
     private func quantitySeriesPoints(type: HKQuantityType, workout: HKWorkout, forExport: Bool = false) async throws -> [QuantitySeriesPoint] {
-        try await withCheckedThrowingContinuation { continuation in
+        try await cancellableQuery { continuation in
             var collected: [QuantitySeriesPoint] = []
             var resumed = false
             let query = HKQuantitySeriesSampleQuery(
@@ -516,7 +581,7 @@ final class HealthKitService {
             }
             query.includeSample = forExport
             query.orderByQuantitySampleStartDate = true
-            store.execute(query)
+            return query
         }
     }
 
@@ -535,7 +600,7 @@ final class HealthKitService {
 
     private func stepCount(for workout: HKWorkout) async throws -> Double? {
         guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return nil }
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await cancellableQuery { continuation in
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: samplePredicate(for: workout),
                                           options: .cumulativeSum) { _, result, error in
                 if let error {
@@ -545,7 +610,7 @@ final class HealthKitService {
                 }
                 continuation.resume(returning: result?.sumQuantity()?.doubleValue(for: .count()))
             }
-            store.execute(query)
+            return query
         }
     }
 

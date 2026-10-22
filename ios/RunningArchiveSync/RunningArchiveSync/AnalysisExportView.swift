@@ -3,6 +3,7 @@ import SwiftUI
 struct AnalysisExportView: View {
     @EnvironmentObject private var store: ArchiveStore
     @EnvironmentObject private var journal: TrainingJournal
+    @EnvironmentObject private var analytics: TrainingAnalysisStore
     @State private var range = ExportRange.recent
     @State private var start = Calendar.current.date(byAdding: .day, value: -89, to: .now) ?? .now
     @State private var end = Date.now
@@ -31,7 +32,7 @@ struct AnalysisExportView: View {
         case .all: lower = calendar.startOfDay(for: store.activities.map(\.date).min() ?? .now); upper = .now
         case .custom: lower = calendar.startOfDay(for: start); upper = end
         }
-        return AnalysisExportOptions(start: lower, endExclusive: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: upper))!, full: full, includePlanning: includePlanning, timeZone: .current)
+        return AnalysisExportOptions(start: lower, endExclusive: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: upper))!, full: full, includePlanning: includePlanning, timeZone: .current, calibration: analytics.calibration, preferredAppleHeartRateZones: analytics.heartRateProfile?.preferredZones)
     }
     private var selected: [ArchiveActivity] { store.activities.filter { options.includes($0.date) }.sorted { $0.date < $1.date } }
 
@@ -173,8 +174,12 @@ struct AnalysisExportView: View {
             do {
                 progressText = "正在准备健康数据权限…"
                 try await store.prepareAnalysisExport()
+                await analytics.prepareHeartRateProfile(archive: store, authorize: true, force: true)
                 try Task.checkCancellation()
-                let builder = try AnalysisExportBuilder(options: settings, journal: annotations, activities: activities, folder: folder)
+                var resolved = settings
+                resolved.calibration = analytics.calibration
+                resolved.preferredAppleHeartRateZones = analytics.heartRateProfile?.preferredZones
+                let builder = try AnalysisExportBuilder(options: resolved, journal: annotations, activities: activities, folder: folder)
                 progressText = "正在读取体能参考指标…"
                 let references = try await store.exportReferences(start: settings.start, end: settings.endExclusive)
                 await builder.setReferences(references)

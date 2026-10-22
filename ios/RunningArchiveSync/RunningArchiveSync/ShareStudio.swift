@@ -23,9 +23,11 @@ enum ShareMapProvider: String, CaseIterable, Identifiable {
 
 struct ShareStudioView: View {
     @EnvironmentObject private var store: ArchiveStore
+    @EnvironmentObject private var navigation: ArchiveNavigationStore
     @Environment(\.colorScheme) private var colorScheme
     let initialActivity: ArchiveActivity?
 
+    @FocusState private var titleIsFocused: Bool
     @State private var selectedID: String?
     @State private var shareTitle: String
     @State private var layout: ShareLayout = .compact
@@ -88,10 +90,22 @@ struct ShareStudioView: View {
             .padding(.top, 16)
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(RunTheme.page)
         .navigationTitle("分享")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(RunTheme.page, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { titleIsFocused = false }
+                    .accessibilityIdentifier("share.title.done")
+            }
+        }
+        .onChange(of: titleIsFocused) { _, focused in navigation.isEditingShareTitle = focused }
+        .onDisappear {
+            titleIsFocused = false
+            navigation.isEditingShareTitle = false
+        }
         .task { await store.load(); selectDefault() }
         .task(id: renderToken) {
             guard renderRequested, selected != nil else { return }
@@ -119,7 +133,10 @@ struct ShareStudioView: View {
     }
 
     private var activitySelector: some View {
-        Button { showingActivityPicker = true } label: {
+        Button {
+            titleIsFocused = false
+            showingActivityPicker = true
+        } label: {
             HStack(spacing: 12) {
                 Image(systemName: "figure.run").font(.title3).foregroundStyle(RunTheme.accent)
                     .frame(width: 38, height: 38).background(RunTheme.accent.opacity(0.09), in: Circle())
@@ -162,40 +179,96 @@ struct ShareStudioView: View {
             Text(renderedImage == nil ? "预览为轨迹示意 · 生成后显示真实地图" : "图片已生成，可保存或分享")
                 .font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture { titleIsFocused = false }
     }
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("图片设置").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
-            VStack(spacing: 0) {
+            Text("图片设置").font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary).padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("图片版式").font(.subheadline.weight(.medium))
+                HStack(spacing: 10) {
+                    layoutOption(.compact, title: "图文", ratio: "3:4")
+                    layoutOption(.detailed, title: "竖屏", ratio: "9:16")
+                }
+                Divider()
                 HStack {
-                    Text("版式").font(.subheadline)
+                    Label("配色", systemImage: "circle.lefthalf.filled")
+                    Spacer(minLength: 24)
+                    Picker("配色", selection: $darkCard) {
+                        Text("浅色").tag(false)
+                        Text("深色").tag(true)
+                    }.pickerStyle(.segmented).frame(width: 160)
+                }
+                Divider()
+                HStack {
+                    Label("地图", systemImage: "map")
                     Spacer()
-                    Picker("版式", selection: $layout) {
-                        ForEach(ShareLayout.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented).frame(maxWidth: 238)
-                }.padding(14)
-                Divider().padding(.horizontal, 14)
-                Picker("配色", selection: $darkCard) { Text("浅色").tag(false); Text("深色").tag(true) }
-                    .pickerStyle(.menu).padding(.horizontal, 14).padding(.vertical, 6)
-                Divider().padding(.horizontal, 14)
-                Picker("底图", selection: $mapProvider) {
-                    ForEach(ShareMapProvider.allCases) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.menu).padding(.horizontal, 14).padding(.vertical, 6)
-                Divider().padding(.horizontal, 14)
-                HStack {
-                    Text("标题").font(.subheadline)
-                    TextField(selected?.name ?? "户外跑步", text: $shareTitle).multilineTextAlignment(.trailing).font(.subheadline)
-                }.padding(14)
-                Divider().padding(.horizontal, 14)
-                Toggle("附上档案二维码", isOn: $includeQRCode).font(.subheadline).tint(RunTheme.accent).padding(14)
-            }.background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+                    Picker("地图", selection: $mapProvider) {
+                        ForEach(ShareMapProvider.allCases) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.menu).labelsHidden().tint(RunTheme.route)
+                }
+            }
+            .font(.subheadline).padding(16)
+            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("分享标题").font(.subheadline.weight(.medium))
+                TextField(selected?.name ?? "户外跑步", text: $shareTitle)
+                    .font(.body).padding(12)
+                    .background(RunTheme.page, in: RoundedRectangle(cornerRadius: 10))
+                    .focused($titleIsFocused).submitLabel(.done)
+                    .onSubmit { titleIsFocused = false }
+                    .accessibilityIdentifier("share.title")
+                Divider()
+                Toggle(isOn: $includeQRCode) {
+                    Label("档案二维码", systemImage: "qrcode")
+                        .font(.subheadline)
+                }.tint(RunTheme.accent)
+            }
+            .padding(16)
+            .background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
         }
+        .onChange(of: layout) { _, _ in titleIsFocused = false }
+        .onChange(of: darkCard) { _, _ in titleIsFocused = false }
+        .onChange(of: mapProvider) { _, _ in titleIsFocused = false }
+        .onChange(of: includeQRCode) { _, _ in titleIsFocused = false }
+    }
+
+    private func layoutOption(_ option: ShareLayout, title: String, ratio: String) -> some View {
+        let selected = layout == option
+        return Button {
+            titleIsFocused = false
+            layout = option
+        } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(selected ? RunTheme.route : Color.secondary.opacity(0.5), lineWidth: 1.5)
+                    .frame(width: option == .compact ? 20 : 15, height: 26)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(ratio).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? RunTheme.route : Color.secondary.opacity(0.3))
+            }
+            .foregroundStyle(.primary).padding(12).frame(maxWidth: .infinity)
+            .background(selected ? RunTheme.route.opacity(0.07) : RunTheme.page, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? RunTheme.route.opacity(0.55) : .clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.rawValue)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var actions: some View {
         VStack(spacing: 10) {
             Button {
+                titleIsFocused = false
                 renderRequested = true
                 renderToken &+= 1
             } label: {

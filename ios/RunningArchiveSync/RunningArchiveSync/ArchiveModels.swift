@@ -1,6 +1,11 @@
 import CoreLocation
 import Foundation
 
+/// Month and activity links share the same value-based navigation stack.
+struct ArchiveMonthRoute: Hashable {
+    let month: Date
+}
+
 enum ActivityChartSampling {
     /// Keep both extremes in each bucket, plus segment boundaries, so peaks and data gaps remain visible.
     static func indices(values: [Double], segments: [Int], limit: Int = 400) -> [Int] {
@@ -162,6 +167,10 @@ struct ArchiveActivity: Codable, Identifiable, Hashable {
     let avgPower: Double?
     let avgCadence: Double?
     let isPb: Bool
+    // Keep the HealthKit summary identity separate from detail/map presentation enrichment.
+    // Optional so overview snapshots written by older app versions remain readable.
+    var workoutSummarySignature: String? = nil
+    var workoutEndDate: Date? = nil
 
     init(run: ArchiveRun) {
         id = run.id
@@ -215,6 +224,8 @@ struct ArchiveActivity: Codable, Identifiable, Hashable {
         avgPower = preview.avgPower
         avgCadence = preview.avgCadence
         self.isPb = isPb
+        workoutEndDate = preview.endDate
+        workoutSummarySignature = "\(preview.id)|\(preview.date.timeIntervalSince1970)|\(preview.distanceKm)|\(preview.duration)|\(preview.avgHeartRate ?? 0)|\(preview.maxHeartRate ?? 0)|\(preview.avgPower ?? 0)|\(preview.avgCadence ?? 0)"
     }
 
     init(activity: ArchiveActivity, payload: WorkoutPayload) {
@@ -232,6 +243,8 @@ struct ArchiveActivity: Codable, Identifiable, Hashable {
         avgPower = payload.avgPower ?? activity.avgPower
         avgCadence = payload.avgCadence ?? activity.avgCadence
         isPb = activity.isPb
+        workoutSummarySignature = activity.workoutSummarySignature
+        workoutEndDate = activity.workoutEndDate
     }
 
     private static func durationText(_ duration: TimeInterval) -> String {

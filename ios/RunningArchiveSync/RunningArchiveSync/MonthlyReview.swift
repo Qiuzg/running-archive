@@ -31,13 +31,20 @@ struct MonthlyReviewView: View {
                         Spacer()
                         Text("\(data.activeDays) 天留下足迹").font(.caption).foregroundStyle(.secondary)
                     }
-                    MonthlyCalendar(report: data, selectedDay: selectedDay) { day in
+                    MonthlyCalendar(report: data, selectedDay: selectedDay, opensSingleActivity: true) { day in
                         selectedDay = selectedDay == day ? nil : day
                     }
-                    Text("日期下为当天公里数 · 点击日期筛选记录")
+                    Text("日期下为公里数 · 单次直接查看，多次筛选记录")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 .padding(18).background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 22))
+                NavigationLink { TrainingAnalysisModule(section: .structure, month: data.start) } label: {
+                    HStack {
+                        Label("本月跑量与频率", systemImage: "chart.bar")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
+                    }.font(.subheadline).padding(16).background(RunTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+                }.buttonStyle(.plain)
                 weeklyDistribution(data)
                 records(data).id("month-records")
             }
@@ -229,6 +236,7 @@ struct MonthlyCalendar: View {
     let report: MonthlyReport
     var selectedDay: Int? = nil
     var poster = false
+    var opensSingleActivity = false
     var onSelect: ((Int) -> Void)? = nil
 
     var body: some View {
@@ -247,7 +255,10 @@ struct MonthlyCalendar: View {
                             let index = row * 7 + col - report.leadingDays
                             if report.days.indices.contains(index) {
                                 let day = report.days[index]
-                                if let onSelect {
+                                if opensSingleActivity, day.activities.count == 1, let activity = day.activities.first {
+                                    NavigationLink(value: activity) { cell(day) }.buttonStyle(.plain)
+                                        .accessibilityLabel("\(day.number) 日，\(String(format: "%.1f", day.distance)) 公里，查看跑步详情")
+                                } else if let onSelect {
                                     Button { onSelect(day.number) } label: { cell(day) }.buttonStyle(.plain)
                                         .accessibilityLabel("\(day.number) 日，\(day.activities.count) 次跑步，\(String(format: "%.1f", day.distance)) 公里")
                                 } else { cell(day) }

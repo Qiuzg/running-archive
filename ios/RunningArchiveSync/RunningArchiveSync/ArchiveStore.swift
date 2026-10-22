@@ -30,25 +30,36 @@ final class ArchiveStore: ObservableObject {
     @Published var routeScanStatus: String?
 
     private let health = HealthKitService()
+    private var syncPreviewSnapshot: (date: Date, previews: [WorkoutPreview])?
     private var cache: HealthArchiveCache?
+    private var cachePreparation: Task<Void, Never>?
     private var metricsCache: [String: WorkoutMetricPresentation] = [:]
     private var detailCache: [String: ArchiveRouteDetail] = [:]
     private var routeLookup: [String: ArchiveRouteSummary] = [:]
     private var routeScanTask: Task<Void, Never>?
+    private var heartRateProfileValue: AnalysisHeartRateProfile?
 
     private let chartPointLimit = 480
     private let detailMapPointLimit = 900
 
-    func configureCache(_ context: ModelContext) {
-        guard cache == nil else { return }
-        let cache = HealthArchiveCache(context: context)
-        self.cache = cache
-        if activities.isEmpty, let snapshot = try? cache.overview() {
-            activities = snapshot.activities
-            summary = snapshot.summary
+    func configureCache(_ context: ModelContext) async {
+        if let cachePreparation { await cachePreparation.value; return }
+        let container = context.container
+        let preparation = Task { @MainActor in
+            let cache = await Task.detached(priority: .userInitiated) { HealthArchiveCache(modelContainer: container) }.value
+            await cache.configure()
+            self.cache = cache
+            if let snapshot = try? await cache.overview(), self.activities.isEmpty {
+                self.activities = snapshot.activities
+                self.summary = snapshot.summary
+            }
+            if let routes = try? await cache.allRouteSummaries() {
+                let ids = Set(self.activities.map(\.id))
+                self.setRoutes(self.orderedRoutes(routes.filter { ids.contains($0.id) }))
+            }
         }
-        let ids = Set(activities.map(\.id))
-        setRoutes(orderedRoutes(((try? cache.allRouteSummaries()) ?? []).filter { ids.contains($0.id) }))
+        cachePreparation = preparation
+        await preparation.value
     }
 
     func load(force: Bool = false, authorize: Bool = true, scanRoutes: Bool = true) async {
@@ -61,17 +72,18 @@ final class ArchiveStore: ObservableObject {
                 UserDefaults.standard.set(true, forKey: "healthReadAuthorization-v2")
             }
             let previews = try await health.runningWorkoutPreviews()
+            syncPreviewSnapshot = (.now, previews)
             let marathonPB = fastest(in: previews, distance: 41...44)
             let halfPB = fastest(in: previews, distance: 20...23)
             let pbIDs = Set([marathonPB?.id, halfPB?.id].compactMap { $0 })
 
             activities = previews.map { ArchiveActivity(preview: $0, isPb: pbIDs.contains($0.id)) }
             summary = makeSummary(previews: previews, marathonPB: marathonPB, halfPB: halfPB)
-            persistOverview()
+            await persistOverview()
 
             if let cache {
                 let activeIDs = Set(previews.map(\.id))
-                setRoutes(orderedRoutes(try cache.allRouteSummaries().filter { activeIDs.contains($0.id) }))
+                setRoutes(orderedRoutes(try await cache.allRouteSummaries().filter { activeIDs.contains($0.id) }))
             }
             isLoading = false
             if scanRoutes { startRouteScan(for: activities) }
@@ -90,7 +102,7 @@ final class ArchiveStore: ObservableObject {
             ? Date.now.addingTimeInterval(-6 * 60 * 60)
             : nil
         let payload: WorkoutPayload
-        if let cached = try cache?.workoutPayload(id: id, newerThan: cacheCutoff),
+        if let cached = try await cache?.workoutPayload(id: id, newerThan: cacheCutoff),
            cached.runningSpeedSamples != nil {
             payload = cached
         } else {
@@ -98,18 +110,19 @@ final class ArchiveStore: ObservableObject {
                 throw LocalArchiveError.workoutUnavailable
             }
             payload = loaded
-            try cache?.save(payload: loaded)
+            try await cache?.save(payload: loaded)
         }
 
-        return cacheDetail(payload: payload)
+        return await cacheDetail(payload: payload)
     }
 
-    func cachedActivityPresentation(id: String) -> (ArchiveRouteDetail?, WorkoutMetricPresentation?) {
+    func cachedActivityPresentation(id: String) async -> (ArchiveRouteDetail?, WorkoutMetricPresentation?) {
         let cutoff = presentationCutoff(id: id)
-        let metrics = metricsCache[id] ?? (try? cache?.metrics(id: id, newerThan: cutoff))
+        var metrics = metricsCache[id]
+        if metrics == nil { metrics = try? await cache?.metrics(id: id, newerThan: cutoff) }
         if let metrics { metricsCache[id] = metrics }
         if detailCache[id] == nil,
-           let payload = try? cache?.workoutPayload(id: id, newerThan: cutoff) {
+           let payload = try? await cache?.workoutPayload(id: id, newerThan: cutoff) {
             detailCache[id] = makeDetail(payload: payload, name: activities.first { $0.id == id }?.name ?? payload.name)
         }
         return (detailCache[id], metrics)
@@ -117,7 +130,7 @@ final class ArchiveStore: ObservableObject {
 
     /// Read one set of native data for the map, all five charts, and running-form facts.
     func activityPresentation(id: String) async throws -> (ArchiveRouteDetail, WorkoutMetricPresentation) {
-        let cached = cachedActivityPresentation(id: id)
+        let cached = await cachedActivityPresentation(id: id)
         if let route = cached.0, let metrics = cached.1 { return (route, metrics) }
         let workout = try await exportWorkout(id: id)
         let metrics = await Task.detached(priority: .userInitiated) { WorkoutMetricPresentation(workout: workout) }.value
@@ -126,23 +139,24 @@ final class ArchiveStore: ObservableObject {
         func samples(_ metric: ExportMetric) -> [MetricSamplePayload] {
             (metrics.series[metric] ?? []).map { MetricSamplePayload(elapsedSeconds: $0.seconds, value: $0.value) }
         }
+        var routePoints = workout.points
+        if workout.readIssues["gps"] != nil, let saved = try? await cache?.workoutPayload(id: id) { routePoints = saved.routePoints }
         let payload = WorkoutPayload(id: id, name: activity?.name ?? "户外跑步", startDate: workout.start,
             distanceKm: workout.distanceKm ?? activity?.distanceKm ?? 0, durationSeconds: workout.duration,
             city: activity?.city ?? "", avgHeartRate: workout.heartRate.map { Int($0.rounded()) },
             maxHeartRate: workout.maxHeartRate.map { Int($0.rounded()) }, avgCadence: workout.cadence,
             avgPower: workout.power,
-            routePoints: workout.readIssues["gps"] != nil
-                ? ((try? cache?.workoutPayload(id: id))?.routePoints ?? workout.points) : workout.points,
+            routePoints: routePoints,
             heartRateSamples: samples(.heartRate),
             runningSpeedSamples: samples(.speed), intervals: workout.intervals)
         // Transient/partial HealthKit reads must be retried, rather than becoming permanent missing charts.
         if workout.readIssues.isEmpty {
-            try? cache?.save(payload: payload)
-            try? cache?.save(metrics: metrics, id: id)
+            try? await cache?.save(payload: payload)
+            try? await cache?.save(metrics: metrics, id: id)
         }
         if workout.readIssues.isEmpty { metricsCache[id] = metrics }
         else { metricsCache.removeValue(forKey: id) }
-        return (cacheDetail(payload: payload, persistRoute: workout.readIssues["gps"] == nil), metrics)
+        return (await cacheDetail(payload: payload, persistRoute: workout.readIssues["gps"] == nil), metrics)
     }
 
     private func presentationCutoff(id: String) -> Date? {
@@ -150,24 +164,24 @@ final class ArchiveStore: ObservableObject {
         return Date.now.addingTimeInterval(-6 * 3600)
     }
 
-    private func cacheDetail(payload: WorkoutPayload, persistRoute: Bool = true) -> ArchiveRouteDetail {
+    private func cacheDetail(payload: WorkoutPayload, persistRoute: Bool = true) async -> ArchiveRouteDetail {
         let id = payload.id
         let activity = activities.first { $0.id == id }
         let detail = makeDetail(payload: payload, name: activity?.name ?? payload.name)
         if let index = activities.firstIndex(where: { $0.id == id }) {
             activities[index] = ArchiveActivity(activity: activities[index], payload: payload)
-            persistOverview()
+            await persistOverview()
         }
         detailCache[id] = detail
         let route = makeRouteSummary(id: id, name: activity?.name ?? payload.name,
             distanceKm: payload.distanceKm, points: payload.routePoints)
-        if persistRoute { try? cache?.saveRoute(id: id, summary: route) }
+        if persistRoute { try? await cache?.saveRoute(id: id, summary: route) }
         if let route { upsertRoute(route) }
         return detail
     }
 
-    private func persistOverview() {
-        if let summary { try? cache?.save(overview: ArchiveOverviewSnapshot(summary: summary, activities: activities)) }
+    private func persistOverview() async {
+        if let summary { try? await cache?.save(overview: ArchiveOverviewSnapshot(summary: summary, activities: activities)) }
     }
 
     func routeSummary(id: String?) -> ArchiveRouteSummary? {
@@ -180,13 +194,33 @@ final class ArchiveStore: ObservableObject {
         let activity = activities.first { $0.id == id }
         let recent = (activity?.date ?? .distantPast) > Date.now.addingTimeInterval(-7 * 86400)
         let cutoff = recent ? Date.now.addingTimeInterval(-6 * 3600) : nil
-        if let payload = try cache?.workoutPayload(id: id, newerThan: cutoff), !payload.routePoints.isEmpty {
+        if let payload = try await cache?.workoutPayload(id: id, newerThan: cutoff), !payload.routePoints.isEmpty {
             return payload.routePoints
         }
         guard let points = try await health.routePoints(forWorkoutID: id), points.count > 1 else {
             throw JournalError.noRoute
         }
         return points
+    }
+
+    // Reuse the just-refreshed summaries and HKWorkout lookup for auto upload.
+    // The 15-minute finalization pass falls outside this short reuse window.
+    func syncWorkoutPreviews() async throws -> [WorkoutPreview] {
+        if let snapshot = syncPreviewSnapshot, Date.now.timeIntervalSince(snapshot.date) < 60 {
+            return snapshot.previews
+        }
+        let previews = try await health.runningWorkoutPreviews()
+        syncPreviewSnapshot = (.now, previews)
+        return previews
+    }
+
+    func requestSyncAuthorization() async throws {
+        syncPreviewSnapshot = nil
+        try await health.requestAuthorization()
+    }
+
+    func syncWorkoutPayload(id: String) async throws -> WorkoutPayload? {
+        try await health.payload(forWorkoutID: id)
     }
 
     func prepareAnalysisExport() async throws {
@@ -196,17 +230,34 @@ final class ArchiveStore: ObservableObject {
     }
 
     func exportWorkout(id: String) async throws -> ExportWorkout {
-        try await health.exportWorkout(id: id)
+        var workout = try await health.exportWorkout(id: id)
+        workout.preferredAppleHeartRateZones = heartRateProfileValue?.preferredZones
+        return workout
     }
 
-    func requestAIContextAccess() async throws {
-        guard !UserDefaults.standard.bool(forKey: "healthAIContextAuthorization-v1") else { return }
+    @discardableResult
+    func requestHeartRateProfileAccess() async throws -> Bool {
+        guard !UserDefaults.standard.bool(forKey: "healthHeartRateProfileAuthorization-v1") else { return false }
+        try await health.requestAuthorization(includeExportMetrics: true, includeHeartRateProfile: true)
+        UserDefaults.standard.set(true, forKey: "healthHeartRateProfileAuthorization-v1")
+        return true
+    }
+    func heartRateProfile() async -> AnalysisHeartRateProfile {
+        let value = await health.heartRateProfile()
+        heartRateProfileValue = value
+        return value
+    }
+
+    @discardableResult
+    func requestAIContextAccess() async throws -> Bool {
+        guard !UserDefaults.standard.bool(forKey: "healthAIContextAuthorization-v1") else { return false }
         try await health.requestAuthorization(includeExportMetrics: true, includeTrainingContext: true)
         UserDefaults.standard.set(true, forKey: "healthAIContextAuthorization-v1")
+        return true
     }
 
-    func trainingContext(now: Date, calendar: Calendar) async -> AIRecoveryContext {
-        await health.trainingContext(now: now, calendar: calendar)
+    func trainingContext(now: Date, calendar: Calendar, days: Int = 28) async -> AIRecoveryContext {
+        await health.trainingContext(now: now, calendar: calendar, days: days)
     }
 
     func exportReferences(start: Date, end: Date) async throws -> ExportReferenceData {
@@ -214,34 +265,41 @@ final class ArchiveStore: ObservableObject {
     }
 
     private func startRouteScan(for activities: [ArchiveActivity]) {
-        routeScanTask?.cancel()
+        guard routeScanTask == nil else { return }
         routeScanTask = Task { [weak self] in
-            await self?.warmRoutePreviews(activities)
+            guard let self else { return }
+            var scanned = Set<String>()
+            repeat {
+                let candidates = self.activities.filter { !scanned.contains($0.id) }
+                if candidates.isEmpty { break }
+                scanned.formUnion(candidates.map(\.id))
+                await self.warmRoutePreviews(candidates)
+            } while !Task.isCancelled
+            self.routeScanTask = nil
         }
     }
 
     private func warmRoutePreviews(_ candidates: [ArchiveActivity]) async {
         guard let cache else { return }
-        var remaining = 0
-        for (index, activity) in candidates.enumerated() {
-            if (try? cache.routeState(id: activity.id).scanned) != true { remaining += 1 }
-            if index % 20 == 19 { await Task.yield() }
-        }
-        guard remaining > 0 else { routeScanStatus = nil; return }
-
+        let cachedIDs = (try? await cache.scannedRouteIDs()) ?? []
+        let pending = candidates.filter { !cachedIDs.contains($0.id) }
+        guard !pending.isEmpty else { routeScanStatus = nil; return }
+        let remaining = pending.count
         var completed = 0
-        var discovered = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
-        for activity in candidates {
+        var batch: [ArchiveRouteSummary] = []
+        func publishBatch() {
+            let ids = Set(activities.map(\.id))
+            var latest = Dictionary(uniqueKeysWithValues: routes.filter { ids.contains($0.id) }.map { ($0.id, $0) })
+            for route in batch where ids.contains(route.id) { latest[route.id] = route }
+            batch.removeAll()
+            setRoutes(orderedRoutes(Array(latest.values)))
+        }
+        for activity in pending {
             if Task.isCancelled { return }
             do {
-                let state = try cache.routeState(id: activity.id)
-                if state.scanned {
-                    if let summary = state.summary { discovered[summary.id] = summary }
-                    completed += 1
-                    if completed % 20 == 0 { await Task.yield() }
-                    continue
-                }
                 let points = try await health.routePoints(forWorkoutID: activity.id) ?? []
+                try Task.checkCancellation()
+                guard activities.contains(where: { $0.id == activity.id }) else { continue }
                 let summary = makeRouteSummary(
                     id: activity.id,
                     name: activity.name,
@@ -251,24 +309,25 @@ final class ArchiveStore: ObservableObject {
                 let recentCutoff = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
                 let isRecent = activity.date > recentCutoff
                 if summary != nil || !isRecent {
-                    try cache.saveRoute(id: activity.id, summary: summary)
+                    try await cache.saveRoute(id: activity.id, summary: summary)
                 }
-                if let summary { discovered[summary.id] = summary }
+                if let summary { batch.append(summary) }
                 completed += 1
 
                 // Do not publish and rebuild the overview map for every HealthKit route.
                 // Larger batches reduce main-thread overlay churn while preserving progress.
                 if completed == 1 || completed % 16 == 0 {
-                    setRoutes(orderedRoutes(Array(discovered.values)))
+                    publishBatch()
                     routeScanStatus = "正在整理 Apple Health 路线 \(completed)/\(remaining)"
                     await Task.yield()
                 }
-            } catch {
+            } catch is CancellationError { return }
+            catch {
                 // Keep this workout unmarked so a later launch can retry it.
                 completed += 1
             }
         }
-        setRoutes(orderedRoutes(Array(discovered.values)))
+        publishBatch()
         routeScanStatus = nil
     }
 

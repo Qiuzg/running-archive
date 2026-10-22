@@ -38,6 +38,22 @@
 		C10000000000000000000005 /* AITrainingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000005 /* AITrainingStore.swift */; };
 		C10000000000000000000006 /* AITrainingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000006 /* AITrainingViews.swift */; };
 		C10000000000000000000007 /* ActivityHealthMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000007 /* ActivityHealthMetrics.swift */; };
+		D10000000000000000000001 /* TrainingAnalysisMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* TrainingAnalysisMath.swift */; };
+		D10000000000000000000002 /* TrainingAnalysisStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* TrainingAnalysisStore.swift */; };
+		D10000000000000000000003 /* TrainingAnalysisViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* TrainingAnalysisViews.swift */; };
+		E10000000000000000000001 /* WatchTrainingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* WatchTrainingModels.swift */; };
+		E10000000000000000000002 /* WatchPlanSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* WatchPlanSync.swift */; };
+		E10000000000000000000003 /* WatchWorkoutBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* WatchWorkoutBridge.swift */; };
+		E10000000000000000000004 /* WatchTrainingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000004 /* WatchTrainingViews.swift */; };
+		F10000000000000000000001 /* RuntimeSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* RuntimeSupport.swift */; };
+		F10000000000000000000003 /* TrainingDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* TrainingDashboard.swift */; };
+		F10000000000000000000002 /* HealthSyncStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* HealthSyncStore.swift */; };
+		F10000000000000000000004 /* TrainingExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000004 /* TrainingExecution.swift */; };
+		F10000000000000000000005 /* TrainingExecutionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000005 /* TrainingExecutionViews.swift */; };
+		F10000000000000000000006 /* TrainingFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000006 /* TrainingFeedback.swift */; };
+		F10000000000000000000007 /* TrainingFeedbackViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000007 /* TrainingFeedbackViews.swift */; };
+		F10000000000000000000009 /* TrainingPhaseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000009 /* TrainingPhaseViews.swift */; };
+		F10000000000000000000008 /* TrainingPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000008 /* TrainingPhase.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,6 +91,22 @@
 		C20000000000000000000005 /* AITrainingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingStore.swift; sourceTree = "<group>"; };
 		C20000000000000000000006 /* AITrainingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITrainingViews.swift; sourceTree = "<group>"; };
 		C20000000000000000000007 /* ActivityHealthMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityHealthMetrics.swift; sourceTree = "<group>"; };
+		D20000000000000000000001 /* TrainingAnalysisMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingAnalysisMath.swift; sourceTree = "<group>"; };
+		D20000000000000000000002 /* TrainingAnalysisStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingAnalysisStore.swift; sourceTree = "<group>"; };
+		D20000000000000000000003 /* TrainingAnalysisViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingAnalysisViews.swift; sourceTree = "<group>"; };
+		E20000000000000000000001 /* WatchTrainingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTrainingModels.swift; sourceTree = "<group>"; };
+		E20000000000000000000002 /* WatchPlanSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPlanSync.swift; sourceTree = "<group>"; };
+		E20000000000000000000003 /* WatchWorkoutBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkoutBridge.swift; sourceTree = "<group>"; };
+		E20000000000000000000004 /* WatchTrainingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTrainingViews.swift; sourceTree = "<group>"; };
+		F20000000000000000000001 /* RuntimeSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeSupport.swift; sourceTree = "<group>"; };
+		F20000000000000000000003 /* TrainingDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingDashboard.swift; sourceTree = "<group>"; };
+		F20000000000000000000002 /* HealthSyncStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncStore.swift; sourceTree = "<group>"; };
+		F20000000000000000000004 /* TrainingExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingExecution.swift; sourceTree = "<group>"; };
+		F20000000000000000000005 /* TrainingExecutionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingExecutionViews.swift; sourceTree = "<group>"; };
+		F20000000000000000000006 /* TrainingFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingFeedback.swift; sourceTree = "<group>"; };
+		F20000000000000000000007 /* TrainingFeedbackViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingFeedbackViews.swift; sourceTree = "<group>"; };
+		F20000000000000000000009 /* TrainingPhaseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingPhaseViews.swift; sourceTree = "<group>"; };
+		F20000000000000000000008 /* TrainingPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingPhase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +141,22 @@
 				C20000000000000000000004 /* AITrainingService.swift */,
 				C20000000000000000000005 /* AITrainingStore.swift */,
 				C20000000000000000000006 /* AITrainingViews.swift */,
+				F20000000000000000000001 /* RuntimeSupport.swift */,
+				F20000000000000000000003 /* TrainingDashboard.swift */,
+				F20000000000000000000007 /* TrainingFeedbackViews.swift */,
+				F20000000000000000000009 /* TrainingPhaseViews.swift */,
+				F20000000000000000000008 /* TrainingPhase.swift */,
+				F20000000000000000000006 /* TrainingFeedback.swift */,
+				F20000000000000000000005 /* TrainingExecutionViews.swift */,
+				F20000000000000000000004 /* TrainingExecution.swift */,
+				F20000000000000000000002 /* HealthSyncStore.swift */,
+				D20000000000000000000001 /* TrainingAnalysisMath.swift */,
+				D20000000000000000000002 /* TrainingAnalysisStore.swift */,
+				D20000000000000000000003 /* TrainingAnalysisViews.swift */,
+				E20000000000000000000004 /* WatchTrainingViews.swift */,
+				E20000000000000000000003 /* WatchWorkoutBridge.swift */,
+				E20000000000000000000002 /* WatchPlanSync.swift */,
+				E20000000000000000000001 /* WatchTrainingModels.swift */,
 				C20000000000000000000007 /* ActivityHealthMetrics.swift */,
 				A20000000000000000000001 /* RunningArchiveSyncApp.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
@@ -232,6 +280,22 @@
 				C10000000000000000000004 /* AITrainingService.swift in Sources */,
 				C10000000000000000000005 /* AITrainingStore.swift in Sources */,
 				C10000000000000000000006 /* AITrainingViews.swift in Sources */,
+				F10000000000000000000001 /* RuntimeSupport.swift in Sources */,
+				F10000000000000000000003 /* TrainingDashboard.swift in Sources */,
+				F10000000000000000000007 /* TrainingFeedbackViews.swift in Sources */,
+				F10000000000000000000009 /* TrainingPhaseViews.swift in Sources */,
+				F10000000000000000000008 /* TrainingPhase.swift in Sources */,
+				F10000000000000000000006 /* TrainingFeedback.swift in Sources */,
+				F10000000000000000000005 /* TrainingExecutionViews.swift in Sources */,
+				F10000000000000000000004 /* TrainingExecution.swift in Sources */,
+				F10000000000000000000002 /* HealthSyncStore.swift in Sources */,
+				D10000000000000000000001 /* TrainingAnalysisMath.swift in Sources */,
+				D10000000000000000000002 /* TrainingAnalysisStore.swift in Sources */,
+				D10000000000000000000003 /* TrainingAnalysisViews.swift in Sources */,
+				E10000000000000000000004 /* WatchTrainingViews.swift in Sources */,
+				E10000000000000000000003 /* WatchWorkoutBridge.swift in Sources */,
+				E10000000000000000000002 /* WatchPlanSync.swift in Sources */,
+				E10000000000000000000001 /* WatchTrainingModels.swift in Sources */,
 				C10000000000000000000007 /* ActivityHealthMetrics.swift in Sources */,
 				A10000000000000000000001 /* RunningArchiveSyncApp.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,

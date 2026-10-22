@@ -15,16 +15,21 @@ enum SyncAPIError: LocalizedError {
 }
 
 struct SyncAPI {
-    func upload(_ workouts: [WorkoutPayload], baseURL: String, token: String) async throws -> SyncResponse {
+    static func endpoint(baseURL: String) throws -> URL {
         guard var components = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              components.host != nil else { throw SyncAPIError.invalidURL }
+              components.host != nil, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil else { throw SyncAPIError.invalidURL }
         let isLocal = components.host == "127.0.0.1" || components.host == "localhost"
-        guard components.scheme == "https" || isLocal else { throw SyncAPIError.insecureURL }
+        guard components.scheme == "https" || (components.scheme == "http" && isLocal) else { throw SyncAPIError.insecureURL }
         let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         components.path = "/" + [basePath, "api/sync/apple-workouts"].filter { !$0.isEmpty }.joined(separator: "/")
         guard let url = components.url else { throw SyncAPIError.invalidURL }
 
-        var request = URLRequest(url: url)
+        return url
+    }
+
+    func upload(_ workouts: [WorkoutPayload], baseURL: String, token: String) async throws -> SyncResponse {
+        var request = URLRequest(url: try Self.endpoint(baseURL: baseURL))
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
